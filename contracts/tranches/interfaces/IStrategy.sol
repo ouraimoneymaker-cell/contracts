@@ -1,0 +1,18 @@
+// SPDX-License-Identifier: UNLICENSED
+pragma solidity ^0.8.28;
+
+import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
+import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import { ICDOComponent } from "./ICDOComponent.sol";
+
+interface IStrategy is ICDOComponent {
+
+    function deposit (address tranche, address token, uint256 tokenAmount, uint256 baseAssets, address owner) external returns (uint256);
+    function withdraw (address tranche, address token, uint256 tokenAmount, uint256 bseAssets, address receiver) external returns (uint256);
+    function totalAssets () external view returns (uint256);
+
+    function convertToAssets (address token, uint256 tokenAmount, Math.Rounding rounding) external view returns (uint256 baseAssets);
+    function convertToTokens (address token, uint256 baseAssets, Math.Rounding rounding) external view returns (uint256 tokenAmount);
+
+    function getSupportedTokens () external view returns (IERC20[] memory);
+}

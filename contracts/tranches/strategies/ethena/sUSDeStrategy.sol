@@ -17,7 +17,6 @@ import { AccessControlled } from "../../../governance/AccessControlled.sol";
 import { CDOComponent } from "../../base/CDOComponent.sol";
 
 contract sUSDeStrategy is IStrategy, CDOComponent, AccessControlled {
-    bytes32 public constant STRATEGY_CONFIG_ROLE = keccak256("STRATEGY_CONFIG_ROLE");
 
     IERC4626 public immutable sUSDe;
     IERC20 public immutable USDe;
@@ -87,6 +86,19 @@ contract sUSDeStrategy is IStrategy, CDOComponent, AccessControlled {
         }
         revert UnsupportedToken(token);
     }
+
+    function reduceReserve (address token, uint256 tokenAmount, address receiver) external onlyCDO {
+        if (token == address(sUSDe)) {
+            erc20Cooldown.transfer(sUSDe, receiver, tokenAmount, 0);
+            return;
+        }
+        if (token == address(USDe)) {
+            unstakeCooldown.transfer(sUSDe, receiver, tokenAmount);
+            return;
+        }
+        revert UnsupportedToken(token);
+    }
+
     function totalAssets () external view returns (uint256 baseAssets) {
         uint256 shares = sUSDe.balanceOf(address(this));
         baseAssets = sUSDe.previewRedeem(shares);
@@ -124,7 +136,7 @@ contract sUSDeStrategy is IStrategy, CDOComponent, AccessControlled {
         return tokens;
     }
 
-    function setCooldowns (uint256 sUSDeCooldownJrt_, uint256 sUSDeCooldownSrt_) external onlyRole(STRATEGY_CONFIG_ROLE) {
+    function setCooldowns (uint256 sUSDeCooldownJrt_, uint256 sUSDeCooldownSrt_) external onlyRole(UPDATER_STRAT_CONFIG_ROLE) {
         uint256 WEEK = 7 days;
         if (sUSDeCooldownJrt_ > WEEK || sUSDeCooldownSrt_ > WEEK) {
             revert InvalidConfigCooldown();

@@ -12,8 +12,6 @@ import { ERC4626Upgradeable } from "@openzeppelin/contracts-upgradeable/token/ER
 
 contract Tranche is CDOComponent, AccessControlled, ERC4626Upgradeable {
 
-    bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
-
     /// @notice Minimum non-zero shares amount to prevent donation attack
     uint256 private constant MIN_SHARES = 0.1 ether;
 
@@ -22,8 +20,6 @@ contract Tranche is CDOComponent, AccessControlled, ERC4626Upgradeable {
 
     event OnMetaDeposit(address indexed owner, address indexed token, uint256 tokenAssets, uint256 shares);
     event OnMetaWithdraw(address indexed owner, address indexed token, uint256 tokenAssets, uint256 shares);
-    event DepositsStateChanged(bool enabled);
-    event WithdrawalsStateChanged(bool enabled);
 
     function initialize(
         address owner_,
@@ -204,25 +200,10 @@ contract Tranche is CDOComponent, AccessControlled, ERC4626Upgradeable {
         }
     }
 
-    function setDepositsEnabled(bool depositsEnabled_) external onlyRole(PAUSER_ROLE) {
-        depositsEnabled = depositsEnabled_;
-        emit DepositsStateChanged(depositsEnabled_);
-    }
-
-    function setWithdrawalsEnabled(bool withdrawalsEnabled_) external onlyRole(PAUSER_ROLE) {
-        withdrawalsEnabled = withdrawalsEnabled_;
-        emit WithdrawalsStateChanged(withdrawalsEnabled_);
-    }
-
     function _onAfterDepositChecks () internal view {
-        if (!depositsEnabled) {
-            revert DepositsDisabled();
-        }
+
     }
     function _onAfterWithdrawalChecks () internal view {
-        if (!withdrawalsEnabled) {
-            revert WithdrawalsDisabled();
-        }
         if (totalSupply() < MIN_SHARES) {
             revert MinSharesViolation();
         }

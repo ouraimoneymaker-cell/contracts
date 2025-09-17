@@ -13,8 +13,8 @@ interface IErrors {
 
     error MinSharesViolation();
 
-    error WithdrawalsDisabled();
-    error DepositsDisabled();
+    error WithdrawalsDisabled(address tranche);
+    error DepositsDisabled(address tranche);
 
     error InvalidConfigCooldown();
 }

@@ -14,4 +14,6 @@ interface IYieldAccounting is ICDOComponent, IAprTupleFeedListener {
     ) external;
 
     function totalAssets (uint256 currentNAV) external view returns (uint jrtAssets, uint srtAssets, uint reserveAssets);
+    function totalReserveLatest () external view returns (uint256);
+    function reduceReserve (uint256 amount) external;
 }

@@ -2,6 +2,7 @@
 pragma solidity ^0.8.28;
 
 import { IERC4626 } from "@openzeppelin/contracts/interfaces/IERC4626.sol";
+import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
 
 import { AccessControlled } from "../governance/AccessControlled.sol";
 
@@ -11,18 +12,28 @@ import { ITranche } from "./interfaces/ITranche.sol";
 
 import { IErrors } from "./interfaces/IErrors.sol";
 import { IStrataCDO } from "./interfaces/IStrataCDO.sol";
-
+import { TActionState } from "./structs/TActionState.sol";
 
 contract StrataCDO is IErrors, IStrataCDO, AccessControlled {
 
     IYieldAccounting public accounting;
-    IStrategy public strategy;
+    IStrategy        public strategy;
 
     // Junior (BB) Tranche
     ITranche public jrtVault;
 
     // Sinior (AA) Tranche
     ITranche public srtVault;
+
+    address public treasury;
+
+    TActionState public actionsJrt;
+    TActionState public actionsSrt;
+
+    event DepositsStateChanged(address indexed tranche, bool enabled);
+    event WithdrawalsStateChanged(address indexed tranche, bool enabled);
+    event ReserveReduced(address token, uint256 amount);
+    event TreasurySet(address treasury);
 
 
     /// @notice
@@ -60,22 +71,30 @@ contract StrataCDO is IErrors, IStrataCDO, AccessControlled {
     }
 
     function deposit(address tranche, address token, uint256 tokenAmount, uint256 baseAssets) external onlyTranche {
-        // @TODO check enabled
+        bool isJrt_ = isJrt(tranche);
+        bool enabled = isJrt_ ? actionsJrt.isDepositEnabled : actionsSrt.isDepositEnabled;
+        if (!enabled) {
+            revert DepositsDisabled(tranche);
+        }
         strategy.deposit(tranche, token, tokenAmount, baseAssets, /* owner: */ tranche);
-        uint jrtAssetsIn = tranche == address(jrtVault) ? baseAssets : 0;
-        uint srtAssetsIn = tranche == address(srtVault) ? baseAssets : 0;
+        uint jrtAssetsIn = isJrt_ ? baseAssets : 0;
+        uint srtAssetsIn = isJrt_ ? 0          : baseAssets;
         accounting.updateBalanceFlow(jrtAssetsIn, 0, srtAssetsIn, 0);
     }
 
     function withdraw(address tranche, address token, uint256 tokenAmount, uint256 baseAssets, address receiver) external onlyTranche {
-        // @TODO check enabled
+        bool isJrt_ = isJrt(tranche);
+        bool enabled = isJrt_ ? actionsJrt.isWithdrawEnabled : actionsSrt.isWithdrawEnabled;
+        if (!enabled) {
+            revert WithdrawalsDisabled(tranche);
+        }
         strategy.withdraw(tranche, token, tokenAmount, baseAssets, receiver);
-        uint jrtAssetsOut = tranche == address(jrtVault) ? baseAssets : 0;
-        uint srtAssetsOut = tranche == address(srtVault) ? baseAssets : 0;
+        uint jrtAssetsOut = isJrt_ ? baseAssets : 0;
+        uint srtAssetsOut = isJrt_ ? 0          : baseAssets;
         accounting.updateBalanceFlow(0, jrtAssetsOut, 0, srtAssetsOut);
     }
 
-    function isJrt (address tranche) external view returns (bool) {
+    function isJrt (address tranche) public view returns (bool) {
         if (tranche == address(0)) {
             revert InvalidTranche(tranche);
         }
@@ -99,9 +118,9 @@ contract StrataCDO is IErrors, IStrataCDO, AccessControlled {
             revert AlreadyConfigured();
         }
         require(address(this) == accounting_.getCDOAddress(), "A1");
-        require(address(this) == strategy_.getCDOAddress()  , "A2");
-        require(address(this) == jrtVault_.getCDOAddress()  , "A3");
-        require(address(this) == srtVault_.getCDOAddress()  , "A4");
+        require(address(this) ==   strategy_.getCDOAddress(), "A2");
+        require(address(this) ==   jrtVault_.getCDOAddress(), "A3");
+        require(address(this) ==   srtVault_.getCDOAddress(), "A4");
 
         accounting = accounting_;
         strategy = strategy_;
@@ -110,5 +129,40 @@ contract StrataCDO is IErrors, IStrataCDO, AccessControlled {
 
         jrtVault_.configure();
         srtVault_.configure();
+    }
+
+    function reduceReserve (address token, uint256 tokenAmount) external onlyRole(RESERVE_MANAGER_ROLE) {
+        if (treasury == address(0)) {
+            revert ZeroAddress();
+        }
+        uint256 baseAssets = strategy.convertToAssets(token, tokenAmount, Math.Rounding.Floor);
+        accounting.reduceReserve(baseAssets);
+        strategy.reduceReserve(token, tokenAmount, treasury);
+        emit ReserveReduced(token, tokenAmount);
+    }
+
+    function setReserveTreasury (address treasury_) external onlyRole(RESERVE_MANAGER_ROLE) {
+        treasury = treasury_;
+        emit TreasurySet(treasury_);
+    }
+
+    function setActionStates (address tranche, bool isDepositEnabled, bool isWithdrawEnabled) external onlyRole(PAUSER_ROLE) {
+        if (address(tranche) == address(0)) {
+            setActionStatesInner(address(jrtVault), isDepositEnabled, isWithdrawEnabled);
+            setActionStatesInner(address(srtVault), isDepositEnabled, isWithdrawEnabled);
+            return;
+        }
+        setActionStatesInner(tranche, isDepositEnabled, isWithdrawEnabled);
+    }
+    function setActionStatesInner (address tranche, bool isDepositEnabled, bool isWithdrawEnabled) internal {
+        TActionState storage state = isJrt(tranche)? actionsJrt : actionsSrt;
+        if (state.isDepositEnabled != isDepositEnabled) {
+            state.isDepositEnabled = isDepositEnabled;
+            emit DepositsStateChanged(tranche, isDepositEnabled);
+        }
+        if (state.isWithdrawEnabled != isWithdrawEnabled) {
+            state.isWithdrawEnabled = isWithdrawEnabled;
+            emit WithdrawalsStateChanged(tranche, isWithdrawEnabled);
+        }
     }
 }

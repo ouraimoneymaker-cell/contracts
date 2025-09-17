@@ -8,7 +8,7 @@ import { IAprTupleFeed, IAprTupleFeedListener } from "../interfaces/IAprFeed.sol
 import "hardhat/console.sol";
 
 contract AprTupleFeed is IAprTupleFeed, AccessControlled {
-    bytes32 public constant FEED_UPDATER_ROLE = keccak256("FEED_UPDATER_ROLE");
+
 
     struct Round {
         // SD7x12
@@ -65,12 +65,9 @@ contract AprTupleFeed is IAprTupleFeed, AccessControlled {
         return round;
     }
 
-    function updateRoundData(int64 aprTarget, int64 aprBase) external onlyRole(FEED_UPDATER_ROLE) {
-        console.log("Updating round data: ", uint256(int256(aprTarget)));
-
+    function updateRoundData(int64 aprTarget, int64 aprBase) external onlyRole(UPDATER_FEED_ROLE) {
         ensureValid(aprTarget);
         ensureValid(aprBase);
-
 
         uint64 roundId = (latestRoundId + 1);
         uint64 roundIdx = roundId % roundsCap;
@@ -102,7 +99,7 @@ contract AprTupleFeed is IAprTupleFeed, AccessControlled {
         }
     }
 
-    function addListener(IAprTupleFeedListener listener) external onlyRole(FEED_UPDATER_ROLE) {
+    function addListener(IAprTupleFeedListener listener) external onlyRole(UPDATER_FEED_ROLE) {
         bool has = hasListener(listener);
         if (has) {
             return;
@@ -111,7 +108,7 @@ contract AprTupleFeed is IAprTupleFeed, AccessControlled {
         emit ListenerAdded(address(listener));
     }
 
-    function removeListener(IAprTupleFeedListener listener) external onlyRole(FEED_UPDATER_ROLE) {
+    function removeListener(IAprTupleFeedListener listener) external onlyRole(UPDATER_FEED_ROLE) {
         uint256 len = listeners.length;
         for (uint256 i; i < len;) {
             if (listeners[i] == listener) {

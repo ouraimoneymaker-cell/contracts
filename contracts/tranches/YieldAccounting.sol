@@ -13,8 +13,6 @@ import "hardhat/console.sol";
 
 contract YieldAccounting is IYieldAccounting, CDOComponent, AccessControlled {
 
-    bytes32 public constant APR_UPDATER_ROLE = keccak256("APR_UPDATER");
-
     uint256 constant SECONDS_PER_YEAR = 31_536_000;
 
     int64 private constant APR_BOUNDARY_MAX = 200 * 1e12;
@@ -75,9 +73,8 @@ contract YieldAccounting is IYieldAccounting, CDOComponent, AccessControlled {
 
         srtTargetIndex = 1e18;
         srtTargetIndexFloor = 1e18;
-        indexTimestamp = block.timestamp;
-
         jrtBenchmarkIndex = 1e18;
+        indexTimestamp = block.timestamp;
     }
 
     function totalAssets (uint256 currentNAV) public view returns (uint jrtAssets, uint srtAssets, uint reserveAssets) {
@@ -87,6 +84,16 @@ contract YieldAccounting is IYieldAccounting, CDOComponent, AccessControlled {
             reserveAssets,
         ) = calculateNAVSplit(nav, jrtNav, srtNav, reserveNav, currentNAV);
         return (jrtAssets, srtAssets, reserveAssets);
+    }
+
+    function totalReserveLatest () external view returns (uint256) {
+        return reserveNav;
+    }
+    function reduceReserve (uint256 amount) external onlyCDO {
+        require(amount <= reserveNav, "NOT_ENOUGH_RESERVE");
+        reserveNav = reserveNav - amount;
+        nav = nav - amount;
+        require(nav == jrtNav + srtNav + reserveNav, "INVALID_ASSETS");
     }
 
     function updateAccounting (
@@ -246,7 +253,7 @@ contract YieldAccounting is IYieldAccounting, CDOComponent, AccessControlled {
         return riskPremium;
     }
 
-    function onAprChanged (/* SD7x12 */ int64 newAprTarget, /* SD7x12 */ int64 newAprBase) external onlyRole(APR_UPDATER_ROLE)  {
+    function onAprChanged (/* SD7x12 */ int64 newAprTarget, /* SD7x12 */ int64 newAprBase) external onlyRole(UPDATER_CDO_APR_ROLE)  {
         UD60x18 aprTargetNew = mapApr(newAprTarget);
         UD60x18 aprBaseNew = mapApr(newAprBase);
 

@@ -26,4 +26,10 @@ library UD60x18Extra {
     function max(UD60x18 x, UD60x18 y) internal pure returns (UD60x18) {
         return UD60x18.unwrap(x) >= UD60x18.unwrap(y) ? x : y;
     }
+
+    function diffAbs (UD60x18 x, UD60x18 y) internal pure returns (UD60x18) {
+        uint256 a = UD60x18.unwrap(x);
+        uint256 b = UD60x18.unwrap(y);
+        return UD60x18.wrap(a > b ? (a - b) : (b - a));
+    }
 }

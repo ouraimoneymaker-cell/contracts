@@ -21,18 +21,23 @@ contract YieldAccounting is IYieldAccounting, CDOComponent, AccessControlled {
     int64 private constant APR_BOUNDARY_MIN = 0;
 
 
-    address public aprTargetFeed;
-    address public aprBaseFeed;
-
+    // External floor target APR for Srt
     UD60x18 public aprTarget;
+
+    // External APR for the underlying protocol
     UD60x18 public aprBase;
 
+    // The calculated target APR for Srt; the primary objective in calculations.
     UD60x18 public aprSrt;
-    UD60x18 public aprJrt;
 
-    uint256 public srtTargetIndexTimestamp;
+    // Benchmark APR for Jrt; used as reference in edge-case handling.
+    UD60x18 public aprJrtBenchmark;
+
+    uint256 public indexTimestamp;
     uint256 public srtTargetIndex;
     uint256 public srtTargetIndexFloor;
+
+    uint256 public jrtBenchmarkIndex;
 
     uint256 public reserveBps;
     uint256 constant PERCENTAGE_100 = 1e18;
@@ -70,7 +75,9 @@ contract YieldAccounting is IYieldAccounting, CDOComponent, AccessControlled {
 
         srtTargetIndex = 1e18;
         srtTargetIndexFloor = 1e18;
-        srtTargetIndexTimestamp = block.timestamp;
+        indexTimestamp = block.timestamp;
+
+        jrtBenchmarkIndex = 1e18;
     }
 
     function totalAssets (uint256 currentNAV) public view returns (uint jrtAssets, uint srtAssets, uint reserveAssets) {
@@ -127,19 +134,16 @@ contract YieldAccounting is IYieldAccounting, CDOComponent, AccessControlled {
         uint256 srtTargetIndexCurrent = getSrtTargetIndexCurrent();
         uint256 srtTargetIndexFloorCurrent = getSrtTargetIndexFloorCurrent();
         // Gain = Assets * (TargetIndex1 / TargetIndex0 - 1);
-        uint256 srtGainTarget = calculateGain(lastSrtNav, srtTargetIndexCurrent, srtTargetIndex); //srtTargetIndex == 0 ? 0 : (lastSrtNav * srtTargetIndexCurrent / srtTargetIndex - lastSrtNav);
-        uint256 srtGainTargetFloor = calculateGain(lastSrtNav, srtTargetIndexFloorCurrent, srtTargetIndexFloor); //srtTargetIndexFloor == 0 ? 0 : (lastSrtNav * srtTargetIndexFloorCurrent / srtTargetIndexFloor - lastSrtNav);
+        uint256 srtGainTarget = calculateGain(lastSrtNav, srtTargetIndexCurrent, srtTargetIndex);
+        uint256 srtGainTargetFloor = calculateGain(lastSrtNav, srtTargetIndexFloorCurrent, srtTargetIndexFloor);
+
+        // Calculate Jrt Benchmark
+        uint256 jrtBenchmarkIndexCurrent = getJrtBenchmarkIndexCurrent();
+        uint256 jrtGainBenchmark = calculateGain(lastJrtNav, jrtBenchmarkIndexCurrent, jrtBenchmarkIndex);
+
 
         int256 currentGain = int256(currentNAV) - int256(lastNav);
         uint256 currentGainAbs = currentGain < 0 ? 0 : uint256(currentGain);
-
-        console.log("srtGainTarget : ", srtGainTarget);
-        console.log("srtGainTargetF: ", srtGainTargetFloor);
-        console.log("Current Gain: ", currentGainAbs);
-
-        console.log("index latest       :", srtTargetIndex);
-        console.log("index current      :", srtTargetIndexCurrent);
-        console.log("index current floor:", srtTargetIndexFloorCurrent);
 
         uint256 reserve = 0;
         if (currentGainAbs > 0 && reserveBps > 0) {
@@ -147,18 +151,28 @@ contract YieldAccounting is IYieldAccounting, CDOComponent, AccessControlled {
             currentGainAbs -= reserve;
         }
 
+        console.log("    srtGainTarget : ", srtGainTarget);
+
         // if juniors have previously funded Srt, pick the Floor APR (APRssr) to refund juniors
         navJrtFundingTotal = jrtFundingNav;
-        if (navJrtFundingTotal > 0 && srtGainTargetFloor < srtGainTarget) {
-            uint256 extra = srtGainTarget - srtGainTargetFloor;
-            if (extra > navJrtFundingTotal) {
-                // Take minimum required gain to cover APR_target and repay juniors
-                srtGainTarget = srtGainTargetFloor;
-                navJrtFundingTotal -= extra;
-            } else {
-                // Current extra is already enough to cover total juniors funding
-                srtGainTarget -= navJrtFundingTotal;
-                navJrtFundingTotal = 0;
+        if (navJrtFundingTotal > 0 && currentGainAbs > srtGainTarget && srtGainTarget > srtGainTargetFloor) {
+            uint256 srtGainExcess = srtGainTarget - srtGainTargetFloor;
+            uint256 jrtGainCurrent = currentGainAbs - srtGainTarget;
+
+            if (jrtGainCurrent > jrtGainBenchmark) {
+                // Check if the funding can be covered/partially covered by current jrtGain compared to benchmark
+                uint256 jrtGainExcess = jrtGainCurrent - jrtGainBenchmark;
+                navJrtFundingTotal = navJrtFundingTotal < jrtGainExcess
+                    ? 0 // covered, reset to zero
+                    : navJrtFundingTotal - jrtGainExcess;
+            }
+            if (navJrtFundingTotal > 0) {
+                uint256 srtGainTaken = srtGainExcess > navJrtFundingTotal
+                    ? navJrtFundingTotal
+                    : srtGainExcess;
+
+                srtGainTarget = srtGainTarget - srtGainTaken;
+                navJrtFundingTotal -= srtGainTaken;
             }
         }
 
@@ -173,6 +187,18 @@ contract YieldAccounting is IYieldAccounting, CDOComponent, AccessControlled {
             srtGainTarget -= fundingFromJrt - lastJrtNav;
             fundingFromJrt = lastJrtNav;
         }
+
+        console.log("  lastSrtNav      :", lastSrtNav);
+        console.log("  srtGainTarget : ", srtGainTarget);
+        console.log("  srtGainTargetF: ", srtGainTargetFloor);
+        console.log("  Current Gain  : ", currentGainAbs);
+
+        console.log("  index latest       :", srtTargetIndex);
+        console.log("  index current      :", srtTargetIndexCurrent);
+        console.log("  index current floor:", srtTargetIndexFloorCurrent);
+        console.log("  apr srt            :", aprSrt.unwrap());
+        console.log("  fundingFromJrt_Now", fundingFromJrt);
+        console.log("  fundingFromJrt_BeforeTotal", jrtFundingNav);
 
         int256 jrtGain = int256(currentGainAbs) - int256(srtGainTarget);
         uint256 jrtGainAbs = jrtGain < 0 ? 0 : uint256(jrtGain);
@@ -194,10 +220,13 @@ contract YieldAccounting is IYieldAccounting, CDOComponent, AccessControlled {
     }
 
     function getSrtTargetIndexCurrent () internal view returns (uint256) {
-        return calculateTargetIndex(srtTargetIndex, srtTargetIndexTimestamp, block.timestamp, aprSrt);
+        return calculateTargetIndex(srtTargetIndex, indexTimestamp, block.timestamp, aprSrt);
     }
     function getSrtTargetIndexFloorCurrent () internal view returns (uint256) {
-        return calculateTargetIndex(srtTargetIndexFloor, srtTargetIndexTimestamp, block.timestamp, aprTarget);
+        return calculateTargetIndex(srtTargetIndexFloor, indexTimestamp, block.timestamp, aprTarget);
+    }
+    function getJrtBenchmarkIndexCurrent () internal view returns (uint256) {
+        return calculateTargetIndex(jrtBenchmarkIndex, indexTimestamp, block.timestamp, aprJrtBenchmark);
     }
 
     function calculateTargetIndex (uint256 targetIndex, uint256 t0, uint256 t1, UD60x18 apr) internal pure returns (uint256) {
@@ -228,17 +257,27 @@ contract YieldAccounting is IYieldAccounting, CDOComponent, AccessControlled {
     }
 
     function updateIndexes (UD60x18 aprTarget_, UD60x18 aprBase_) internal {
+        UD60x18 tvlRatioSrt = UD60x18.wrap(srtNav == 0 ? 0 : (srtNav * 1e18 / (srtNav + jrtNav)));
+        UD60x18 tvlRatioJrt = UD60x18.wrap(1e18) - tvlRatioSrt;
+
         UD60x18 risk = calculateRiskPremium();
         UD60x18 aprSrt1 = mul(aprBase_, UD60x18.wrap(1e18) - risk);
 
         aprSrt = UD60x18Extra.max(aprTarget_, aprSrt1);
         srtTargetIndex = getSrtTargetIndexCurrent();
         srtTargetIndexFloor = getSrtTargetIndexFloorCurrent();
-        srtTargetIndexTimestamp = block.timestamp;
+        indexTimestamp = block.timestamp;
+        jrtBenchmarkIndex = getJrtBenchmarkIndexCurrent();
+
+        // ((BaseAPY - APYsr) * TVL_ratio_sr) / TVL_ratio_jr + BaseAPY
+        UD60x18 aprJrtSpread = UD60x18Extra.diffAbs(aprBase_, aprSrt) * tvlRatioSrt / tvlRatioJrt;
+        aprJrtBenchmark = aprBase_ >= aprSrt
+            ? (aprBase_ + aprJrtSpread)
+            : (aprJrtSpread > aprBase_ ? UD60x18.wrap(0) : aprBase_ - aprJrtSpread);
 
         console.log("Update Indexes");
         console.log("      aprTarget: ", aprTarget_.unwrap());
-        console.log("      aprBase  : ", aprTarget_.unwrap());
+        console.log("      aprBase  : ", aprBase_.unwrap());
         console.log("      aprSrt1  : ", aprSrt1.unwrap());
         console.log("      aprSrt   : ", aprSrt.unwrap());
     }

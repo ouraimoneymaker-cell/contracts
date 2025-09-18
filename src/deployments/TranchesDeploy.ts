@@ -77,8 +77,8 @@ export class TranchesDeploy {
         let roles = {
             [this.owner.address]: [
                 $contract.keccak256('PAUSER_ROLE'),
-                $contract.keccak256('STRATEGY_CONFIG_ROLE'),
-                $contract.keccak256('FEED_UPDATER_ROLE'),
+                $contract.keccak256('UPDATER_STRAT_CONFIG_ROLE'),
+                $contract.keccak256('UPDATER_FEED_ROLE'),
             ]
         };
         for (let account in roles) {
@@ -278,33 +278,32 @@ export class TranchesDeploy {
                 await feed.$receipt().addListener(this.owner, accounting.address);
             }
         });
-        await acm.$receipt().grantRole(this.owner, $contract.keccak256('APR_UPDATER'), feed.address);
+        await acm.$receipt().grantRole(this.owner, $contract.keccak256('UPDATER_CDO_APR_ROLE'), feed.address);
 
         await this.setCooldown(strategy, info);
-        await this.setDepositsEnabled(jrtVault, info.jrt.depositsEnabled);
-        await this.setDepositsEnabled(srtVault, info.srt.depositsEnabled);
-        await this.setWithdrawalsEnabled(jrtVault, info.jrt.withdrawalsEnabled);
-        await this.setWithdrawalsEnabled(srtVault, info.srt.withdrawalsEnabled);
+        await this.setTrancheActions(cdo, jrtVault, info, 'jrt');
+        await this.setTrancheActions(cdo, srtVault, info, 'srt');
     }
 
-    async setDepositsEnabled (tranche: Tranche, value: boolean) {
-        await this.ds.configure(tranche, {
-            value: value,
-            current: await tranche.depositsEnabled(),
-            updater: async () => {
-                await tranche.$receipt().setDepositsEnabled(this.owner, value);
-            }
-        });
+    async setTrancheActions (cdo: StrataCDO, tranche: Tranche, info: typeof Tranches['ethena'], type: 'srt' | 'jrt') {
+        let actions = type === 'jrt'
+            ? await cdo.actionsJrt()
+            : await cdo.actionsSrt();
+
+        let current = type === 'jrt'
+            ? info.jrt
+            : info.srt;
+
+        if (actions.isDepositEnabled !== current.depositsEnabled || actions.isWithdrawEnabled !== current.withdrawalsEnabled) {
+            await cdo.$receipt().setActionStates(
+                this.owner,
+                tranche.address,
+                current.depositsEnabled,
+                current.withdrawalsEnabled,
+            );
+        }
     }
-    async setWithdrawalsEnabled (tranche: Tranche, value: boolean) {
-        await this.ds.configure(tranche, {
-            value: value,
-            current: await tranche.withdrawalsEnabled(),
-            updater: async (x, value) => {
-                await x.$receipt().setWithdrawalsEnabled(this.owner, value);
-            }
-        });
-    }
+
     async setCooldown (strategy: SUSDeStrategy, info: typeof Tranches['ethena']) {
         let cooldowns = [ info.jrt.sUSDeCooldown, info.srt.sUSDeCooldown]
             .map(mix => {

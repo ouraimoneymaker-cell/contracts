@@ -4,19 +4,16 @@ pragma solidity ^0.8.28;
 import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { IERC4626 } from "@openzeppelin/contracts/interfaces/IERC4626.sol";
-import { IStrataCDO }  from "../interfaces/IStrataCDO.sol";
-import { CDOComponent }  from "../base/CDOComponent.sol";
-import { AccessControlled } from "../../governance/AccessControlled.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import { ERC4626Upgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC20/extensions/ERC4626Upgradeable.sol";
 
-contract Tranche is CDOComponent, AccessControlled, ERC4626Upgradeable {
+import { IStrataCDO }  from "./interfaces/IStrataCDO.sol";
+import { CDOComponent }  from "./base/CDOComponent.sol";
+
+contract Tranche is CDOComponent, ERC4626Upgradeable {
 
     /// @notice Minimum non-zero shares amount to prevent donation attack
     uint256 private constant MIN_SHARES = 0.1 ether;
-
-    bool public depositsEnabled;
-    bool public withdrawalsEnabled;
 
     event OnMetaDeposit(address indexed owner, address indexed token, uint256 tokenAssets, uint256 shares);
     event OnMetaWithdraw(address indexed owner, address indexed token, uint256 tokenAssets, uint256 shares);
@@ -191,12 +188,12 @@ contract Tranche is CDOComponent, AccessControlled, ERC4626Upgradeable {
     }
 
     function configure () external onlyCDO {
-
         IERC20[] memory tokens = cdo.strategy().getSupportedTokens();
         uint256 len = tokens.length;
         address strategy = address(cdo.strategy());
-        for (uint256 i = 0; i < len; i++) {
+        for (uint256 i = 0; i < len; ) {
             SafeERC20.forceApprove(tokens[i], strategy, type(uint256).max);
+            unchecked { i++; }
         }
     }
 

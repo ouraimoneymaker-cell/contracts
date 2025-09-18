@@ -10,10 +10,16 @@ import { IAccessControlManager } from "./interfaces/IAccessControlManager.sol";
  * @dev The AccessControlled contract is a wrapper around the OpenZeppelin AccessControl contract
  *      It provides a standardized way to control access to methods within the Strata Smart Contract Ecosystem.
  *      The contract allows the owner to set an AccessControlManager contract address.
- *      It can restrict method calls based on the sender's role and the method's signature.
  */
 
 abstract contract AccessControlled is Initializable, Ownable2StepUpgradeable {
+
+    bytes32 public constant PAUSER_ROLE                 = keccak256("PAUSER_ROLE");
+    bytes32 public constant UPDATER_CDO_APR_ROLE        = keccak256("UPDATER_CDO_APR_ROLE");
+    bytes32 public constant UPDATER_FEED_ROLE           = keccak256("UPDATER_FEED_ROLE");
+    bytes32 public constant UPDATER_STRAT_CONFIG_ROLE   = keccak256("UPDATER_STRAT_CONFIG_ROLE");
+    bytes32 public constant RESERVE_MANAGER_ROLE        = keccak256("RESERVE_MANAGER_ROLE");
+
     /// @notice Access control manager contract
     IAccessControlManager public acm;
 

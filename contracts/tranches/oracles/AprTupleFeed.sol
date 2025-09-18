@@ -9,15 +9,6 @@ import "hardhat/console.sol";
 
 contract AprTupleFeed is IAprTupleFeed, AccessControlled {
 
-
-    struct Round {
-        // SD7x12
-        int64 aprTarget;
-        int64 aprBase;
-        uint64 updatedAt;
-        uint64 answeredInRound;
-    }
-
     int64 private constant APR_BOUNDARY_MAX = 200 * 1e12;
     int64 private constant APR_BOUNDARY_MIN = -10 * 1e12;
 

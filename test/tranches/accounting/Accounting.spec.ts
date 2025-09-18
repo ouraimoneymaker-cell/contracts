@@ -60,7 +60,7 @@ UAction.create({
                     ]
                 });
             },
-            async '!update in 0.5 year without yield' () {
+            async 'update in 0.5 year without yield' () {
                 let exec = new Executor(deploy);
                 await exec.run({
                     steps: [
@@ -246,7 +246,7 @@ UAction.create({
 
             },
         },
-        '↘️ deposit 20srt/80jrt': {
+        '!↘️ deposit 20srt/80jrt': {
             async $teardown () {
                 await client.debug.revert(snapshotId);
             },

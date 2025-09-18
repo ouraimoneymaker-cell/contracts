@@ -4,10 +4,19 @@ pragma solidity ^0.8.28;
 import { IErrors } from "../interfaces/IErrors.sol";
 import { IStrataCDO } from "../interfaces/IStrataCDO.sol";
 import { ICDOComponent } from "../interfaces/ICDOComponent.sol";
+import { AccessControlled } from "../../governance/AccessControlled.sol";
 
-abstract contract CDOComponent is ICDOComponent, IErrors {
+/// @title CDOComponent
+/// @notice Abstract base contract for CDO components (Tranches, Accounting, Strategy)
+/// @dev Provides common functionality and access control for CDO-related contracts
+abstract contract CDOComponent is ICDOComponent, IErrors, AccessControlled {
 
     IStrataCDO public cdo;
+
+     /**
+     * @dev See https://docs.openzeppelin.com/upgrades-plugins/writing-upgradeable#storage-gaps
+     */
+    uint256[49] private __gap;
 
     /// @notice ensure cooldownDuration is zero
     modifier onlyCDO() {

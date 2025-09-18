@@ -12,11 +12,10 @@ import { IStrategy } from "../../interfaces/IStrategy.sol";
 import { IStrataCDO } from "../../interfaces/IStrataCDO.sol";
 import { IERC20Cooldown } from "../../interfaces/cooldown/IERC20Cooldown.sol";
 import { IUnstakeCooldown } from "../../interfaces/cooldown/IUnstakeCooldown.sol";
-import { AccessControlled } from "../../../governance/AccessControlled.sol";
 
-import { CDOComponent } from "../../base/CDOComponent.sol";
+import { Strategy } from "../../Strategy.sol";
 
-contract sUSDeStrategy is IStrategy, CDOComponent, AccessControlled {
+contract sUSDeStrategy is IStrategy, Strategy {
 
     IERC4626 public immutable sUSDe;
     IERC20 public immutable USDe;

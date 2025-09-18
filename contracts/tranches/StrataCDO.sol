@@ -3,21 +3,30 @@ pragma solidity ^0.8.28;
 
 import { IERC4626 } from "@openzeppelin/contracts/interfaces/IERC4626.sol";
 import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
-
 import { AccessControlled } from "../governance/AccessControlled.sol";
-
-import { IYieldAccounting } from "./interfaces/IYieldAccounting.sol";
-import { IStrategy } from "./interfaces/IStrategy.sol";
-import { ITranche } from "./interfaces/ITranche.sol";
-
 import { IErrors } from "./interfaces/IErrors.sol";
+import { ITranche } from "./interfaces/ITranche.sol";
+import { IStrategy } from "./interfaces/IStrategy.sol";
 import { IStrataCDO } from "./interfaces/IStrataCDO.sol";
 import { TActionState } from "./structs/TActionState.sol";
+import { IAccounting } from "./interfaces/IAccounting.sol";
 
+
+/// @title StrataCDO
+/// @notice Core CDO contract that orchestrates Tranches, Accounting, and Strategy
+/// @dev Manages deposits, withdrawals, and asset distribution between tranches
 contract StrataCDO is IErrors, IStrataCDO, AccessControlled {
 
-    IYieldAccounting public accounting;
-    IStrategy        public strategy;
+    /// @dev Accounting contract for managing asset flows and TVL redistribution
+    /// @notice This contract handles the calculation of asset distribution between tranches based on target APRs
+    /// @dev It's responsible for updating tranche balances, calculating risk-adjusted returns, and maintaining the reserve
+    IAccounting public accounting;
+
+    /// @dev The underlying investment strategy contract for this CDO
+    /// @notice This contract implements the specific investment logic, e.g., USDe staking
+    /// @dev Responsible for handling deposits, withdrawals, and calculating total assets
+    /// @dev Interacts directly with external protocol to generate returns
+    IStrategy public strategy;
 
     // Junior (BB) Tranche
     ITranche public jrtVault;
@@ -25,9 +34,16 @@ contract StrataCDO is IErrors, IStrataCDO, AccessControlled {
     // Sinior (AA) Tranche
     ITranche public srtVault;
 
+
+    /// @dev Address of the treasury wallet
+    /// @dev Used as the recipient when reducing reserves
+    /// @dev Can be updated by the RESERVE_MANAGER_ROLE
     address public treasury;
 
+    /// @dev Controls the ability to deposit into or withdraw from the junior tranche
     TActionState public actionsJrt;
+
+    /// @dev Controls the ability to deposit into or withdraw from the senior tranche
     TActionState public actionsSrt;
 
     event DepositsStateChanged(address indexed tranche, bool enabled);
@@ -51,18 +67,23 @@ contract StrataCDO is IErrors, IStrataCDO, AccessControlled {
         AccessControlled_init(owner_, acm_);
     }
 
+    /// @notice Calculates the total assets for a specific tranche
+    /// @dev Retrieves the overall TVL from the strategy and determines the asset split
+    /// @param tranche The address of the tranche (junior or senior) to return assets for
+    /// @return The total assets allocated to the specified tranche
+    /// @dev This function:
+    ///      1. Gets the total TVL from the strategy
+    ///      2. Uses the accounting contract to calculate the asset split
+    ///      3. Returns the assets allocated to the specified tranche
     function totalAssets(address tranche) external view returns (uint256) {
         uint totalAssetsOverall = strategy.totalAssets();
         (uint256 jrtAssets, uint256 srtAssets, ) = accounting.totalAssets(
             totalAssetsOverall
         );
-        if (tranche == address(jrtVault)) {
+        if (isJrt(tranche)) {
             return jrtAssets;
         }
-        if (tranche == address(srtVault)) {
-            return srtAssets;
-        }
-        revert InvalidTranche(tranche);
+        return srtAssets;
     }
 
     function updateAccounting () external onlyTranche {
@@ -94,6 +115,11 @@ contract StrataCDO is IErrors, IStrataCDO, AccessControlled {
         accounting.updateBalanceFlow(0, jrtAssetsOut, 0, srtAssetsOut);
     }
 
+    /// @notice Determines if the given address is the Junior (BB) Tranche
+    /// @dev Used to differentiate between Junior and Senior Tranches
+    /// @param tranche The address to check
+    /// @return bool True if the address is the Junior Tranche, false if it's the Senior Tranche
+    /// @dev Reverts with InvalidTranche error if the address is neither Junior nor Senior Tranche
     function isJrt (address tranche) public view returns (bool) {
         if (tranche == address(0)) {
             revert InvalidTranche(tranche);
@@ -107,9 +133,10 @@ contract StrataCDO is IErrors, IStrataCDO, AccessControlled {
         revert InvalidTranche(tranche);
     }
 
-    // Deploy and configure the CDO components first with this CDO
+    /// @notice Configures the CDO with its components
+    /// @dev Can only be called once by the owner after components deployment
     function configure (
-        IYieldAccounting accounting_,
+        IAccounting accounting_,
         IStrategy strategy_,
         ITranche jrtVault_,
         ITranche srtVault_
@@ -131,21 +158,28 @@ contract StrataCDO is IErrors, IStrataCDO, AccessControlled {
         srtVault_.configure();
     }
 
+    /// @notice Reduces the reserve and transfers tokens to the treasury
+    /// @dev Only callable by RESERVE_MANAGER_ROLE
     function reduceReserve (address token, uint256 tokenAmount) external onlyRole(RESERVE_MANAGER_ROLE) {
         if (treasury == address(0)) {
             revert ZeroAddress();
         }
+        // Reverts if the token is not supported
         uint256 baseAssets = strategy.convertToAssets(token, tokenAmount, Math.Rounding.Floor);
+        // Reverts if not enough reserve
         accounting.reduceReserve(baseAssets);
+        // Transfers tokens out instantly if possible, or through the cooldown process
         strategy.reduceReserve(token, tokenAmount, treasury);
         emit ReserveReduced(token, tokenAmount);
     }
 
+    /// @notice Sets the address of the reserve treasury
     function setReserveTreasury (address treasury_) external onlyRole(RESERVE_MANAGER_ROLE) {
         treasury = treasury_;
         emit TreasurySet(treasury_);
     }
 
+    /// @notice Sets action states for the tranche; zero address affects both tranches
     function setActionStates (address tranche, bool isDepositEnabled, bool isWithdrawEnabled) external onlyRole(PAUSER_ROLE) {
         if (address(tranche) == address(0)) {
             setActionStatesInner(address(jrtVault), isDepositEnabled, isWithdrawEnabled);
@@ -154,6 +188,8 @@ contract StrataCDO is IErrors, IStrataCDO, AccessControlled {
         }
         setActionStatesInner(tranche, isDepositEnabled, isWithdrawEnabled);
     }
+
+    /// @notice Internal function to set deposit and withdrawal states for a tranche
     function setActionStatesInner (address tranche, bool isDepositEnabled, bool isWithdrawEnabled) internal {
         TActionState storage state = isJrt(tranche)? actionsJrt : actionsSrt;
         if (state.isDepositEnabled != isDepositEnabled) {

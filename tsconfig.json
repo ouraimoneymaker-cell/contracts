@@ -1,11 +1,23 @@
 {
   "compilerOptions": {
-    "target": "es2020",
-    "module": "commonjs",
+    "target": "es2022",
+    "module": "preserve",
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
-    "strict": true,
+    "moduleResolution": "bundler",
+    "moduleDetection": "force",
+    "strict": false,
+    "strictNullChecks": false,
     "skipLibCheck": true,
-    "resolveJsonModule": true
+    "resolveJsonModule": true,
+    "paths": {
+      "@0xc/*": [
+        "0xc/*"
+      ],
+      "@s/*": [
+        "src/*"
+      ]
+    },
+    "baseUrl": "./"
   }
 }

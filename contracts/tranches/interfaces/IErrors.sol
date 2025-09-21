@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: UNLICENSED
+// SPDX-License-Identifier: MIT
 pragma solidity ^0.8.28;
 
 
@@ -15,6 +15,9 @@ interface IErrors {
 
     error WithdrawalsDisabled(address tranche);
     error DepositsDisabled(address tranche);
+
+    error DepositCapReached(address tranche);
+    error WithdrawalCapReached(address tranche);
 
     error InvalidConfigCooldown();
 }

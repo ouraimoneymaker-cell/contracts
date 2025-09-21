@@ -2,9 +2,9 @@ import { IToken } from 'dequanto/models/IToken';
 import { TEth } from 'dequanto/models/TEth';
 
 export interface IPlatform {
-    Tokens: Record<string, Partial<IToken>>;
+    Tokens?: Record<string, Partial<IToken>>;
 
-    Tranches: {
+    Tranches?: {
         [id: string]: {
             base: Partial<IToken>,
 
@@ -17,5 +17,8 @@ export interface IPlatform {
                 description: string
             }
         }
+    }
+    Feed?: {
+        stalePeriodAfter: string | '4hours'
     }
 }

@@ -1,51 +1,14 @@
-import { HardhatProvider } from 'dequanto/hardhat/HardhatProvider';
-import { TranchesDeploy } from '../../../src/deployments/TranchesDeploy';
-import { UAction } from 'atma-utest'
-import { $require } from 'dequanto/utils/$require';
-import { AprTupleFeed } from '@0xc/hardhat/AprTupleFeed/AprTupleFeed';
-import { $apr } from '../../../src/utils/$apr';
-import { $bigint } from 'dequanto/utils/$bigint';
-import { YieldAccounting } from '@0xc/hardhat/YieldAccounting/YieldAccounting';
-import { StrataCDO } from '@0xc/hardhat/StrataCDO/StrataCDO';
-import { $date } from 'dequanto/utils/$date';
-import { $block } from 'dequanto/utils/$block';
-import { l } from 'dequanto/utils/$logger';
-import { $accounting } from '../utils/$accounting';
+import { UTest } from 'atma-utest'
+import { $hh } from '../utils/$hh';
+import { Executor } from './Executor';
 
+await $hh.test.deploy();
 
-let hh = new HardhatProvider();
-let client = await hh.client('localhost');
-let deployer = await hh.deployer(0);
-
-
-let deploy = new TranchesDeploy({
-    client,
-    deployer
-});
-
-let snapshotId;
-
-let { USDe, sUSDe } = await deploy.ensureEthena();
-let { jrtVault, srtVault, cdo, strategy, accounting, feed } = await deploy.ensureEthenaCDO();
-
-UAction.create({
-    async $before () {
-        snapshotId = await client.debug.snapshot();
-    },
-    async $teardown () {
-        await client.debug.revert(snapshotId);
-    },
-
+UTest.create({
     'sUSDe APY ⬆️🟢 SSR': {
-        async $teardown () {
-            await client.debug.revert(snapshotId);
-        },
         '➡️ deposit 50/50': {
-            async $teardown () {
-                await client.debug.revert(snapshotId);
-            },
             async 'accrue after 1 year' () {
-                let exec = new Executor(deploy);
+                let exec = new Executor($hh.test);
                 await exec.run({
                     steps: [
                         { balanceFlow: [1000, 0, 1000, 0] },
@@ -61,7 +24,7 @@ UAction.create({
                 });
             },
             async 'update in 0.5 year without yield' () {
-                let exec = new Executor(deploy);
+                let exec = new Executor($hh.test);
                 await exec.run({
                     steps: [
                         { balanceFlow: [1000, 0, 1000, 0] },
@@ -84,11 +47,8 @@ UAction.create({
         },
 
         '↗️ deposit 80srt/20jrt': {
-            async $teardown () {
-                await client.debug.revert(snapshotId);
-            },
             async 'accrue after 1 year' () {
-                let exec = new Executor(deploy);
+                let exec = new Executor($hh.test);
                 await exec.run({
                     steps: [
                         { balanceFlow: [1600, 0, 400, 0] },
@@ -104,7 +64,7 @@ UAction.create({
                 });
             },
             async 'update in 0.5 year without yield' () {
-                let exec = new Executor(deploy);
+                let exec = new Executor($hh.test);
                 await exec.run({
                     steps: [
                         { balanceFlow: [1600, 0, 400, 0] },
@@ -123,11 +83,8 @@ UAction.create({
             },
         },
         '↘️ deposit 20srt/80jrt': {
-            async $teardown () {
-                await client.debug.revert(snapshotId);
-            },
             async 'accrue after 1 year' () {
-                let exec = new Executor(deploy);
+                let exec = new Executor($hh.test);
                 await exec.run({
                     steps: [
                         { balanceFlow: [400, 0, 1600, 0] },
@@ -143,7 +100,7 @@ UAction.create({
                 });
             },
             async 'update in 0.5 year without yield' () {
-                let exec = new Executor(deploy);
+                let exec = new Executor($hh.test);
                 await exec.run({
                     steps: [
                         { balanceFlow: [400, 0, 1600, 0] },
@@ -163,15 +120,9 @@ UAction.create({
         }
     },
     'sUSDe APY ⬇️🔴 SSR': {
-        async $teardown () {
-            await client.debug.revert(snapshotId);
-        },
         '➡️ deposit 50/50': {
-            async $teardown () {
-                await client.debug.revert(snapshotId);
-            },
             async 'accrue after 1 year' () {
-                let exec = new Executor(deploy);
+                let exec = new Executor($hh.test);
                 await exec.run({
                     steps: [
                         { balanceFlow: [1000, 0, 1000, 0] },
@@ -187,7 +138,7 @@ UAction.create({
                 });
             },
             async 'update in 0.5 year without yield' () {
-                let exec = new Executor(deploy);
+                let exec = new Executor($hh.test);
                 await exec.run({
                     steps: [
                         { balanceFlow: [1000, 0, 1000, 0] },
@@ -206,11 +157,8 @@ UAction.create({
             },
         },
         '↗️ deposit 80srt/20jrt': {
-            async $teardown () {
-                await client.debug.revert(snapshotId);
-            },
             async 'accrue after 1 year' () {
-                let exec = new Executor(deploy);
+                let exec = new Executor($hh.test);
                 await exec.run({
                     steps: [
                         { balanceFlow: [1600, 0, 400, 0] },
@@ -227,7 +175,7 @@ UAction.create({
             },
             async 'update in 0.5 year without yield' () {
 
-                let exec = new Executor(deploy);
+                let exec = new Executor($hh.test);
                 await exec.run({
                     steps: [
                         { balanceFlow: [1600, 0, 400, 0] },
@@ -246,12 +194,9 @@ UAction.create({
 
             },
         },
-        '!↘️ deposit 20srt/80jrt': {
-            async $teardown () {
-                await client.debug.revert(snapshotId);
-            },
+        '↘️ deposit 20srt/80jrt': {
             async 'accrue after 1 year' () {
-                let exec = new Executor(deploy);
+                let exec = new Executor($hh.test);
                 await exec.run({
                     steps: [
                         { balanceFlow: [400, 0, 1600, 0] },
@@ -267,7 +212,7 @@ UAction.create({
                 });
             },
             async 'update in 0.5 year without yield' () {
-                let exec = new Executor(deploy);
+                let exec = new Executor($hh.test);
                 await exec.run({
                     steps: [
                         { balanceFlow: [400, 0, 1600, 0] },
@@ -287,118 +232,3 @@ UAction.create({
         }
     }
 });
-
-namespace Updater {
-    let cdo: StrataCDO;
-    let accounting: YieldAccounting;
-    export async function impersonate (cdo_: StrataCDO, accounting_: YieldAccounting) {
-        cdo = cdo_;
-        accounting = accounting_;
-        await client.debug.setBalance(cdo.address, 10n**18n);
-        await client.debug.impersonateAccount(cdo.address);
-    }
-    export async function balanceFlow(jrtIn: number, jrtOut: number, srtIn: number, srtOut: number) {
-        await accounting.$receipt().updateBalanceFlow(
-            cdo,
-            $bigint.toWei(jrtIn),
-            $bigint.toWei(jrtOut),
-            $bigint.toWei(srtIn),
-            $bigint.toWei(srtOut)
-        );
-    }
-    export async function totalAssets(currentNAV: number) {
-        await accounting.$receipt().updateAccounting(
-            cdo,
-            $bigint.toWei(currentNAV),
-        );
-    }
-    export async function time(t: string) {
-        //let s = $date.parseTimespan(t, { get: 's' });
-        let dateBefore = await Block.getDate();
-        await client.debug.mine(t);
-        let dateAfter = await Block.getDate();
-        let seconds = Math.floor((dateAfter.valueOf() - dateBefore.valueOf()) / 1000)
-        l`Moved time from gray<${ $date.format(dateBefore, 'yyyy-MM-dd HH:mm') }> to cyan<${ $date.format(dateAfter, 'yyyy-MM-dd HH:mm') }> (s: gray<${ seconds} >)`
-    }
-}
-
-namespace Balance {
-    export async function eq (balance: bigint | Promise<bigint>, requireBalance: number, msg?: string) {
-        $require.eq(await balance, $bigint.toWei(requireBalance), msg);
-    }
-    export async function eqAvg (balance: bigint | Promise<bigint>, requireBalance: number, msg?: string) {
-        let b = await balance;
-        let bEther = $bigint.toEther(b, 18);
-        let diff = Math.abs(bEther - requireBalance);
-        if (diff > 5) {
-            throw new Error(`Balance not around to ${requireBalance}, actual: ${bEther}`);
-        }
-
-    }
-}
-
-namespace Block {
-    export async function getDate () {
-        let nr = await client.getBlockNumber();
-        let block = await client.getBlock(nr);
-        return $date.fromUnixTimestamp(block.timestamp);
-    }
-}
-
-
-
-class Executor {
-    srtNav: bigint
-    jrtNav: bigint
-
-    constructor(private deploy: TranchesDeploy) {
-
-    }
-
-    async run (data: IExecutionData) {
-        let accounting = await deploy.ensureAccounting(cdo.address);
-
-        await Updater.impersonate(cdo, accounting);
-        await Updater.totalAssets(0);
-
-        for (let step of data.steps) {
-            if (step.aprs != null) {
-                await feed.$receipt().updateRoundData(deployer, $apr.toWei(step.aprs[0]), $apr.toWei(step.aprs[1]));
-            }
-            if (step.balanceFlow != null) {
-                await Updater.balanceFlow(...step.balanceFlow);
-            }
-            if (step.time != null) {
-                await Updater.time(step.time);
-            }
-            if (step.totalAssets != null) {
-                await Updater.totalAssets(step.totalAssets);
-                await Balance.eq(await accounting.jrtNav() + await accounting.srtNav(), step.totalAssets);
-                await Balance.eq(await accounting.nav(), step.totalAssets);
-            }
-            if (step.eqAvg) {
-                console.log('JRT:', $bigint.toEther(await accounting.jrtNav()));
-                console.log('SRT:', $bigint.toEther(await accounting.srtNav()));
-                await Balance.eqAvg(accounting.jrtNav(), step.eqAvg[0]);
-                await Balance.eqAvg(accounting.srtNav(), step.eqAvg[1]);
-            }
-            if (step.eqNav != null) {
-                await Balance.eq(accounting.nav(), step.eqNav);
-            }
-        }
-
-    }
-}
-
-interface IExecutionData {
-    //aprs: [targetApr: number, baseApr: number]
-    steps: IExecutionStep[]
-}
-interface IExecutionStep {
-    aprs?: [targetApr: number, baseApr: number]
-    balanceFlow?: [jrtIn: number, jrtOut: number, srtIn: number, srtOut: number]
-    time?: string
-    totalAssets?: number
-    eqAvg?: [jrtNav: number, srtNav: number]
-    eqNav?: number
-}

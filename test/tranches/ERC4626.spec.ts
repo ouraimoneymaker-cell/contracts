@@ -1,6 +1,6 @@
 import { Web3ClientFactory } from 'dequanto/clients/Web3ClientFactory';
 import { HardhatProvider } from 'dequanto/hardhat/HardhatProvider';
-import { TranchesDeploy } from '../../src/deployments/TranchesDeploy';
+import { TranchesDeployments } from '../../src/deployments/TranchesDeployments';
 import { UAction } from 'atma-utest'
 import { $erc4626 } from './utils/$erc4626';
 import { $usde } from './utils/$usde';
@@ -14,7 +14,7 @@ UAction.create({
         let client = await hh.client('localhost');
         let deployer = await hh.deployer();
 
-        let deploy = new TranchesDeploy({
+        let deploy = new TranchesDeployments({
             client,
             deployer
         });

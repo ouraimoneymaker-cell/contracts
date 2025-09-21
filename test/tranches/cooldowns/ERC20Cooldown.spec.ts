@@ -1,5 +1,5 @@
 import { HardhatProvider } from 'dequanto/hardhat/HardhatProvider';
-import { TranchesDeploy } from '../../../src/deployments/TranchesDeploy';
+import { TranchesDeployments } from '../../../src/deployments/TranchesDeployments';
 import { UAction } from 'atma-utest'
 import { $usde } from '../utils/$usde';
 import { $erc20 } from '../utils/$erc20';
@@ -9,21 +9,16 @@ import { ERC20Cooldown } from '@0xc/hardhat/ERC20Cooldown/ERC20Cooldown';
 import { ERC20 } from 'dequanto/prebuilt/openzeppelin/ERC20';
 import { $date } from 'dequanto/utils/$date';
 import { $require } from 'dequanto/utils/$require';
+import { $hh } from '../utils/$hh';
 
 
 let hh = new HardhatProvider();
-let client = await hh.client('localhost');
-let deployer = await hh.deployer(0);
-
 let alice = await hh.deployer(1);
 let bob = await hh.deployer(2);
 
-let deploy = new TranchesDeploy({
-    client,
-    deployer
-});
+await $hh.test.init();
 
-let { USDe, sUSDe } = await deploy.ensureEthena();
+let { USDe, sUSDe } = await $hh.test.factory.ensureEthena();
 await $usde.mint(USDe, alice, 1000.0);
 
 
@@ -35,12 +30,12 @@ UAction.create({
     },
     async 'transfer via cooldown' () {
 
-        let { erc20Cooldown } = await deploy.ensureCooldowns();
+        let { erc20Cooldown } = await $hh.test.factory.ensureCooldowns();
 
         await transfer(erc20Cooldown, USDe, alice, bob, 20n, '60s');
         await transfer(erc20Cooldown, USDe, alice, bob, 30n, '120s');
 
-        await client.debug.mine(`30s`);
+        await $hh.test.mine(`30s`);
 
         // no transfers yet
         await $erc20.eqBalance(USDe, bob, 0n);
@@ -56,7 +51,7 @@ UAction.create({
         }
 
         // #1: 60s passed, withdraw 1. portion
-        await client.debug.mine(`51s`);
+        await $hh.test.mine(`51s`);
         await eqBalanceOf(erc20Cooldown, USDe, bob, 20n);
 
         await finalize(erc20Cooldown, USDe, bob);
@@ -66,7 +61,7 @@ UAction.create({
         await eqBalanceOf(erc20Cooldown, USDe, bob, 0n);
 
         // #2: 120s passed, withdraw 2. portion
-        await client.debug.mine(`61s`);
+        await $hh.test.mine(`61s`);
         await eqBalanceOf(erc20Cooldown, USDe, bob, 30n);
         await finalize(erc20Cooldown, USDe, bob);
         await $erc20.eqBalance(USDe, bob, 50n);
@@ -82,7 +77,7 @@ async function transfer (cooldown: ERC20Cooldown, token: ERC20 | any, from: TEth
 }
 
 async function finalize (cooldown: ERC20Cooldown, token: ERC20 | any, to: $acc.Address) {
-    await cooldown.$receipt().finalize(deployer,  token.address, $acc.toAddress(to));
+    await cooldown.$receipt().finalize($hh.test.deployer,  token.address, $acc.toAddress(to));
 }
 
 async function eqBalanceOf(cooldown: ERC20Cooldown, token: ERC20 | any, account: $acc.Address, requireAmount: bigint) {

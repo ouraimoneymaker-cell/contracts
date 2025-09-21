@@ -12,7 +12,7 @@ export namespace $erc20 {
         if (typeof amount === 'bigint') {
             return amount;
         }
-        let erc20 = new ERC20($acc.toAddress(token), $hh.client());
+        let erc20 = new ERC20($acc.toAddress(token), $hh.getClient());
         if (typeof amount === 'number') {
             return $bigint.toWei(amount, await Tools.decimals(erc20))
         }

@@ -1,5 +1,5 @@
 import { HardhatProvider } from 'dequanto/hardhat/HardhatProvider';
-import { TranchesDeploy } from '../../../src/deployments/TranchesDeploy';
+import { TranchesDeployments } from '../../../src/deployments/TranchesDeployments';
 import { UAction } from 'atma-utest'
 import { $require } from 'dequanto/utils/$require';
 import { AprTupleFeed } from '@0xc/hardhat/AprTupleFeed/AprTupleFeed';
@@ -11,7 +11,7 @@ let client = await hh.client('localhost');
 let deployer = await hh.deployer(0);
 
 
-let deploy = new TranchesDeploy({
+let deploy = new TranchesDeployments({
     client,
     deployer
 });

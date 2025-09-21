@@ -1,5 +1,14 @@
-// SPDX-License-Identifier: UNLICENSED
+// SPDX-License-Identifier: MIT
 pragma solidity ^0.8.28;
+
+/**
+ ____  _             _          ____ ____   ___
+/ ___|| |_ _ __ __ _| |_ __ _  / ___|  _ \ / _ \
+\___ \| __| '__/ _` | __/ _` || |   | | | | | | |
+ ___) | |_| | | (_| | || (_| || |___| |_| | |_| |
+|____/ \__|_|  \__,_|\__\__,_| \____|____/ \___/
+*/
+
 
 import { IERC4626 } from "@openzeppelin/contracts/interfaces/IERC4626.sol";
 import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
@@ -11,8 +20,6 @@ import { IStrataCDO } from "./interfaces/IStrataCDO.sol";
 import { TActionState } from "./structs/TActionState.sol";
 import { IAccounting } from "./interfaces/IAccounting.sol";
 
-
-/// @title StrataCDO
 /// @notice Core CDO contract that orchestrates Tranches, Accounting, and Strategy
 /// @dev Manages deposits, withdrawals, and asset distribution between tranches
 contract StrataCDO is IErrors, IStrataCDO, AccessControlled {
@@ -86,6 +93,23 @@ contract StrataCDO is IErrors, IStrataCDO, AccessControlled {
         return srtAssets;
     }
 
+    function maxDeposit(address tranche) external view returns (uint256) {
+        bool isJrt_ = isJrt(tranche);
+        bool isDepositEnabled = isJrt_ ? actionsJrt.isDepositEnabled : actionsSrt.isDepositEnabled;
+        if (isDepositEnabled == false) {
+            return 0;
+        }
+        return accounting.maxDeposit(isJrt_);
+    }
+    function maxWithdraw(address tranche) external view returns (uint256) {
+        bool isJrt_ = isJrt(tranche);
+        bool isWithdrawEnabled = isJrt_ ? actionsJrt.isWithdrawEnabled : actionsSrt.isWithdrawEnabled;
+        if (isWithdrawEnabled == false) {
+            return 0;
+        }
+        return accounting.maxWithdraw(isJrt_);
+    }
+
     function updateAccounting () external onlyTranche {
         uint256 totalAssetsOverall = strategy.totalAssets();
         accounting.updateAccounting(totalAssetsOverall);
@@ -96,6 +120,9 @@ contract StrataCDO is IErrors, IStrataCDO, AccessControlled {
         bool enabled = isJrt_ ? actionsJrt.isDepositEnabled : actionsSrt.isDepositEnabled;
         if (!enabled) {
             revert DepositsDisabled(tranche);
+        }
+        if (baseAssets > accounting.maxDeposit(isJrt_)) {
+            revert DepositCapReached(tranche);
         }
         strategy.deposit(tranche, token, tokenAmount, baseAssets, /* owner: */ tranche);
         uint jrtAssetsIn = isJrt_ ? baseAssets : 0;
@@ -108,6 +135,9 @@ contract StrataCDO is IErrors, IStrataCDO, AccessControlled {
         bool enabled = isJrt_ ? actionsJrt.isWithdrawEnabled : actionsSrt.isWithdrawEnabled;
         if (!enabled) {
             revert WithdrawalsDisabled(tranche);
+        }
+        if (baseAssets > accounting.maxWithdraw(isJrt_)) {
+            revert WithdrawalCapReached(tranche);
         }
         strategy.withdraw(tranche, token, tokenAmount, baseAssets, receiver);
         uint jrtAssetsOut = isJrt_ ? baseAssets : 0;

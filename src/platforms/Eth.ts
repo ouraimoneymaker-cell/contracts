@@ -21,5 +21,8 @@ export const Eth: IPlatform = {
                 description: 'Senior Tranch',
             }
         }
+    },
+    Feed: {
+        stalePeriodAfter: '4hours'
     }
 }

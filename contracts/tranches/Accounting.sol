@@ -1,15 +1,15 @@
-// SPDX-License-Identifier: UNLICENSED
+// SPDX-License-Identifier: MIT
 pragma solidity ^0.8.28;
 
-import { UD60x18Ext } from "./utils/UD60x18Ext.sol";
-import { MathExt } from "./utils/MathExt.sol";
-import { UD60x18, pow, mul } from "@prb/math/src/ud60x18/Math.sol";
-import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
 import { OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
+import { UD60x18, pow, mul } from "@prb/math/src/ud60x18/Math.sol";
 import { IAccounting } from "./interfaces/IAccounting.sol";
 import { IStrataCDO } from "./interfaces/IStrataCDO.sol";
-import { IAprTupleFeed } from "./interfaces/IAprFeed.sol";
+import { IAprPairFeed } from "./interfaces/IAprPairFeed.sol";
 import { CDOComponent } from "./base/CDOComponent.sol";
+import { UD60x18Ext } from "./utils/UD60x18Ext.sol";
+import { MathExt } from "./utils/MathExt.sol";
 import "hardhat/console.sol";
 
 /**
@@ -20,12 +20,13 @@ contract Accounting is IAccounting, CDOComponent {
 
     uint256 constant SECONDS_PER_YEAR = 31_536_000;
 
-    int64 private constant APR_BOUNDARY_MAX = 200 * 1e12;
-    int64 private constant APR_BOUNDARY_MIN = 0;
+    int64   private constant APR_BOUNDARY_MAX = 200e12;
+    int64   private constant APR_BOUNDARY_MIN = 0;
+    uint256 private constant APR_FEED_DECIMALS = 12;
 
     /// @dev The oracle to fetch the latest APR floor and APR base.
     /// @notice When the oracle is updated, it can actively push the latest values to this contract, allowing us to adjust srtTargetIndex.
-    IAprTupleFeed public aprsFeed;
+    IAprPairFeed public aprPairFeed;
 
     /// @dev External floor target APR for Srt
     UD60x18 public aprTarget;
@@ -56,19 +57,27 @@ contract Accounting is IAccounting, CDOComponent {
     UD60x18 public riskY;
     UD60x18 public riskK;
 
+    /// @dev minimum TVL ratio: TVLjrt/TVLsrt, e.g. >= 0.05%
+    /// @dev This ratio helps maintain a balance between Jrt and Srt, ensuring JRT always has a minimum share of the total TVL
+    /// @dev It limits withdrawals from Jrt and deposits to Srt to maintain this ratio
+    /// @dev In case of low APR, Jrt will still be responsible for funding Srt returns, even if it falls below this ratio
+    uint256 public minimumJrtSrtRatio;
+
     error InvalidNavSpit(uint256 navT1, uint256 jrtAssets, uint256 srtAssets, uint256 reserveAssets);
 
-    event AprsPushed(uint256 aprTarget, uint256 aprBase);
-    event AprsFeedChanged(address aprsFeed);
+    event AprPairFeedChanged(address aprPairFeed);
     event ReservePercentageChanged(uint256 reserveBps);
 
     function initialize(
         address owner_,
         address acm_,
-        IStrataCDO cdo_
+        IStrataCDO cdo_,
+        IAprPairFeed aprPairFeed_
     ) public virtual initializer {
         AccessControlled_init(owner_, acm_);
         cdo = cdo_;
+
+        aprPairFeed = aprPairFeed_;
 
         riskX = UD60x18.wrap(0.2e18);
         riskY = UD60x18.wrap(0.2e18);
@@ -76,6 +85,7 @@ contract Accounting is IAccounting, CDOComponent {
 
         srtTargetIndex = 1e18;
         indexTimestamp = block.timestamp;
+        minimumJrtSrtRatio = 0.05e18;
     }
 
     /// @notice Returns the current total assets for each tranche and the reserve
@@ -109,6 +119,22 @@ contract Accounting is IAccounting, CDOComponent {
         require(amount <= reserveNav, "NOT_ENOUGH_RESERVE");
         reserveNav = reserveNav - amount;
         nav = nav - amount;
+    }
+
+    function maxWithdraw(bool isJrt) external view returns (uint256) {
+        if (isJrt) {
+            uint256 minJrt = srtNav * minimumJrtSrtRatio / 1e18;
+            return Math.saturatingSub(jrtNav, minJrt);
+        }
+        // srt
+        return srtNav;
+    }
+    function maxDeposit(bool isJrt) external view returns (uint256) {
+        if (isJrt) {
+            return type(uint256).max;
+        }
+        uint256 maxSrt = jrtNav * 1e18 / minimumJrtSrtRatio;
+        return Math.saturatingSub(maxSrt, srtNav);
     }
 
     /// @notice Updates the accounting for the CDO, calculating new TVL split
@@ -153,8 +179,9 @@ contract Accounting is IAccounting, CDOComponent {
     /// @dev This function performs the following operations:
     /// 1. Calculates and distributes gains or losses across tranches
     /// 2. Allocates a portion of gains to the Reserve based on reserveBps
-    /// 3. Ensures the Senior tranche reaches its target APR, potentially using Junior tranche funds
-    /// 4. Verifies the final NAV split is consistent with the total NAV
+    /// 3. Junior tranche initially receives all gain, but this is later adjusted
+    /// 4. Ensures the Senior tranche reaches its target APR using Junior tranche funds
+    /// 5. Verifies the final NAV split is consistent with the total NAV
     /// @param navT0 Total Net Asset Value at the previous timestamp
     /// @param jrtNavT0 Junior tranche NAV at the previous timestamp
     /// @param srtNavT0 Senior tranche NAV at the previous timestamp
@@ -174,7 +201,7 @@ contract Accounting is IAccounting, CDOComponent {
         int256 gain_dT = int256(navT1) - int256(navT0);
 
         if (gain_dT < 0) {
-            // Should never happen to USDe, but in such edge case the Loss is covered by Jrt, then Reserve, then Srt
+            // Should never happen to USDe, jic: cover by Jrt, then Reserve, then Srt
             uint256 loss = uint256(-gain_dT);
             console.log("  Loss  : ", loss);
 
@@ -194,7 +221,6 @@ contract Accounting is IAccounting, CDOComponent {
         }
         uint256 gain_dTAbs = uint256(gain_dT);
 
-
         console.log("  Current Strategy Gain  : ", uint256(gain_dT));
         console.log("  srtNavT0      :", srtNavT0);
         console.log("  jrtNavT0      :", jrtNavT0);
@@ -212,7 +238,7 @@ contract Accounting is IAccounting, CDOComponent {
         }
         reserveNavT1 = reserveNavT0 + reserve_dT;
 
-        // Give the total gain (if any) to Juniors, later here, we subtract from Juniors the disered Gain of Seniors
+        // Give the total gain (if any) to Juniors, later here, we subtract from Juniors the desired Gain of Seniors
         jrtNavT1 = jrtNavT0 + gain_dTAbs;
 
         // Calculate Srt gain
@@ -222,11 +248,12 @@ contract Accounting is IAccounting, CDOComponent {
         console.log("  Srt Gain Target : ", uint256(srtGainTarget));
 
         if (srtGainTarget < 0) {
-            uint256 los = uint256(-srtGainTarget);
-            uint256 srtLos = Math.min(srtNavT0, los);
+            // Should never happen, jic: transfer the loss to Juniors as profit
+            uint256 loss = uint256(-srtGainTarget);
+            uint256 srtLoss = Math.min(srtNavT0, loss);
 
-            srtNavT0 -= srtLos;
-            jrtNavT0 += srtLos;
+            srtNavT0 -= srtLoss;
+            jrtNavT0 += srtLoss;
             srtGainTarget = 0;
         }
         uint256 srtGainTargetAbs = Math.min(
@@ -272,33 +299,26 @@ contract Accounting is IAccounting, CDOComponent {
     }
 
 
-    function calculateRiskPremium () public view returns (UD60x18){
+    function calculateRiskPremium () internal view returns (UD60x18){
         // RiskPremium = x + y * TVL_ratio_sr ^ k
         UD60x18 tvlRatio = UD60x18.wrap(srtNav == 0 ? 0 : (srtNav * 1e18 / (srtNav + jrtNav)));
         UD60x18 riskPremium = riskX + riskY * pow(tvlRatio, riskK);
         return riskPremium;
     }
 
-    // Push new APRs to update srtIndex
-    function onAprChanged (/* SD7x12 */ int64 newAprTarget, /* SD7x12 */ int64 newAprBase) external onlyRole(UPDATER_CDO_APR_ROLE)  {
-        UD60x18 aprTargetNew = mapApr(newAprTarget);
-        UD60x18 aprBaseNew = mapApr(newAprBase);
-
-        aprTarget = aprTargetNew;
-        aprBase = aprBaseNew;
-        updateIndexes(aprTargetNew, aprBaseNew);
-        emit AprsPushed(aprTargetNew.unwrap(), aprBaseNew.unwrap());
-    }
-
     // Fetch APRs from Feed
     function updateAprs () internal  {
-        if (address(aprsFeed) == address(0)) {
+        if (address(aprPairFeed) == address(0)) {
             return;
         }
-        IAprTupleFeed.Round memory round = aprsFeed.latestRoundData();
+        IAprPairFeed.TRound memory round = aprPairFeed.latestRoundData();
 
-        UD60x18 aprTargetNew = mapApr(round.aprTarget);
-        UD60x18 aprBaseNew = mapApr(round.aprBase);
+        UD60x18 aprTargetNew = normalizeAprFromFeed(round.aprTarget);
+        UD60x18 aprBaseNew = normalizeAprFromFeed(round.aprBase);
+
+        console.log("Update Aprs: Target", aprTargetNew.unwrap());
+        console.log("Update Aprs: Base", aprBaseNew.unwrap());
+
         if (aprTargetNew != aprTarget || aprBaseNew != aprBase) {
             aprTarget = aprTargetNew;
             aprBase = aprBaseNew;
@@ -330,13 +350,22 @@ contract Accounting is IAccounting, CDOComponent {
 
     /// @dev Converts APR from Feed's compact format (12 decimal places, stored in 1 SLOT) to UD60x18
     /// @return The APR value as a UD60x18
-    function mapApr (/* SD7x12 */ int64 apr) internal pure returns (UD60x18) {
+    function normalizeAprFromFeed (/* SD7x12 */ int64 apr) internal pure returns (UD60x18) {
         require(
             APR_BOUNDARY_MIN <= apr && apr <= APR_BOUNDARY_MAX,
             "invalid apr"
         );
-        uint256 decimals = 12;
-        return UD60x18.wrap(uint256(int256(apr)) * (10 ** (18 - decimals)));
+        return UD60x18.wrap(uint256(int256(apr)) * (10 ** (18 - APR_FEED_DECIMALS)));
+    }
+
+
+    /*****************************************************************************
+     *                  External configuration Methods                           *
+     *****************************************************************************/
+
+    // Trigger fetching new APRs to update srtTargetIndex
+    function onAprChanged () external onlyRole(UPDATER_FEED_ROLE)  {
+        updateAprs();
     }
 
     /// @notice Sets the risk premium parameters used in calculating the risk-adjusted APR
@@ -358,11 +387,13 @@ contract Accounting is IAccounting, CDOComponent {
 
     /// @notice Sets the APRs Feed contract for fetching APR target and APR base
     /// @dev This feed provides the external APR values used in calculations
-    /// @param aprsFeed_ The address of the new APRs Feed contract
+    /// @param aprPairFeed_ The address of the new APRs Feed contract
     /// @dev Only callable by the protocol owner
-    function setAprsFeed (IAprTupleFeed aprsFeed_) external onlyOwner {
-        aprsFeed = aprsFeed_;
-        emit AprsFeedChanged(address(aprsFeed_));
+    function setAprPairFeed (IAprPairFeed aprPairFeed_) external onlyOwner {
+        // integrity check
+        require(aprPairFeed_.decimals() == APR_FEED_DECIMALS, "InvalidFeed");
+        aprPairFeed = aprPairFeed_;
+        emit AprPairFeedChanged(address(aprPairFeed_));
     }
 
     /// @notice Sets the percentage of gains allocated to the reserve
@@ -370,7 +401,14 @@ contract Accounting is IAccounting, CDOComponent {
     /// @dev Only callable by the protocol owner
     /// @dev The maximum allowed value is defined by RESERVE_BPS_MAX
     function setReserveBps (uint256 bps) external onlyOwner {
-        require(bps <= RESERVE_BPS_MAX, "RESERVE_BPS_MAX");
+        require(bps <= RESERVE_BPS_MAX, "ReserveBpsMax");
+        reserveBps = bps;
+        emit ReservePercentageChanged(reserveBps);
+    }
+
+    /// @notice Sets the minimum ratio of Junior Tranche to Senior Tranche TVL
+    function setMinimumJrtSrtRatio (uint256 bps) external onlyOwner {
+        require(bps <= RESERVE_BPS_MAX, "ReserveBpsMax");
         reserveBps = bps;
         emit ReservePercentageChanged(reserveBps);
     }

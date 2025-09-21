@@ -1,0 +1,101 @@
+import { IsUSDe } from '@0xc/hardhat/IsUSDe/IsUSDe';
+import { Addresses } from '@s/constants';
+import { BlockDateResolver } from 'dequanto/blocks/BlockDateResolver';
+import { Web3Client } from 'dequanto/clients/Web3Client';
+import { Web3ClientFactory } from 'dequanto/clients/Web3ClientFactory';
+import { $bigint } from 'dequanto/utils/$bigint';
+import { $date } from 'dequanto/utils/$date';
+import { $number } from 'dequanto/utils/$number';
+import { $require } from 'dequanto/utils/$require';
+
+export namespace $ethena {
+    const SECONDS_PER_YEAR = BigInt(31_536_000);
+
+    export async function getAPRbaseFromVesting (p: { blockNr?: number, timestamp?: number }) {
+        let client = await Web3ClientFactory.getAsync('eth');
+
+        let { blockNr, timestamp } = await getTPoint(client, p)
+        let t1 = timestamp;
+        let sUSDe = new IsUSDe( Addresses.eth.sUSDe, client).forBlock(blockNr);
+
+        let t0 = await sUSDe.lastDistributionTimestamp();
+        let VESTING_PERIOD_sUSDe = BigInt($date.parseTimespan('8hours', { get: 's'}));
+
+        if (t1 >= t0 + VESTING_PERIOD_sUSDe) {
+            // No distribution yet;
+            return 0;
+        }
+
+        let vestingAmount = await sUSDe.vestingAmount();
+        let unvestedAmount = await sUSDe.getUnvestedAmount();
+        let totalAssets = await sUSDe.totalAssets();
+
+        let WAD = 10n**18n;
+        let WAD_OUT = 10n**12n;
+        // APRavg = (vestingAmount / vestingPeriod) / totalAssets * SECONDS_PER_YEAR
+        let apr = vestingAmount * SECONDS_PER_YEAR * WAD
+            / VESTING_PERIOD_sUSDe
+            / (totalAssets - (vestingAmount - unvestedAmount));
+
+        let out = apr * WAD_OUT / WAD;
+        return out;
+    }
+
+    export async function getAPRbaseFromDeltaT (
+        p0_: { blockNr?: number, timestamp?: number },
+        p1_: { blockNr?: number, timestamp?: number }
+    ) {
+        let client = await Web3ClientFactory.getAsync('eth');
+
+        let p0 = await getTPoint(client, p0_);
+        let p1 = await getTPoint(client, p1_);
+
+        let sUSDe = new IsUSDe( Addresses.eth.sUSDe, client);
+
+        let a0 = await getAssets(sUSDe, p0.blockNr);
+        let a1 = await getAssets(sUSDe, p1.blockNr);
+
+        let deltaT = p1.timestamp - p0.timestamp;
+
+        let exchangeRate_T0 = a0.totalAssets / a0.totalSupply;
+        let exchangeRate_T1 = a1.totalAssets / a1.totalSupply;
+
+        let growthFactor = exchangeRate_T1 / exchangeRate_T0 - 1;
+
+        let APR = growthFactor / deltaT * Number(SECONDS_PER_YEAR);
+        return $number.round(APR * 100, 5);
+    }
+
+    async function getTPoint (client: Web3Client, p: { blockNr?: number, timestamp?: number }) {
+        let blocks = new BlockDateResolver(client);
+
+        let blockNr = p.blockNr;
+        if (blockNr == null) {
+            let t = $require.notNull(p.timestamp, 'At least timestamp must be present');
+            blockNr = await blocks.getBlockNumberFor($date.fromUnixTimestamp(t));
+        }
+        let block = await client.getBlock(blockNr);
+        let timestamp = block.timestamp;
+
+        return {
+            blockNr,
+            timestamp
+        };
+    }
+    async function getAssets (sUSDe: IsUSDe, blockNr: number) {
+        sUSDe = sUSDe.forBlock(blockNr);
+
+        let [
+            totalAssets,
+            totalSupply
+        ] = await Promise.all([
+            sUSDe.totalAssets(),
+            sUSDe.totalSupply()
+        ]);
+
+        return {
+            totalAssets: $bigint.toEther(totalAssets),
+            totalSupply: $bigint.toEther(totalSupply),
+        }
+    }
+}

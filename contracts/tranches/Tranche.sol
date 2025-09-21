@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: UNLICENSED
+// SPDX-License-Identifier: MIT
 pragma solidity ^0.8.28;
 
 import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
@@ -36,6 +36,29 @@ contract Tranche is CDOComponent, ERC4626Upgradeable {
     /// @return uint256 The total assets for this tranche
     function totalAssets() public view override returns (uint256) {
         return cdo.totalAssets(address(this));
+    }
+
+    /** @dev Extends {IERC4626-maxDeposit} to handle the paused state and the TVL ratio */
+    function maxDeposit(address owner) public view override returns (uint256) {
+        return cdo.maxDeposit(address(this));
+    }
+
+    /** @dev Extends {IERC4626-maxMint} to handle the paused state and the TVL ratio */
+    function maxMint(address owner) public view override returns (uint256) {
+        uint256 assets = cdo.maxDeposit(address(this));
+        return convertToShares(assets);
+    }
+
+    /** @dev Extends {IERC4626-maxWithdraw} to handle the paused state and the TVL ratio */
+    function maxWithdraw(address owner) public view override returns (uint256) {
+        return Math.min(super.maxWithdraw(owner), cdo.maxWithdraw(address(this)));
+    }
+
+    /** @dev Extends {IERC4626-maxRedeem} to handle the paused state and the TVL ratio */
+    function maxRedeem(address owner) public view override returns (uint256) {
+        uint256 assetsMax = cdo.maxWithdraw(address(this));
+        uint256 sharesMax = convertToShares(assetsMax);
+        return Math.min(super.maxRedeem(owner), sharesMax);
     }
 
     /** @dev See {IERC4626-deposit}. */
@@ -80,7 +103,6 @@ contract Tranche is CDOComponent, ERC4626Upgradeable {
     function _deposit(address caller, address receiver, uint256 assets, uint256 shares) internal override {
         super._deposit(caller, receiver, assets, shares);
         cdo.deposit(address(this), asset(), assets, assets);
-        _onAfterDepositChecks();
     }
 
     /**
@@ -96,7 +118,6 @@ contract Tranche is CDOComponent, ERC4626Upgradeable {
         _mint(receiver, shares);
 
         cdo.deposit(address(this), token, tokenAssets, baseAssets);
-        _onAfterDepositChecks();
         emit Deposit(caller, receiver, baseAssets, shares);
         emit OnMetaDeposit(receiver, token, tokenAssets, shares);
     }
@@ -197,9 +218,6 @@ contract Tranche is CDOComponent, ERC4626Upgradeable {
         }
     }
 
-    function _onAfterDepositChecks () internal view {
-
-    }
     function _onAfterWithdrawalChecks () internal view {
         if (totalSupply() < MIN_SHARES) {
             revert MinSharesViolation();

@@ -6,7 +6,6 @@ import { Tranche } from '@0xc/hardhat/Tranche/Tranche'
 import { Web3Client } from 'dequanto/clients/Web3Client'
 import { Deployments } from 'dequanto/contracts/deploy/Deployments'
 import { TEth } from 'dequanto/models/TEth'
-import { ERC20 } from 'dequanto/prebuilt/openzeppelin/ERC20'
 import { Platforms } from '../platforms/Platforms'
 import { IPlatform } from '../platforms/IPlatform'
 import { $require } from 'dequanto/utils/$require'
@@ -14,27 +13,30 @@ import { SUSDeStrategy } from '@0xc/hardhat/sUSDeStrategy/sUSDeStrategy'
 import { StrataCDO } from '@0xc/hardhat/StrataCDO/StrataCDO'
 import { ERC20Cooldown } from '@0xc/hardhat/ERC20Cooldown/ERC20Cooldown'
 import { UnstakeCooldown } from '@0xc/hardhat/UnstakeCooldown/UnstakeCooldown'
-import { YieldAccounting } from '@0xc/hardhat/YieldAccounting/YieldAccounting'
-import { AprFeed } from '@0xc/hardhat/AprFeed/AprFeed'
+import { Accounting } from '@0xc/hardhat/Accounting/Accounting'
 import { Tranches } from '../platforms/Tranches'
 import { $address } from 'dequanto/utils/$address'
 import { IERC4626 } from 'dequanto/prebuilt/openzeppelin/IERC4626'
 import { $contract } from 'dequanto/utils/$contract'
-import alot from 'alot'
 import { SUSDeCooldownRequestImpl } from '@0xc/hardhat/sUSDeCooldownRequestImpl/sUSDeCooldownRequestImpl';
 import { $date } from 'dequanto/utils/$date';
-import { AprTupleFeed } from '@0xc/hardhat/AprTupleFeed/AprTupleFeed';
+import { AprPairFeed } from '@0xc/hardhat/AprPairFeed/AprPairFeed';
+import { SUSDeAprPairProvider } from '@0xc/hardhat/sUSDeAprPairProvider/sUSDeAprPairProvider';
+import { MockStakedUSDS } from '@0xc/hardhat/MockStakedUSDS/MockStakedUSDS';
 
-export class TranchesDeploy {
+
+export class TranchesDeployments {
 
     ds: Deployments
     platform: IPlatform
     owner: TEth.EoAccount
+    deployer: TEth.EoAccount
 
     constructor (params: {
         client: Web3Client
         deployer: TEth.EoAccount
     }) {
+        this.deployer = params.deployer;
         this.ds = new Deployments(params.client, params.deployer, {});
         this.platform = Platforms[params.client.platform];
         this.owner = params.deployer;
@@ -52,15 +54,23 @@ export class TranchesDeploy {
                     this.owner.address
                 ]
             });
+            let sUSDs = await this.ds.ensureContract(MockStakedUSDS, {
+                arguments: [
+                    USDe.address,
+                ]
+            });
             await sUSDe.$receipt().setCooldownDuration(this.owner, $date.parseTimespan('1week', { get: 's' }));
-            return { USDe, sUSDe };
+
+            return { USDe, sUSDe, sUSDs };
         }
 
         let USDeAddress = $require.Address(this.platform.Tokens['USDe'].address);
         let sUSDeAddress = $require.Address(this.platform.Tokens['sUSDe'].address);
+        let sUSDsAddress = $require.Address(this.platform.Tokens['sUSDs'].address);
         return {
             USDe: new MockUSDe (USDeAddress, this.ds.client),
-            sUSDe: new MockStakedUSDe(sUSDeAddress, this.ds.client)
+            sUSDe: new MockStakedUSDe(sUSDeAddress, this.ds.client),
+            sUSDs: new MockStakedUSDS(sUSDsAddress, this.ds.client)
         };
     }
 
@@ -156,6 +166,32 @@ export class TranchesDeploy {
         };
     }
 
+    async ensureFeeds () {
+        const acm  = await this.ensureACM();
+        const { sUSDe, USDe, sUSDs } = await this.ensureEthena();
+        const { contract: sUSDeAprPairProvider } = await this.ds.ensure(SUSDeAprPairProvider, {
+            arguments: [
+                sUSDs.address,
+                sUSDe.address,
+            ]
+        });
+        const stalePeriodAfter =  $date.parseTimespan(this.platform.Feed.stalePeriodAfter, { get: 's' });
+        const { contract: feed } = await this.ds.ensureWithProxy(AprPairFeed, {
+            id: 'sUSDeAprFeeds',
+            initialize: [
+                this.owner.address,
+                acm.address,
+                sUSDeAprPairProvider.address,
+                BigInt(stalePeriodAfter),
+                "Ethena CDO APR Pair"
+            ]
+        });
+        return {
+            feed,
+            sUSDeAprPairProvider,
+        };
+    }
+
     @memd.deco.memoize()
     async ensureEthenaCDO () {
         const { USDe, sUSDe } = await this.ensureEthena();
@@ -192,14 +228,7 @@ export class TranchesDeploy {
         const accounting = await this.ensureAccounting(cdo.address);
 
         // Oracle
-        const { contract: feed } = await this.ds.ensureWithProxy(AprTupleFeed, {
-            id: 'sUSDeAprFeeds',
-            initialize: [
-                this.owner.address,
-                acm.address,
-                'sUSDe Aprs Floor _ Base'
-            ]
-        });
+        const { feed } = await this.ensureFeeds();
 
 
         const { jrtVault, srtVault } = await this.ensureEthenaTranches(cdo);
@@ -227,6 +256,8 @@ export class TranchesDeploy {
             erc20Cooldown,
             unstakeCooldown,
             feed,
+            USDe,
+            sUSDe
         };
 
         await this.configure(info, output);
@@ -235,12 +266,14 @@ export class TranchesDeploy {
 
     async ensureAccounting (cdo: TEth.Address) {
         const acm = await this.ensureACM();
-        const { contract: accounting } = await this.ds.ensureWithProxy(YieldAccounting, {
+        const { feed } = await this.ensureFeeds();
+        const { contract: accounting } = await this.ds.ensureWithProxy(Accounting, {
             id: `USDeAccounting`,
             initialize: [
                 this.owner.address,
                 acm.address,
                 cdo,
+                feed.address,
             ]
         });
         return accounting;
@@ -252,8 +285,8 @@ export class TranchesDeploy {
         srtVault: Tranche,
         cdo: StrataCDO,
         strategy: SUSDeStrategy,
-        accounting: YieldAccounting,
-        feed: AprTupleFeed
+        accounting: Accounting,
+        feed: AprPairFeed
     }) {
 
         let {
@@ -270,14 +303,6 @@ export class TranchesDeploy {
 
         await this.addRoles();
 
-        await this.ds.configure(feed, {
-            shouldUpdate: async () => {
-                return await feed.hasListener(accounting.address) === false
-            },
-            updater: async () => {
-                await feed.$receipt().addListener(this.owner, accounting.address);
-            }
-        });
         await acm.$receipt().grantRole(this.owner, $contract.keccak256('UPDATER_CDO_APR_ROLE'), feed.address);
 
         await this.setCooldown(strategy, info);

@@ -1,5 +1,5 @@
 import { HardhatProvider } from 'dequanto/hardhat/HardhatProvider';
-import { TranchesDeploy } from '../../../src/deployments/TranchesDeploy';
+import { TranchesDeployments } from '../../../src/deployments/TranchesDeployments';
 import { UAction } from 'atma-utest'
 import { $usde } from '../utils/$usde';
 import { $erc20 } from '../utils/$erc20';
@@ -10,41 +10,36 @@ import { $date } from 'dequanto/utils/$date';
 import { $require } from 'dequanto/utils/$require';
 import { $erc4626 } from '../utils/$erc4626';
 import { UnstakeCooldown } from '@0xc/hardhat/UnstakeCooldown/UnstakeCooldown';
+import { $hh } from '../utils/$hh';
+
+
 
 
 let hh = new HardhatProvider();
-let client = await hh.client('localhost');
-let deployer = await hh.deployer(0);
-
 let alice = await hh.deployer(1);
 let bob = await hh.deployer(2);
 
-let deploy = new TranchesDeploy({
-    client,
-    deployer
-});
+await $hh.test.init();
 
-let { USDe, sUSDe } = await deploy.ensureEthena();
-
+let { USDe, sUSDe } = await $hh.test.factory.ensureEthena();
 await $usde.mint(USDe, alice, 1000.0);
 await $erc4626.deposit(sUSDe, alice, 1000.0);
 
-let snapshotId;
 
 UAction.create({
     async $before () {
-        snapshotId = await client.debug.snapshot();
+        await $hh.test.snapshot();
     },
     async $after () {
-        await client.debug.revert(snapshotId);
+        await $hh.test.reset();
     },
     async 'cooldown to self with 2 requests' () {
 
-        let { unstakeCooldown } = await deploy.ensureCooldowns();
+        let { unstakeCooldown } = await $hh.test.factory.ensureCooldowns();
 
         await transfer(unstakeCooldown, sUSDe, alice, alice.address, 20n);
 
-        await client.debug.mine(`2d`);
+        await $hh.test.mine(`2d`);
         await transfer(unstakeCooldown, sUSDe, alice, alice.address, 30n);
 
 
@@ -60,7 +55,7 @@ UAction.create({
         }
 
         // #1: 7days passed, withdraw 1. portion
-        await client.debug.mine(`6days`);
+        await $hh.test.mine(`6days`);
 
         await finalize(unstakeCooldown, sUSDe, alice);
         await $erc20.eqBalance(USDe, alice, 20n);
@@ -69,7 +64,7 @@ UAction.create({
         await eqBalanceOf(unstakeCooldown, sUSDe, alice, 0n);
 
         // #2: 9days passed, withdraw 2. portion
-        await client.debug.mine(`3days`);
+        await $hh.test.mine(`3days`);
         await eqBalanceOf(unstakeCooldown, sUSDe, alice, 30n);
         await finalize(unstakeCooldown, sUSDe, alice);
 
@@ -86,7 +81,7 @@ async function transfer (cooldown: UnstakeCooldown, token: ERC20 | any, from: TE
 }
 
 async function finalize (cooldown: UnstakeCooldown, token: ERC20 | any, to: $acc.Address) {
-    await cooldown.$receipt().finalize(deployer,  token.address, $acc.toAddress(to));
+    await cooldown.$receipt().finalize($hh.test.deployer,  token.address, $acc.toAddress(to));
 }
 
 async function eqBalanceOf(cooldown: UnstakeCooldown, token: ERC20 | any, account: $acc.Address, requireAmount: bigint) {

@@ -1,48 +1,39 @@
 import { HardhatProvider } from 'dequanto/hardhat/HardhatProvider';
-import { TranchesDeploy } from '../../../src/deployments/TranchesDeploy';
 import { UAction } from 'atma-utest'
 import { $usde } from '../utils/$usde';
 import { $erc20 } from '../utils/$erc20';
 import { $acc } from '../utils/$acc';
 import { TEth } from 'dequanto/models/TEth';
 import { ERC20 } from 'dequanto/prebuilt/openzeppelin/ERC20';
-import { $date } from 'dequanto/utils/$date';
 import { $require } from 'dequanto/utils/$require';
-import { $erc4626 } from '../utils/$erc4626';
 import { UnstakeCooldown } from '@0xc/hardhat/UnstakeCooldown/UnstakeCooldown';
 import { $tranche } from '../utils/$tranche';
-import { $promise } from 'dequanto/utils/$promise';
+import { $hh } from '../utils/$hh';
 
 
 let hh = new HardhatProvider();
-let client = await hh.client('localhost');
-let deployer = await hh.deployer(0);
-
 let alice = await hh.deployer(1);
-let bob = await hh.deployer(2);
 
-let deploy = new TranchesDeploy({
-    client,
-    deployer
-});
-
-let { USDe, sUSDe } = await deploy.ensureEthena();
-
-
-
-
-let snapshotId;
+await $hh.test.init();
 
 UAction.create({
     async $before () {
-        snapshotId = await client.debug.snapshot();
+        await $hh.test.snapshot();
     },
     async $after () {
-        await client.debug.revert(snapshotId);
+        await $hh.test.reset();
     },
     async 'deposit/withdraw sUSDe/USDe jrt/srt' () {
 
-        let { jrtVault, srtVault, strategy, erc20Cooldown, unstakeCooldown } = await deploy.ensureEthenaCDO();
+        let {
+            jrtVault,
+            srtVault,
+            strategy,
+            erc20Cooldown,
+            unstakeCooldown,
+            USDe,
+            sUSDe,
+        } = await $hh.test.factory.ensureEthenaCDO();
 
         // Alice deposits into jrt and srt vaults
         await $usde.mint(USDe, alice, 1000.0);
@@ -51,6 +42,7 @@ UAction.create({
 
         await $erc20.eqBalance(USDe, alice, 400);
 
+
         // Alice withdraws sUSDe from jrt tokens with erc20 cooldown
         let sUSDeTokens = await strategy.convertToTokens(sUSDe.address, 150n * 10n**18n, 0);
         await $tranche.withdraw(jrtVault, alice, sUSDe, sUSDeTokens);
@@ -58,10 +50,10 @@ UAction.create({
         await $tranche.withdraw(srtVault, alice, USDe , 150.0);
 
         // Alice withdraws USDe from jrt
-        await client.debug.mine('2days');
+        await $hh.test.mine('2days');
         await $tranche.withdraw(jrtVault, alice, USDe, 100);
 
-        await client.debug.mine('5days');
+        await $hh.test.mine('5days');
 
         // Finalize erc20 cooldown
         await erc20Cooldown.$receipt().finalize(alice, sUSDe.address, alice.address);
@@ -72,7 +64,7 @@ UAction.create({
         await unstakeCooldown.$receipt().finalize(alice, sUSDe.address, alice.address);
         await $erc20.eqBalance(USDe, alice, 550, `withdrawn 150 from srt after cooldown`);
 
-        await client.debug.mine('2days');
+        await $hh.test.mine('2days');
          // Finalize 2. unstake cooldown from jrt
         await unstakeCooldown.$receipt().finalize(alice, sUSDe.address, alice.address);
         await $erc20.eqBalance(USDe, alice, 650, `withdrawn 100 from srt after cooldown`);
@@ -92,7 +84,7 @@ async function transfer (cooldown: UnstakeCooldown, token: ERC20 | any, from: TE
 }
 
 async function finalize (cooldown: UnstakeCooldown, token: ERC20 | any, to: $acc.Address) {
-    await cooldown.$receipt().finalize(deployer,  token.address, $acc.toAddress(to));
+    await cooldown.$receipt().finalize($hh.test.deployer,  token.address, $acc.toAddress(to));
 }
 
 async function eqBalanceOf(cooldown: UnstakeCooldown, token: ERC20 | any, account: $acc.Address, requireAmount: bigint) {

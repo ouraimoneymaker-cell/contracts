@@ -56,7 +56,6 @@ contract sUSDeStrategy is IStrategy, Strategy {
 
 
     function deposit (address tranche, address token, uint256 tokenAmount, uint256 baseAssets, address owner) external onlyCDO returns (uint256) {
-        // @TODO check tokenAmount - baseAssets flow from paranets
         SafeERC20.safeTransferFrom(IERC20(token), owner, address(this), tokenAmount);
 
         if (token == address(USDe)) {
@@ -65,14 +64,13 @@ contract sUSDeStrategy is IStrategy, Strategy {
             return tokenAmount;
         }
         if (token == address(sUSDe)) {
-            //baseAssets = sUSDe.previewRedeem(tokenAmount);
+            // already transferred in ↑
             return baseAssets;
         }
         revert UnsupportedToken(token);
     }
 
     function withdraw (address tranche, address token, uint256 tokenAmount, uint256 baseAssets, address receiver) external onlyCDO returns (uint256) {
-        // @TODO check tokenAmount - baseAssets flow from paranets
         uint256 shares = sUSDe.previewWithdraw(baseAssets);
         if (token == address(sUSDe)) {
             uint256 cooldownSeconds = cdo.isJrt (tranche) ? sUSDeCooldownJrt : sUSDeCooldownSrt;

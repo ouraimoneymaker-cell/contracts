@@ -16,7 +16,7 @@ contract UnstakeCooldown is IUnstakeCooldown, AccessControlled {
 
     event Requested(address indexed token, address indexed user, uint256 amount, uint256 unlockAt);
     event Unstaked(address indexed token, address indexed user, uint256 amount);
-    event UserProxyCreated(address indexed user, uint256 idx, address proxy);
+    event UserProxyCreated(address indexed user, address proxy);
     event UserProxyImplementationSet(address token, address impl);
 
     error InvalidTime ();
@@ -30,11 +30,11 @@ contract UnstakeCooldown is IUnstakeCooldown, AccessControlled {
 
     mapping(address token => IUnstakeHandler unstakeImpl) public implementations;
 
-    /**
-     * @dev Active request
-     */
+    /// @dev Active requests
     mapping(address token => mapping(address account => TRequest[] requests)) public activeRequests;
-    mapping(address token => mapping(address account => mapping(uint256 idx => IUnstakeHandler proxy))) public proxies;
+
+    /// @dev Maintain proxies Pool, after the request is completed, the proxy is returned to the pool
+    mapping(address token => mapping(address account => IUnstakeHandler[] proxy)) public proxiesPool;
 
     function initialize(
         address owner_,
@@ -54,17 +54,26 @@ contract UnstakeCooldown is IUnstakeCooldown, AccessControlled {
         }
 
         TRequest[] storage requests = activeRequests[address(token)][to];
+        IUnstakeHandler[] storage proxies = proxiesPool[address(token)][to];
 
-        uint256 i = requests.length;
-        IUnstakeHandler proxy = proxies[address(token)][to][i];
-        if (address(proxy) == address(0)) {
-            proxy = createDeterministicFor(impl, to, i);
-            proxies[address(token)][to][i] = proxy;
+        IUnstakeHandler proxy;
+        uint256 len = proxies.length;
+        if (len > 0) {
+            proxy = IUnstakeHandler(proxies[len - 1]);
+            proxies.pop();
+        } else {
+            proxy = createFor(impl, to);
         }
+
 
         SafeERC20.safeTransferFrom(token, from, address(proxy), amount);
 
         uint256 unlockAt = proxy.request();
+        if (unlockAt <= block.timestamp) {
+            // Already transfered, return proxy to pool and exit
+            proxies.push(proxy);
+            return;
+        }
 
         requests.push(TRequest(uint64(unlockAt), proxy));
         emit Requested(address(token), to, amount, unlockAt);
@@ -78,17 +87,20 @@ contract UnstakeCooldown is IUnstakeCooldown, AccessControlled {
             revert InvalidTime();
         }
         TRequest[] storage requests = activeRequests[address(token)][user];
+        IUnstakeHandler[] storage proxies = proxiesPool[address(token)][user];
 
         uint256 len = requests.length;
         for (uint256 i; i < len; ) {
             TRequest memory req = requests[i];
             if (req.unlockAt > at) {
-                // still pending
+                // Still pending
                 unchecked { i++; }
                 continue;
             }
 
             claimed += req.proxy.finalize();
+            // Return proxy to the pool (reuse later)
+            proxies.push(req.proxy);
 
             if (i < len - 1) {
                 requests[i] = requests[len - 1];
@@ -115,16 +127,16 @@ contract UnstakeCooldown is IUnstakeCooldown, AccessControlled {
         for (uint256 i = 0; i < l; i++) {
             TRequest memory req = requests[i];
             if (req.unlockAt <= at) {
-                balance += req.proxy.getPending();
+                balance += req.proxy.getPendingAmount();
             }
         }
         return balance;
     }
 
-    function createDeterministicFor(address implementation, address user, uint256 idx) internal returns (IUnstakeHandler proxy) {
-        proxy = IUnstakeHandler(Clones.cloneDeterministic(implementation, bytes32(idx)));
-        proxy.initialize(user);
-        emit UserProxyCreated(user, idx, address(proxy));
+    function createFor(address implementation, address user) internal returns (IUnstakeHandler proxy) {
+        proxy = IUnstakeHandler(Clones.clone(implementation, 0));
+        proxy.initialize(address(this), user);
+        emit UserProxyCreated(user, address(proxy));
         return proxy;
     }
 

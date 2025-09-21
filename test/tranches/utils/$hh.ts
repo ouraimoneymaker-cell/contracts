@@ -4,6 +4,7 @@ import { TranchesDeployments } from '@s/deployments/TranchesDeployments';
 import { $require } from 'dequanto/utils/$require';
 import { Web3Client } from 'dequanto/clients/Web3Client';
 import { TEth } from 'dequanto/models/TEth';
+import { $sig } from 'dequanto/utils/$sig';
 
 
 
@@ -47,6 +48,11 @@ export namespace $hh {
             this.deployer = deployer;
         }
 
+        async createAccount (name: string) {
+            let account = $sig.$account.generate({ name });
+            await this.client.debug.setBalance(account.address, 10n**20n);
+            return account;
+        }
 
         @memd.deco.memoize()
         async deploy () {
@@ -62,7 +68,7 @@ export namespace $hh {
         }
 
         async snapshot (snapshotName: string = 'root') {
-            this.snapshots['root'] = await this.client.debug.snapshot();
+            this.snapshots[snapshotName] = await this.client.debug.snapshot();
         }
 
         async reset (snapshotName: string = 'root') {

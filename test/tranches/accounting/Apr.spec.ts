@@ -4,6 +4,7 @@ import { Executor } from './Executor';
 import { $apr } from '@s/utils/$apr';
 
 await $hh.test.deploy();
+await $hh.test.snapshot();
 
 UTest.create({
     async $teardown () {

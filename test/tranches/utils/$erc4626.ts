@@ -9,28 +9,33 @@ import { $require } from 'dequanto/utils/$require';
 import { Tranche } from '@0xc/hardhat/Tranche/Tranche';
 
 export namespace $erc4626 {
-    export async function deposit (erc4626: IERC4626, sender: TEth.IAccount,  amount: bigint | number) {
+    export async function deposit (erc4626: IERC4626, sender: TEth.IAccount,  amount: bigint | number | `${number}%`) {
         let erc20 = await Tools.getAsset(erc4626);
-        let amountWei = typeof amount === 'number' ? $bigint.toWei(amount, 18) : amount;
+        let amountWei = await $erc20.toAmount(erc4626, amount, sender);
 
         await erc20.$receipt().approve(sender, erc4626.address, amountWei);
         await erc4626.$receipt().deposit(sender, amountWei, sender.address);
     }
 
-    export async function depositMeta (tranche: Tranche & IERC4626, token: $acc.Address, sender: TEth.IAccount,  amount: bigint | number) {
+    export async function redeem (erc4626: IERC4626, sender: TEth.IAccount,  amount: bigint | number | `${number}%`) {
+        let shares = await $erc20.toAmount(erc4626, amount, sender);
+        await erc4626.$receipt().redeem(sender, shares, sender.address, sender.address);
+    }
+
+    export async function depositMeta (tranche: Tranche & IERC4626, token: $acc.Address, sender: TEth.IAccount,  amount: bigint | number | `${number}%`) {
 
         let tokenAddress = $acc.toAddress(token);
-        let amountWei = typeof amount === 'number' ? $bigint.toWei(amount, 18) : amount;
+        let amountWei = await $erc20.toAmount(token, amount, sender);
         let erc20 = new ERC20(tokenAddress, tranche.client);
 
         await erc20.$receipt().approve(sender, tranche.address, amountWei);
         await tranche.$receipt().deposit(sender, erc20.address, amountWei, sender.address);
     }
 
-    export async function withdrawMeta (tranche: Tranche, token: $acc.Address, sender: TEth.IAccount,  amount: bigint | number) {
+    export async function redeemMeta (tranche: Tranche, token: $acc.Address, sender: TEth.IAccount,  amount: bigint | number | `${number}%`) {
         let tokenAddress = $acc.toAddress(token);
-        let amountWei = typeof amount === 'number' ? $bigint.toWei(amount, 18) : amount;
-        await tranche.$receipt().withdraw(sender, tokenAddress, amountWei, sender.address, sender.address);
+        let shares = await $erc20.toAmount(tranche, amount, sender);
+        await tranche.$receipt().redeem(sender, tokenAddress, shares, sender.address, sender.address);
     }
 
     export async function getAssets (erc4626: IERC4626, account: $acc.Address, shares?: number | bigint): Promise<bigint> {

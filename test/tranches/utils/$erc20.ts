@@ -5,6 +5,7 @@ import { $bigint } from 'dequanto/utils/$bigint';
 import { $require } from 'dequanto/utils/$require';
 import { $acc } from './$acc';
 import { $hh } from './$hh';
+import { l } from 'dequanto/utils/$logger';
 
 export namespace $erc20 {
 
@@ -39,6 +40,7 @@ export namespace $erc20 {
         let balanceEth = $bigint.toEther(balanceWei, decimals);
 
         $require.eq(amountWei, balanceWei, `"${await erc20.symbol()}" balance missmatch for user "${address}" (${amountEth} != ${balanceEth}) ${message ?? ''}`);
+        l`✅ ${account?.name}`;
         return amountWei;
     }
 

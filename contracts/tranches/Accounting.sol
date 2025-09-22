@@ -10,7 +10,7 @@ import { IAprPairFeed } from "./interfaces/IAprPairFeed.sol";
 import { CDOComponent } from "./base/CDOComponent.sol";
 import { UD60x18Ext } from "./utils/UD60x18Ext.sol";
 import { MathExt } from "./utils/MathExt.sol";
-import "hardhat/console.sol";
+
 
 /**
  * @title CDO::Accounting
@@ -141,9 +141,7 @@ contract Accounting is IAccounting, CDOComponent {
     /// @dev This method should be called before any deposits or withdrawals in tranches
     /// @dev It calculates the new TVL split, allowing tranches to accurately calculate their share prices
     /// @param navT1 The current total assets (Net Asset Value) held by the CDO in the strategy
-    function updateAccounting (
-        uint256 navT1
-    ) external onlyCDO {
+    function updateAccounting (uint256 navT1) external onlyCDO {
         (
             uint256 jrtNavT1,
             uint256 srtNavT1,
@@ -203,7 +201,6 @@ contract Accounting is IAccounting, CDOComponent {
         if (gain_dT < 0) {
             // Should never happen to USDe, jic: cover by Jrt, then Reserve, then Srt
             uint256 loss = uint256(-gain_dT);
-            console.log("  Loss  : ", loss);
 
             uint256 jrtLoss = Math.min(jrtNavT0, loss);
 
@@ -221,15 +218,6 @@ contract Accounting is IAccounting, CDOComponent {
         }
         uint256 gain_dTAbs = uint256(gain_dT);
 
-        console.log("  Current Strategy Gain  : ", uint256(gain_dT));
-        console.log("  srtNavT0      :", srtNavT0);
-        console.log("  jrtNavT0      :", jrtNavT0);
-
-        // console.log("  index latest       :", srtTargetIndex);
-        // console.log("  index current      :", srtTargetIndexCurrent);
-        // console.log("  apr srt            :", aprSrt.unwrap());
-
-
         // #1 Final new reserve
         uint256 reserve_dT = 0;
         if (gain_dTAbs > 0 && reserveBps > 0) {
@@ -245,7 +233,7 @@ contract Accounting is IAccounting, CDOComponent {
         uint256 srtTargetIndexT1 = getSrtTargetIndexT1();
         // Gain = Assets * (TargetIndex1 / TargetIndex0 - 1);
         int256 srtGainTarget = calculateGain(srtNavT0, srtTargetIndexT1, srtTargetIndex);
-        console.log("  Srt Gain Target : ", uint256(srtGainTarget));
+
 
         if (srtGainTarget < 0) {
             // Should never happen, jic: transfer the loss to Juniors as profit
@@ -268,11 +256,6 @@ contract Accounting is IAccounting, CDOComponent {
 
 
         if (navT1 != (jrtNavT1 + srtNavT1 + reserveNavT1)) {
-            console.log("navT0    :", navT0);
-            console.log("jrtNavT0 :", jrtNavT0);
-            console.log("srtNavT0 :", srtNavT0);
-            console.log("jrtNavT1 :", jrtNavT1);
-            console.log("srtNavT1 :", srtNavT1);
             revert InvalidNavSpit(navT1, jrtNavT1, srtNavT1, reserveNavT1);
         }
 
@@ -316,9 +299,6 @@ contract Accounting is IAccounting, CDOComponent {
         UD60x18 aprTargetNew = normalizeAprFromFeed(round.aprTarget);
         UD60x18 aprBaseNew = normalizeAprFromFeed(round.aprBase);
 
-        console.log("Update Aprs: Target", aprTargetNew.unwrap());
-        console.log("Update Aprs: Base", aprBaseNew.unwrap());
-
         if (aprTargetNew != aprTarget || aprBaseNew != aprBase) {
             aprTarget = aprTargetNew;
             aprBase = aprBaseNew;
@@ -333,12 +313,6 @@ contract Accounting is IAccounting, CDOComponent {
         aprSrt = UD60x18Ext.max(aprTarget_, aprSrt1);
         srtTargetIndex = getSrtTargetIndexT1();
         indexTimestamp = block.timestamp;
-
-        console.log("Update Indexes");
-        console.log("      aprTarget: ", aprTarget_.unwrap());
-        console.log("      aprBase  : ", aprBase_.unwrap());
-        console.log("      aprSrt1  : ", aprSrt1.unwrap());
-        console.log("      aprSrt   : ", aprSrt.unwrap());
     }
 
     /// @dev Calculates the desired gain based on the change in target index over a period

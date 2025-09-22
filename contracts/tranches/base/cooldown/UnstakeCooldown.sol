@@ -7,7 +7,7 @@ import { Clones } from "@openzeppelin/contracts/proxy/Clones.sol";
 import { IUnstakeHandler } from "../../interfaces/cooldown/IUnstakeHandler.sol";
 import { IUnstakeCooldown } from "../../interfaces/cooldown/IUnstakeCooldown.sol";
 import { AccessControlled } from "../../../governance/AccessControlled.sol";
-import "hardhat/console.sol";
+
 
 /**
  * @title Strata sUSDe redemption worker

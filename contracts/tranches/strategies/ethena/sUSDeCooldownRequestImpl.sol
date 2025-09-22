@@ -6,6 +6,12 @@ import { IERC4626 } from "@openzeppelin/contracts/interfaces/IERC4626.sol";
 import { IsUSDe } from "./IsUSDe.sol";
 import { IUnstakeHandler } from "../../interfaces/cooldown/IUnstakeHandler.sol";
 
+/**
+ * @title sUSDeCooldownRequestImpl
+ * @dev Implementation of the unstake process for sUSDe tokens with cooldown period.
+ * This contract is designed to be used within the UnstakeCooldown contract.
+ * It handles the cooldown request, finalization, and asset transfer for unstaking sUSDe tokens.
+ */
 contract sUSDeCooldownRequestImpl is IUnstakeHandler, Initializable {
 
     IsUSDe public immutable sUSDe;
@@ -50,6 +56,10 @@ contract sUSDeCooldownRequestImpl is IUnstakeHandler, Initializable {
         return sUSDe.cooldowns(address(this)).cooldownEnd;
     }
 
+    /**
+     * @dev Completes the unstake request and transfers assets to the receiver.
+     * Can be called by the UnstakeHandler, which can be triggered permissionlessly.
+     */
     function finalize() external returns (uint256 amount)  {
         require(msg.sender == handler, "NOT_AUTHORIZED");
         amount = sUSDe.cooldowns(address(this)).underlyingAmount;

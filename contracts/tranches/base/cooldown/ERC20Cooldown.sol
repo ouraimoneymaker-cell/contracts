@@ -4,7 +4,7 @@ pragma solidity ^0.8.28;
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { IERC20Cooldown } from "../../interfaces/cooldown/IERC20Cooldown.sol";
-import "hardhat/console.sol";
+
 /**
  * @title Strata Cooldown Vault for generic IERC20 tokens
  * @notice The Silo allows to store USDe during the cooldown process.

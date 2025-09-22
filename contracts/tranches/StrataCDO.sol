@@ -115,7 +115,7 @@ contract StrataCDO is IErrors, IStrataCDO, AccessControlled {
         accounting.updateAccounting(totalAssetsOverall);
     }
 
-    function deposit(address tranche, address token, uint256 tokenAmount, uint256 baseAssets) external onlyTranche {
+    function deposit(address tranche, address token, uint256 tokenAmount, uint256 baseAssets) external onlyTranche nonReentrant {
         bool isJrt_ = isJrt(tranche);
         bool enabled = isJrt_ ? actionsJrt.isDepositEnabled : actionsSrt.isDepositEnabled;
         if (!enabled) {
@@ -130,7 +130,7 @@ contract StrataCDO is IErrors, IStrataCDO, AccessControlled {
         accounting.updateBalanceFlow(jrtAssetsIn, 0, srtAssetsIn, 0);
     }
 
-    function withdraw(address tranche, address token, uint256 tokenAmount, uint256 baseAssets, address receiver) external onlyTranche {
+    function withdraw(address tranche, address token, uint256 tokenAmount, uint256 baseAssets, address receiver) external onlyTranche nonReentrant {
         bool isJrt_ = isJrt(tranche);
         bool enabled = isJrt_ ? actionsJrt.isWithdrawEnabled : actionsSrt.isWithdrawEnabled;
         if (!enabled) {

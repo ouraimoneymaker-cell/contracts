@@ -33,6 +33,12 @@ contract Tranche is CDOComponent, ERC4626Upgradeable {
         cdo = cdo_;
     }
 
+    /**
+     * ============================================
+     *              ERC4626 max* methods
+     * ============================================
+     */
+
     /// @return uint256 The total assets for this tranche
     function totalAssets() public view override returns (uint256) {
         return cdo.totalAssets(address(this));
@@ -60,6 +66,13 @@ contract Tranche is CDOComponent, ERC4626Upgradeable {
         uint256 sharesMax = convertToShares(assetsMax);
         return Math.min(super.maxRedeem(owner), sharesMax);
     }
+
+
+    /**
+     * ============================================
+     *        ERC4626 and Meta deposit/mint methods
+     * ============================================
+     */
 
     /** @dev See {IERC4626-deposit}. */
     function deposit(uint256 tokenAssets, address receiver) public override returns (uint256) {
@@ -109,7 +122,6 @@ contract Tranche is CDOComponent, ERC4626Upgradeable {
      * @dev Deposit/mint common workflow for meta token
      */
     function _deposit(address token, address caller, address receiver, uint256 baseAssets, uint256 tokenAssets, uint256 shares) internal virtual {
-
         // Ensure the caller can withdraw the deposited tokenAssets amount
         uint256 maxTokenToBaseAssetsWithdraw = IERC4626(token).maxWithdraw(caller);
         require(maxTokenToBaseAssetsWithdraw >= baseAssets, "MetaVaultExceededMaxWithdraw");
@@ -121,6 +133,12 @@ contract Tranche is CDOComponent, ERC4626Upgradeable {
         emit Deposit(caller, receiver, baseAssets, shares);
         emit OnMetaDeposit(receiver, token, tokenAssets, shares);
     }
+
+    /**
+     * ============================================
+     *     ERC4626 and Meta withdraw/redeem methods
+     * ============================================
+     */
 
     /** @dev See {IERC4626-withdraw}. */
     function withdraw(uint256 assets, address receiver, address owner) public override returns (uint256) {
@@ -154,6 +172,7 @@ contract Tranche is CDOComponent, ERC4626Upgradeable {
         if (token == asset()) {
             return redeem(shares, receiver, owner);
         }
+        cdo.updateAccounting();
         uint256 maxShares = maxRedeem(owner);
         if (shares > maxShares) {
             revert ERC4626ExceededMaxRedeem(owner, shares, maxShares);
@@ -208,6 +227,13 @@ contract Tranche is CDOComponent, ERC4626Upgradeable {
         emit OnMetaWithdraw(receiver, token, tokenAssets, shares);
     }
 
+    /**
+     * ============================================
+     *        Configuration
+     * ============================================
+     * @dev During deposit, CDO requests Strategy to process the assets.
+     *      Here, we allow the strategy to fetch the assets from the Vault.
+     */
     function configure () external onlyCDO {
         IERC20[] memory tokens = cdo.strategy().getSupportedTokens();
         uint256 len = tokens.length;
@@ -217,6 +243,12 @@ contract Tranche is CDOComponent, ERC4626Upgradeable {
             unchecked { i++; }
         }
     }
+
+    /**
+     * ============================================
+     *        Internals
+     * ============================================
+     */
 
     function _onAfterWithdrawalChecks () internal view {
         if (totalSupply() < MIN_SHARES) {

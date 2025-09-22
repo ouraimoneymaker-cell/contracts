@@ -4,7 +4,6 @@ pragma solidity ^0.8.28;
 import { AccessControlled } from "../../governance/AccessControlled.sol";
 import { IAprPairFeed, IStrategyAprPairProvider } from "../interfaces/IAprPairFeed.sol";
 
-import "hardhat/console.sol";
 
 
 /// @title AprPairFeed

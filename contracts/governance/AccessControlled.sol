@@ -3,6 +3,7 @@ pragma solidity ^0.8.28;
 
 import { Initializable } from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import { Ownable2StepUpgradeable } from "@openzeppelin/contracts-upgradeable/access/Ownable2StepUpgradeable.sol";
+import { ReentrancyGuardUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
 import { IAccessControlManager } from "./interfaces/IAccessControlManager.sol";
 
 /**
@@ -12,7 +13,7 @@ import { IAccessControlManager } from "./interfaces/IAccessControlManager.sol";
  *      The contract allows the owner to set an AccessControlManager contract address.
  */
 
-abstract contract AccessControlled is Initializable, Ownable2StepUpgradeable {
+abstract contract AccessControlled is Initializable, Ownable2StepUpgradeable, ReentrancyGuardUpgradeable {
 
     bytes32 public constant PAUSER_ROLE                 = keccak256("PAUSER_ROLE");
     bytes32 public constant UPDATER_CDO_APR_ROLE        = keccak256("UPDATER_CDO_APR_ROLE");
@@ -47,6 +48,7 @@ abstract contract AccessControlled is Initializable, Ownable2StepUpgradeable {
     function AccessControlled_init(address owner, address accessControlManager) internal onlyInitializing {
         __Ownable_init_unchained(owner);
         __AccessControlled_init_unchained(accessControlManager);
+        __ReentrancyGuard_init();
     }
 
     function __AccessControlled_init_unchained(address accessControlManager) internal onlyInitializing {

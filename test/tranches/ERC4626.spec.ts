@@ -11,6 +11,7 @@ import alot from 'alot';
 import { $number } from 'dequanto/utils/$number';
 import { $erc20 } from './utils/$erc20';
 import { l } from 'dequanto/utils/$logger';
+import { $promise } from 'dequanto/utils/$promise';
 
 await $hh.test.deploy();
 await $hh.test.snapshot();
@@ -35,17 +36,32 @@ UAction.create({
         $require.eq(await srtVault.maxDeposit($address.ZERO), 0n);
         $require.eq(await srtVault.maxMint($address.ZERO), 0n);
     },
-    async 'ERC4626::deposit/withdraw Juniors single user' () {
-        let { jrtVault, USDe, sUSDe } = $hh.test.tranches;
+    async '!ERC4626::deposit/withdraw Juniors single user' () {
+        let { jrtVault, srtVault, cdo, USDe, sUSDe, acm } = $hh.test.tranches;
 
         // Deposit initial
         await USDe.$receipt().mint($hh.test.deployer, $hh.test.deployer.address, 10n**18n);
-        await $erc4626.deposit(jrtVault, $hh.test.deployer, 10n**18n)
+        await $erc4626.deposit(jrtVault, $hh.test.deployer, 10n**18n);
+
+        $require.eq(await srtVault.maxDeposit($address.ZERO), (10n**18n) * 20n); // max 20x
 
         let alice = await $hh.test.createAccount('alice');
         await USDe.$receipt().mint(alice, alice.address, 1000n * 10n**18n);
 
         return UTest.create({
+            async 'some access checks' () {
+                let directDepo = await $promise.caught(() => cdo.$receipt().deposit(alice, jrtVault.address, USDe.address, 10n**18n, 10n**18n));
+                $require.notNull(directDepo.error, `manual deposit via CDO`);
+
+                let directUpdate = await $promise.caught(() => cdo.$receipt().updateAccounting(alice));
+                $require.notNull(directUpdate.error, `manual update via CDO`);
+
+                let directInit = await $promise.caught(() => cdo.$receipt().initialize(alice, alice.address, acm.address));
+                $require.notNull(directInit.error, `manual init`);
+
+                let directReconfigure = await $promise.caught(() => jrtVault.$receipt().configure(alice));
+                $require.notNull(directReconfigure.error, `manual config`);
+            },
             async 'USDe' () {
                 await $erc4626.deposit(jrtVault, alice, 600);
                 await $erc20.eqBalance(USDe, alice, 400);
@@ -72,8 +88,8 @@ UAction.create({
 
         // Deposit initial
         await USDe.$receipt().mint($hh.test.deployer, $hh.test.deployer.address, 1000_000n * 10n**18n);
-        await $erc4626.deposit(jrtVault, $hh.test.deployer, 500_000n * 10n**18n)
-        await $erc4626.deposit(srtVault, $hh.test.deployer, 10n**18n)
+        await $erc4626.deposit(jrtVault, $hh.test.deployer, 500_000n * 10n**18n);
+        await $erc4626.deposit(srtVault, $hh.test.deployer, 10n**18n);
 
         let bob = await $hh.test.createAccount('bob');
         await USDe.$receipt().mint(bob, bob.address, 1000n * 10n**18n);

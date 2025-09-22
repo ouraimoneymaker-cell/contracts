@@ -1,62 +1,128 @@
-# Strata contracts
+# High-Level Overview of the Protocol
 
+The protocol is composed of two **ERC-4626 Vaults** (tranches): **Junior (Jrt)** and **Senior (Srt)**.
+Both vaults are implemented as *Meta Vaults*:
 
-[![CircleCI](https://dl.circleci.com/status-badge/img/circleci/CuZPw4nX5nC1pEn3Ea9opp/Fc4365omRPYr1x82FJDJvp/tree/master.svg?style=svg)](https://dl.circleci.com/status-badge/redirect/circleci/CuZPw4nX5nC1pEn3Ea9opp/Fc4365omRPYr1x82FJDJvp/tree/master)
+* Each has a **Base Asset**.
+* They can also accept additional tokens supported by the underlying **Strategy**.
 
+  * Example: the **Ethena Strategy** uses **USDe** as the Base Asset and also accepts **sUSDe**.
 
+All vault shares are denominated in the **Base Asset**.
+User actions (`deposit`, `withdraw`, etc.) are forwarded to the **CDO contract** (the core orchestrator).
 
-Introduction
-----------
+The **CDO contract** has two major components:
 
-Strata is a perpetual yield tranching protocol built on the Ethena Network, designed to offer structured yield exposure on USDe, Ethena’s delta-neutral synthetic stablecoin. Strata allows investors to optimize their risk-return preferences while earning yield from Ethena’s carry trade strategies with two risk-adjusted investment profiles—Senior and Junior.
-
-Docs
-----------
-
-[docs.strata.money](https://strata-finance.gitbook.io/docs)
-
-
-Deployment + Verification
-----------
-
-```bash
-
-# Testnet Ethena dependencies
-npx hardhat ignition deploy ignition/modules/Testnet.ts --network hoodi --verify
-
-# Predeposit
-npx hardhat ignition deploy ignition/modules/pUSDePreDepositModule.ts --network hoodi --verify
-
-
-
-```
-
-Tests
-----------
-
-To run tests first spin up a ganache-cli instance with unlimited contract size flag
-```
-npm run test
-```
-
-Deployments
------------
-
-### Hoodi
-
-- `MockUSDe`: [0x7054A803361640970176Edbd91992DcC52B7D235](https://hoodi.etherscan.io/address/0x7054A803361640970176Edbd91992DcC52B7D235)
-- `MockStakedUSDe`: [0x789d3D9AA2EFDda01f0402a632803158F21cCe05](https://hoodi.etherscan.io/address/0x789d3D9AA2EFDda01f0402a632803158F21cCe05)
-- `PreDepositVault`: [0xaBE28B44a8bD32a0df6Ae784a5F5Ff0a03a57e98](https://hoodi.etherscan.io/address/0xaBE28B44a8bD32a0df6Ae784a5F5Ff0a03a57e98)
+1. **Strategy**
+2. **Accounting**
 
 ---
 
+## Strategy
 
-### Foundry Test
+The Strategy contract is responsible for **asset management**. It receives assets from the CDO, stakes them, and must be able to return them when requested.
 
-Tests can be found in `test/*.t.sol`
+At any point in time, the Strategy reports its **total TVL** (incl. yield).
 
-```bash
-forge test
-```
+When returning assets, the Strategy uses different mechanisms:
+
+* **Direct return**: e.g. `sUSDe` can be returned instantly to an Srt user.
+* **ERC20 Cooldown**: Strategy locks tokens in a cooldown contract. Tokens can be finalized/withdrawn after the cooldown period.
+* **Unstaking Cooldown**: e.g. for USDe, the Strategy requests withdrawal from Ethena's `sUSDe`, which itself has a cooldown period.
+
+Each withdrawal request is handled **independently per user**. New requests do not extend or affect earlier requests.
 
 ---
+
+## Accounting
+
+The Accounting contract performs **pure calculations** for:
+
+* `jrtTVL`
+* `srtTVL`
+
+From these, each vault derives its ERC-4626 `exchangeRate` and `totalAssets`.
+
+### Update Cycle
+
+On every protocol action (deposit, withdrawal), Accounting is updated:
+
+1. Strategy reports current `totalTVL` at current block timestamp `t1`.
+2. Accounting compares against the last saved `totalTVL` at `t0`.
+3. **Strategy Gain** is calculated:
+
+   ```
+   gain = totalTVL(t1) - totalTVL(t0)
+   ```
+
+   (For `sUSDe`, this amount is always >= 0)
+
+4. A portion of the gain may be redirected to **reserveTVL** (if the reserve percentage is set).
+5. The remaining gain goes to Junior TVL.
+6. Calculate Senior's desired gain and subtract from Junior's TVL.
+
+### Gain Splitting
+
+* **Senior Gain Desired (Target)**: Based on the Senior tranche's target index (APR target), last srtTVL and deltaT.
+
+Two cases:
+
+**Case A: Strategy Gain >= Senior Gain Desired**
+
+* Seniors receive their full target.
+* Juniors receive the remaining gain.
+* So finally:
+
+  ```
+  jrtTVL + srtTVL + reserveTVL == totalTVL
+  ```
+
+**Case B: Strategy Gain < Senior Gain Desired**
+
+* Any Senior APR shortfall is covered by the Junior tranche
+
+---
+
+## Deposit Flow (Example with Jrt)
+
+1. **Update Accounting**
+
+   * Refresh Strategy TVL and calculate gains for the period `t0 → t1`.
+   * Adjust Junior/Senior TVLs according to Gain Splitting rules.
+
+2. **Calculate Shares (ERC-4626)**
+
+   * `jrtTVL` is the vault's `totalAssets()`.
+   * User's deposited assets are exchanged for shares proportional to current `jrtTVL`.
+
+3. **Forward Assets to Strategy**
+
+   * User's tokens are passed into the Strategy for staking.
+   * `jrtTVL` is incremented accordingly.
+
+---
+
+## Withdrawals
+
+Withdrawals follow the same process:
+
+* First, Accounting updates TVLs at current block `t1`.
+* Then, ERC-4626 `totalAssets()` is used to determine how many assets a user receives for redeeming shares.
+* Strategy may return assets directly or via cooldown mechanisms, as described above.
+
+---
+
+## APRs Feed
+
+The APR Feed contract provides dynamic parameters:
+
+* **APR SSR** (base rate)
+* **APR Base**
+
+Whenever these values change, the Feed updates the **Accounting contract**, which recalculates the **Senior Target Index** accordingly.
+
+
+
+
+----
+(c) 2025

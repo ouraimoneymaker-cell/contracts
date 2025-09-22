@@ -30,3 +30,7 @@ ignition/deployments/chain-31337
 crytic-export
 echidna*/
 medusa*/
+
+0xc/
+0xweb.json
+contracts/backlog/

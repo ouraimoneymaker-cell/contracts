@@ -1,8 +1,9 @@
 {
   "private": true,
+  "type": "module",
   "name": "strata",
   "version": "0.0.1",
-  "description": "Strata Money Contracts",
+  "description": "Strata CDO Contracts",
   "scripts": {
     "node": "hardhat node",
     "test": "hardhat test",
@@ -11,14 +12,14 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Strata-Money/contracts.git"
+    "url": "git+https://github.com/Strata-Money/contracts-tranches.git"
   },
   "author": "Strata Team",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/Strata-Money/contracts/issues"
+    "url": "https://github.com/Strata-Money/contracts-tranches/issues"
   },
-  "homepage": "https://github.com/Strata-Money/contracts#readme",
+  "homepage": "https://github.com/Strata-Money/contracts-tranches#readme",
   "devDependencies": {
     "@nomicfoundation/hardhat-toolbox": "^5.0.0",
     "hardhat": "^2.24.2"

@@ -54,7 +54,18 @@ contract sUSDeStrategy is IStrategy, Strategy {
         SafeERC20.forceApprove(sUSDe, address(unstakeCooldown), type(uint256).max);
     }
 
-
+    /**
+     * @notice Processes asset deposits for the CDO contract.
+     * @dev This method is called by the CDO contract to handle asset deposits.
+     *      If the deposited token is USDe, it will be staked to receive sUSDe.
+     *      If the deposited token is already sUSDe, it will be accepted as is.
+     * @param tranche The address of the tranche depositing assets (not used in this strategy)
+     * @param token The address of the token being deposited
+     * @param tokenAmount The amount of tokens being deposited
+     * @param baseAssets The amount of base assets represented by the deposit (used for sUSDe deposits)
+     * @param owner The address of the asset owner from whom to transfer tokens
+     * @return The amount of base assets received after deposit
+     */
     function deposit (address tranche, address token, uint256 tokenAmount, uint256 baseAssets, address owner) external onlyCDO returns (uint256) {
         SafeERC20.safeTransferFrom(IERC20(token), owner, address(this), tokenAmount);
 
@@ -70,6 +81,18 @@ contract sUSDeStrategy is IStrategy, Strategy {
         revert UnsupportedToken(token);
     }
 
+    /**
+     * @notice Processes asset withdrawals for the CDO contract.
+     * @dev This method is called by the CDO contract to handle asset withdrawals.
+     *      If withdrawing sUSDe, a cooldown period is applied based on the tranche type.
+     *      If withdrawing USDe, the sUSDe is unstaked with a cooldown.
+     * @param tranche The address of the tranche withdrawing assets
+     * @param token The address of the token to be withdrawn
+     * @param tokenAmount The amount of tokens to be withdrawn (not used in this implementation)
+     * @param baseAssets The amount of base assets to be withdrawn
+     * @param receiver The address that will receive the withdrawn assets
+     * @return The amount of tokens withdrawn (shares for sUSDe, baseAssets for USDe)
+     */
     function withdraw (address tranche, address token, uint256 tokenAmount, uint256 baseAssets, address receiver) external onlyCDO returns (uint256) {
         uint256 shares = sUSDe.previewWithdraw(baseAssets);
         if (token == address(sUSDe)) {
@@ -84,6 +107,16 @@ contract sUSDeStrategy is IStrategy, Strategy {
         revert UnsupportedToken(token);
     }
 
+    /**
+     * @notice Allows the CDO to withdraw tokens from the strategy's reserve
+     * @dev This function is part of the reserve reduction process and can only be called by the CDO.
+     *      It handles both sUSDe and USDe tokens, applying different transfer mechanisms for each.
+     *      For sUSDe, it uses erc20Cooldown with no cooldown period.
+     *      For USDe, it uses unstakeCooldown to handle the unstaking process.
+     * @param token The address of the token to be withdrawn (either sUSDe or USDe)
+     * @param tokenAmount The amount of tokens to be withdrawn
+     * @param receiver The address that will receive the withdrawn tokens
+     */
     function reduceReserve (address token, uint256 tokenAmount, address receiver) external onlyCDO {
         if (token == address(sUSDe)) {
             erc20Cooldown.transfer(sUSDe, receiver, tokenAmount, 0);
@@ -96,12 +129,27 @@ contract sUSDeStrategy is IStrategy, Strategy {
         revert UnsupportedToken(token);
     }
 
+    /**
+     * @notice Calculates the total assets managed by this strategy
+     * @dev This function returns the current value of the strategy's assets in USDe.
+     * @return baseAssets The total amount of USDe managed by this strategy
+     */
     function totalAssets () external view returns (uint256 baseAssets) {
         uint256 shares = sUSDe.balanceOf(address(this));
         baseAssets = sUSDe.previewRedeem(shares);
         return baseAssets;
     }
 
+    /**
+     * @notice Converts a given amount of supported tokens to their equivalent in USDe
+     * @dev This function handles conversion for both sUSDe and USDe tokens.
+     *      For sUSDe, it uses the vault's exchange rate, considering the rounding direction.
+     *      For USDe, it returns the input amount as is.
+     * @param token The address of the token to convert (either sUSDe or USDe)
+     * @param tokenAmount The amount of tokens to convert
+     * @param rounding The rounding direction to use for the conversion (floor or ceiling)
+     * @return The equivalent amount in USDe
+     */
     function convertToAssets (address token, uint256 tokenAmount, Math.Rounding rounding) external view returns (uint256) {
         if (token == address(sUSDe)) {
             return rounding == Math.Rounding.Floor
@@ -114,6 +162,16 @@ contract sUSDeStrategy is IStrategy, Strategy {
         revert UnsupportedToken(token);
     }
 
+    /**
+     * @notice Converts a given amount of base assets (USDe) to the equivalent amount of supported tokens
+     * @dev This function handles conversion for both sUSDe and USDe tokens.
+     *      For sUSDe, it uses the vault's exchange rate, considering the rounding direction.
+     *      For USDe, it returns the input amount as is.
+     * @param token The address of the token to convert to (either sUSDe or USDe)
+     * @param baseAssets The amount of base assets (USDe) to convert
+     * @param rounding The rounding direction to use for the conversion (floor or ceiling)
+     * @return The equivalent amount in the requested token (sUSDe shares or USDe)
+     */
     function convertToTokens (address token, uint256 baseAssets, Math.Rounding rounding) external view returns (uint256) {
         if (token == address(sUSDe)) {
             return rounding == Math.Rounding.Floor
@@ -126,6 +184,9 @@ contract sUSDeStrategy is IStrategy, Strategy {
         revert UnsupportedToken(token);
     }
 
+     /**
+     * @notice Returns an array of supported tokens: sUSDe and USDe
+     */
     function getSupportedTokens () external view returns (IERC20[] memory) {
         IERC20[] memory tokens = new IERC20[](2);
         tokens[0] = IERC20(address(sUSDe));
@@ -133,6 +194,9 @@ contract sUSDeStrategy is IStrategy, Strategy {
         return tokens;
     }
 
+     /**
+     * @notice Updates the cooldown periods for sUSDe withdrawals (USDe cooldown is already defined by Ethena's unstaking period)
+     */
     function setCooldowns (uint256 sUSDeCooldownJrt_, uint256 sUSDeCooldownSrt_) external onlyRole(UPDATER_STRAT_CONFIG_ROLE) {
         uint256 WEEK = 7 days;
         if (sUSDeCooldownJrt_ > WEEK || sUSDeCooldownSrt_ > WEEK) {

@@ -122,6 +122,16 @@ The APR Feed contract provides dynamic parameters:
 Whenever these values change, the Feed updates the **Accounting contract**, which recalculates the **Senior Target Index** accordingly.
 
 
+# Deploy
+
+To localhost:
+```
+# start hh node
+npm run node
+# deploy/check unchanged
+
+npm run deploy-local
+```
 
 
 ----

@@ -8,7 +8,8 @@
     "node": "hardhat node",
     "test": "hardhat test",
     "watch": "hardhat compile --watch",
-    "compile": "hardhat compile"
+    "compile": "hardhat compile",
+    "deploy-local": "atma act tasks/deploy.act.ts -q \"deploy and configure\" --chain hardhat"
   },
   "repository": {
     "type": "git",

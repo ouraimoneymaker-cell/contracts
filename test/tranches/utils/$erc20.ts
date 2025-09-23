@@ -26,6 +26,11 @@ export namespace $erc20 {
         throw new Error(`Invalid amount format: ${amount}`);
     }
 
+    export async function transfer (erc20: ERC20 | any, from, to, amount: bigint | number | `${number}%`): Promise<any> {
+        let amountWei = await toAmount(erc20, amount, from);
+        await erc20.$receipt().transfer(from, to, amountWei);
+    }
+
     export async function eqBalance(erc20: ERC20 | any, account: $acc.Address, amount: bigint | number, message?: string) {
         let decimals = await erc20.decimals();
         let amountWei = typeof amount === 'number'

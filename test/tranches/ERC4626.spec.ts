@@ -14,7 +14,6 @@ import { l } from 'dequanto/utils/$logger';
 import { $promise } from 'dequanto/utils/$promise';
 
 await $hh.test.deploy();
-await $hh.test.snapshot();
 
 UAction.create({
     async $before () {

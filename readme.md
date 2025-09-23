@@ -122,6 +122,20 @@ The APR Feed contract provides dynamic parameters:
 Whenever these values change, the Feed updates the **Accounting contract**, which recalculates the **Senior Target Index** accordingly.
 
 
+# Test
+
+```bash
+npm i
+npm run compile
+# OR in watch mode
+npm run watch
+
+npm run test
+
+#OR single file
+npm run spec -- ./test/tranches/ERC4626.spec.ts
+```
+
 # Deploy
 
 To localhost:

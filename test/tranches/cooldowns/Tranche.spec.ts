@@ -14,12 +14,9 @@ import { $hh } from '../utils/$hh';
 let hh = new HardhatProvider();
 let alice = await hh.deployer(1);
 
-await $hh.test.init();
+await $hh.test.deploy();
 
 UAction.create({
-    async $before () {
-        await $hh.test.snapshot();
-    },
     async $after () {
         await $hh.test.reset();
     },

@@ -60,7 +60,7 @@ export namespace $hh {
 
             this.ethena = await this.factory.ensureEthena();
             this.tranches = await this.factory.ensureEthenaCDO();
-
+            await this.snapshot();
             return {
                 ...this.tranches,
                 ...this.ethena,
@@ -68,10 +68,16 @@ export namespace $hh {
         }
 
         async snapshot (snapshotName: string = 'root') {
+            if (this.client == null) {
+                return;
+            }
             this.snapshots[snapshotName] = await this.client.debug.snapshot();
         }
 
         async reset (snapshotName: string = 'root') {
+            if (this.client == null) {
+                return;
+            }
             let snap = $require.notNull(this.snapshots[snapshotName], snapshotName);
             let result = await this.client.debug.revert(snap);
             if (result == false) {

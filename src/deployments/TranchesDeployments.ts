@@ -50,7 +50,7 @@ export class TranchesDeployments {
             let sUSDe = await this.ds.ensureContract(MockStakedUSDe, {
                 arguments: [
                     USDe.address,
-                    USDe.address,
+                    this.owner.address,
                     this.owner.address
                 ]
             });

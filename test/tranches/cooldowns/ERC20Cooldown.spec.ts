@@ -16,17 +16,18 @@ let hh = new HardhatProvider();
 let alice = await hh.deployer(1);
 let bob = await hh.deployer(2);
 
-await $hh.test.init();
+await $hh.test.deploy();
 
 let { USDe, sUSDe } = await $hh.test.factory.ensureEthena();
 await $usde.mint(USDe, alice, 1000.0);
-
-
 
 UAction.create({
     async $before () {
         // burn
         await USDe.$receipt().transfer(bob, '0x1', await USDe.balanceOf(bob.address));
+    },
+    async $after () {
+        await $hh.test.reset();
     },
     async 'transfer via cooldown' () {
 

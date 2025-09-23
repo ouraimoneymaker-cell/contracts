@@ -1,110 +1,49 @@
-import { UAction, UTest } from 'atma-utest';
-import { HardhatProvider } from 'dequanto/hardhat/HardhatProvider';
+import { UAction } from 'atma-utest';
 import { $hh } from '../utils/$hh';
-import { AprsProvider } from '@0xc/hardhat/AprsProvider/AprsProvider';
 import { Addresses } from '@s/constants';
 import { $bigint } from 'dequanto/utils/$bigint';
-import { Web3ClientFactory } from 'dequanto/clients/Web3ClientFactory';
 import { Web3Client } from 'dequanto/clients/Web3Client';
 import { IsUSDe } from '@0xc/hardhat/IsUSDe/IsUSDe';
 import { $date } from 'dequanto/utils/$date';
 import { l } from 'dequanto/utils/$logger';
 import { BlockDateResolver } from 'dequanto/blocks/BlockDateResolver';
-import { $ethena } from '@s/utils/$ethena';
+import { SUSDeAprPairProvider } from '@0xc/hardhat/sUSDeAprPairProvider/sUSDeAprPairProvider';
+import { $erc4626 } from '../utils/$erc4626';
 
 
-//let net = await $hh.forked();
+await $hh.test.deploy();
 
 UAction.create({
+    async $before () {
+
+    },
+    async $after () {
+        await $hh.test.reset();
+    },
+
     async 'aprs' () {
+        let { factory, deployer } = $hh.test
+        let { sUSDs, sUSDe, USDe } = await factory.ensureEthena();
 
+        await sUSDs.$receipt().setSsr(deployer, 1000000001471536429740616381n);
+        await USDe.$receipt().mint(deployer, deployer.address, 1000n * 10n**18n);
+        await $erc4626.deposit(sUSDe, deployer, '50%');
 
-        // let provider = await net.ds.ensureContract(AprsProvider, {
-        //     arguments:[
-        //         Addresses.eth.sUSDS,
-        //         Addresses.eth.sUSDe,
-        //     ]
-        // });
+        await USDe.$receipt().approve(deployer, sUSDe.address, $bigint.MAX_UINT256);
+        await sUSDe.$receipt().transferInRewards(deployer, 10n * 10n**18n)
 
-        // //console.log($bigint.toEther(await provider.getAPRtarget(), 12))
-
-        // console.log($bigint.toEther(await provider.getAPRbase(), 12))
-
-
-        let client = await Web3ClientFactory.getAsync('eth');
-
-        let HOUR = 60 * 60;
-        let distrTimestamp = 1758261719;
-        let block = 23395201;
-
-        let sUSDe = new IsUSDe(Addresses.eth.sUSDe, client);
-        let cursor = Number(await sUSDe.lastDistributionTimestamp());
-
-        let aprs = [];
-        console.log('');
-        for (let i = 0; i < 80; i++) {
-            let aprV1 = await $ethena.getAPRbaseFromDeltaT(
-                // { blockNr: block + 100},
-                // { blockNr: block + 305 }
-                { timestamp: cursor },
-                { timestamp: cursor - 8 * HOUR }
-            );
-            let aprV2 = await getAPRbase(client, cursor);
-            let aprV3 = await getAPRbaseV3(client, cursor);
-
-            let date = $date.fromUnixTimestamp(cursor);
-            aprs.push([
-                date,
-                aprV1,
-                aprV2,
-                aprV3,
-            ]);
-
-            let cells = [
-                $date.format(date, 'dd-MM HH:mm'), aprV1, aprV2, aprV3
+        let { contract: provider } = await factory.ds.ensure(SUSDeAprPairProvider, {
+            arguments:[
+                sUSDs.address,
+                sUSDe.address,
             ]
-            console.log(cells.join(', '));
-            cursor -= 8 * HOUR;
-        }
+        });
 
+        let APRbase = $bigint.toEther(await provider.getAPRbase(), 12);
+        let APRtarget = $bigint.toEther(await provider.getAPRtarget(), 12);
+        eq_(APRtarget, 0.0464);
+        eq_(APRbase, 21.9);
 
-
-        //let blockNr = await new BlockDateResolver(client).getBlockNumberFor($date.fromUnixTimestamp(distrTimestamp));
-
-
-        // await getAPRbaseForBlock(client, block - 1);
-        // await getAPRbaseForBlock(client, block);
-
-        // await getAPRbaseForBlock(client, block + 1);
-        // await getAPRbaseForBlock(client, block + 2);
-        // await getAPRbaseForBlock(client, block + 3);
-        // await getAPRbaseForBlock(client, block + 4);
-        // await getAPRbaseForBlock(client, block + 305);
-
-        let date = $date.parse('11-09-2025 20:00')
-
-        await getAPRbase(client, $date.toUnixTimestamp(date));
-        let apr = await $ethena.getAPRbaseFromDeltaT(
-            // { blockNr: block + 100},
-            // { blockNr: block + 305 }
-            { timestamp: $date.toUnixTimestamp(date) - 8 * 60 * 60 },
-            { timestamp: $date.toUnixTimestamp(date) },
-        );
-        console.log(apr);
-
-        // await getAPRbase(client, distr - 5 * HOUR);
-        // await getAPRbase(client, distr - 4 * HOUR);
-        // await getAPRbase(client, distr - 3 * HOUR);
-        // await getAPRbase(client, distr - 2 * HOUR);
-        // await getAPRbase(client, distr - 1 * HOUR);
-        // await getAPRbase(client, distr);
-        // await getAPRbase(client, distr + 1 * HOUR);
-        // await getAPRbase(client, distr + 2 * HOUR);
-        // await getAPRbase(client, distr + 3 * HOUR);
-        // await getAPRbase(client, distr + 4 * HOUR);
-        // await getAPRbase(client, distr + 5 * HOUR);
-        // await getAPRbase(client, distr + 6 * HOUR);
-        // await getAPRbase(client, distr + 7 * HOUR);
     },
 })
 

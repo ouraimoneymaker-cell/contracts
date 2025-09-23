@@ -19,7 +19,7 @@ let hh = new HardhatProvider();
 let alice = await hh.deployer(1);
 let bob = await hh.deployer(2);
 
-await $hh.test.init();
+await $hh.test.deploy();
 
 let { USDe, sUSDe } = await $hh.test.factory.ensureEthena();
 await $usde.mint(USDe, alice, 1000.0);
@@ -27,9 +27,6 @@ await $erc4626.deposit(sUSDe, alice, 1000.0);
 
 
 UAction.create({
-    async $before () {
-        await $hh.test.snapshot();
-    },
     async $after () {
         await $hh.test.reset();
     },

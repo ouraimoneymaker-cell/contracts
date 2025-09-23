@@ -11,7 +11,7 @@ import { Tranche } from '@0xc/hardhat/Tranche/Tranche';
 export namespace $erc4626 {
     export async function deposit (erc4626: IERC4626, sender: TEth.IAccount,  amount: bigint | number | `${number}%`) {
         let erc20 = await Tools.getAsset(erc4626);
-        let amountWei = await $erc20.toAmount(erc4626, amount, sender);
+        let amountWei = await $erc20.toAmount(erc20, amount, sender);
 
         await erc20.$receipt().approve(sender, erc4626.address, amountWei);
         await erc4626.$receipt().deposit(sender, amountWei, sender.address);

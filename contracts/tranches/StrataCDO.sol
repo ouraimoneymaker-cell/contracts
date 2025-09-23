@@ -93,6 +93,13 @@ contract StrataCDO is IErrors, IStrataCDO, AccessControlled {
         return srtAssets;
     }
 
+    /// @notice Returns the current total assets held in the strategy
+    /// @dev This method retrieves the fresh amount of assets directly from the strategy contract
+    /// @return uint256 The current total assets in the strategy
+    function totalStrategyAssets() public view returns (uint256) {
+        return strategy.totalAssets();
+    }
+
     function maxDeposit(address tranche) external view returns (uint256) {
         bool isJrt_ = isJrt(tranche);
         bool isDepositEnabled = isJrt_ ? actionsJrt.isDepositEnabled : actionsSrt.isDepositEnabled;

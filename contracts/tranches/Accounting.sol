@@ -146,17 +146,7 @@ contract Accounting is IAccounting, CDOComponent {
     /// @dev It calculates the new TVL split, allowing tranches to accurately calculate their share prices
     /// @param navT1 The current total assets (Net Asset Value) held by the CDO in the strategy
     function updateAccounting (uint256 navT1) external onlyCDO {
-        (
-            uint256 jrtNavT1,
-            uint256 srtNavT1,
-            uint256 reserveNavT1
-        ) = calculateNAVSplit(nav, jrtNav, srtNav, reserveNav, navT1);
-
-        updateIndexes(aprTarget, aprBase);
-        nav = navT1;
-        jrtNav = jrtNavT1;
-        srtNav = srtNavT1;
-        reserveNav = reserveNavT1;
+        updateAccountingInner(navT1);
     }
 
     /// @notice Updates the Net Asset Values (NAVs) after deposits or withdrawals
@@ -264,6 +254,20 @@ contract Accounting is IAccounting, CDOComponent {
         }
 
         return (jrtNavT1, srtNavT1, reserveNavT1);
+    }
+
+    function updateAccountingInner (uint256 navT1) internal {
+        (
+            uint256 jrtNavT1,
+            uint256 srtNavT1,
+            uint256 reserveNavT1
+        ) = calculateNAVSplit(nav, jrtNav, srtNav, reserveNav, navT1);
+
+        updateIndexes(aprTarget, aprBase);
+        nav = navT1;
+        jrtNav = jrtNavT1;
+        srtNav = srtNavT1;
+        reserveNav = reserveNavT1;
     }
 
     /// @notice Calculates the target index for the current block
@@ -379,7 +383,8 @@ contract Accounting is IAccounting, CDOComponent {
     /// @dev Only callable by the protocol owner
     /// @dev The maximum allowed value is defined by RESERVE_BPS_MAX
     function setReserveBps (uint256 bps) external onlyOwner {
-        require(bps <= RESERVE_BPS_MAX, "ReserveBpsMax");
+        require(bps <= RESERVE_BPS_MAX && bps != reserveBps, "InvalidNewReserve");
+        updateAccountingInner(cdo.totalStrategyAssets());
         reserveBps = bps;
         emit ReservePercentageChanged(reserveBps);
     }

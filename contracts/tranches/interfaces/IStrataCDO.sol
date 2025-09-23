@@ -8,6 +8,7 @@ interface IStrataCDO {
     function strategy() external view returns (IStrategy);
 
     function totalAssets (address tranche) external view returns (uint256);
+    function totalStrategyAssets () external view returns (uint256);
     function updateAccounting () external;
 
     function deposit (address tranche, address token, uint256 tokenAmount, uint256 baseAssets) external;

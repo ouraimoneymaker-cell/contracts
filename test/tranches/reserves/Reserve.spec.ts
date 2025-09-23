@@ -20,12 +20,13 @@ UAction.create({
     async $before () {
         await $erc20.mint(USDe, deployer, deployer, 1000_000);
         await cdo.$receipt().setReserveTreasury(deployer, '0xff');
-        await accounting.$receipt().setReserveBps(deployer, $bigint.toWei(0.02));
+
     },
     async $after () {
         await $hh.test.reset();
     },
     async 'withdraw sUSDe' () {
+        await accounting.$receipt().setReserveBps(deployer, $bigint.toWei(0.02));
 
         let { jrtVault, srtVault,  } = $hh.test.tranches;
         await $erc4626.deposit(jrtVault, deployer, 100_000);
@@ -72,14 +73,12 @@ UAction.create({
         await $erc20.eqBalanceDiff(USDe, '0xff', reserve, 5n /** rounding */);
     },
     async 'sUSDe rounding test' () {
+        await accounting.$receipt().setReserveBps(deployer, $bigint.toWei(0.02));
 
         let { jrtVault, srtVault,  } = $hh.test.tranches;
 
-        console.log(`Balance`, await USDe.balanceOf(deployer.address));
-
         await $erc4626.deposit(jrtVault, deployer, 100_001);
         await $ethena.distribute(sUSDe, USDe, deployer, 111111111111111111111111n);
-
 
         await $hh.test.mine('8hours');
         l`Trigger accouning`;
@@ -92,6 +91,24 @@ UAction.create({
         let strategyNav = await strategy.totalAssets();
 
         $require.gt(strategyNav, accountNav);
+    },
 
+    async 'update reserve should trigger accounting' () {
+        let { jrtVault, srtVault, accounting } = $hh.test.tranches;
+
+        console.log(`Balance`, await USDe.balanceOf(deployer.address));
+
+        await $erc4626.deposit(jrtVault, deployer, 1_000);
+        await $ethena.distribute(sUSDe, USDe, deployer, 5000);
+
+        await $hh.test.mine('8hours');
+        l`Set reserve after distribution is over`;
+        await accounting.$receipt().setReserveBps(deployer, $bigint.toWei(0.02))
+
+        l`Ensure accouning`;
+        await $erc4626.deposit(jrtVault, deployer, 100n);
+
+        let r = await accounting.reserveNav();
+        $require.eq(r, 0n, `No reserve must be present`);
     },
 })

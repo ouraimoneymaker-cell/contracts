@@ -52,6 +52,10 @@ contract Tranche is CDOComponent, ERC4626Upgradeable {
     /** @dev Extends {IERC4626-maxMint} to handle the paused state and the TVL ratio */
     function maxMint(address owner) public view override returns (uint256) {
         uint256 assets = cdo.maxDeposit(address(this));
+        if (assets == type(uint256).max) {
+            // No mint-cap
+            return type(uint256).max;
+        }
         return convertToShares(assets);
     }
 

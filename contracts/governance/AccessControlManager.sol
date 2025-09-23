@@ -100,8 +100,10 @@ contract AccessControlManager is AccessControl, IAccessControlManager {
      * Split:
      * sel = bytes4(uint32(uint256(role))); // low 4 bytes
      * contractAddress = address(uint160(uint256(role >> 96))); // high 20 bytes
-     */
+     * @dev All arguments must be non-zero. The function will revert if either contractAddress or sel is zero.
+    */
     function roleFor(address contractAddress, bytes4 sel) internal pure returns (bytes32 role) {
+        require(contractAddress != address(0) && sel != bytes4(0), "Strict_Permission_only");
         role = (bytes32(uint256(uint160(contractAddress))) << 96) | bytes32(uint256(uint32(sel)));
     }
 }

@@ -25,6 +25,9 @@ UAction.create({
     async $after () {
         await $hh.test.reset();
     },
+    async $teardown () {
+        await accounting.$receipt().setReserveBps(deployer, 0n);
+    },
     async 'withdraw sUSDe' () {
         await accounting.$receipt().setReserveBps(deployer, $bigint.toWei(0.02));
 
@@ -105,7 +108,7 @@ UAction.create({
         l`Set reserve after distribution is over`;
         await accounting.$receipt().setReserveBps(deployer, $bigint.toWei(0.02))
 
-        l`Ensure accouning`;
+        l`Ensure accounting`;
         await $erc4626.deposit(jrtVault, deployer, 100n);
 
         let r = await accounting.reserveNav();

@@ -123,7 +123,7 @@ contract AprPairFeed is IAprPairFeed, AccessControlled {
 
     function setProvider(IStrategyAprPairProvider provider_) external onlyOwner {
         // compatibility check
-        (int64 aprTarget, int64 aprBase, ) = provider.getAprPair();
+        (int64 aprTarget, int64 aprBase, ) = provider_.getAprPair();
         ensureValid(aprTarget);
         ensureValid(aprBase);
         provider = provider_;

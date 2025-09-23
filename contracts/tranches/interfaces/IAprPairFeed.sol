@@ -11,7 +11,7 @@ interface IAprPairFeed {
         uint64 answeredInRound;
     }
 
-    function updateRoundData(int64 newAprTarget, int64 newAprBase) external;
+    function updateRoundData(int64 newAprTarget, int64 newAprBase, uint64 timestamp) external;
     function decimals() external view returns (uint8);
     function description() external view returns (string memory);
     function getRoundData(uint64 roundId)external view returns (TRound memory);

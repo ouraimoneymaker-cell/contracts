@@ -1,6 +1,6 @@
 import { HardhatProvider } from 'dequanto/hardhat/HardhatProvider';
 import { TranchesDeployments } from '../../../src/deployments/TranchesDeployments';
-import { UAction } from 'atma-utest'
+import { UTest } from 'atma-utest'
 import { $require } from 'dequanto/utils/$require';
 
 
@@ -9,18 +9,20 @@ import { AprPairFeed } from '@0xc/hardhat/AprPairFeed/AprPairFeed';
 import { $date } from 'dequanto/utils/$date';
 import { $apr } from '@s/utils/$apr';
 import { $promise } from 'dequanto/utils/$promise';
+import { $block } from 'dequanto/utils/$block';
 
 
 await $hh.test.deploy();
 
 
-UAction.create({
+UTest.create({
 
     async $after () {
         await $hh.test.reset();
     },
 
     async 'update feed' () {
+
         let { factory, deployer, client } = await $hh.test;
 
         let acm = await factory.ensureACM();
@@ -48,7 +50,9 @@ UAction.create({
             ]
         });
 
-        await feed.$receipt().updateRoundData(deployer, $apr.toWei(1), $apr.toWei(0.1));
+        //await feed.$receipt().updateRoundData(deployer, $apr.toWei(1), $apr.toWei(0.1), $date.toUnixTimestamp());
+        let { error } = await updateFeed(feed, deployer, 1, 0.1);
+        $require.Null(error, 'Not updated');
 
         let data = await feed.latestRoundData();
         $require.eq(data.aprTarget, 10**12);
@@ -68,9 +72,31 @@ UAction.create({
 
 
         let unauth = hh.deployer(1);
-        let result = await $promise.caught(() => feed.$receipt().updateRoundData(unauth, $apr.toWei(.5), $apr.toWei(.8)));
+        let result = await updateFeed(feed, unauth, .5, .8);
 
-        has_(result.error.message, 'AccessControlUnauthorizedAccount');
+        $require.match(/AccessControlUnauthorizedAccount/, result.error.message);
+
+        result = await updateFeed(feed, deployer, .5, .8);
+        $require.Null(result.error, 'Not updated');
+
+        result = await updateFeed(feed, deployer, .5, .8, -30);
+        $require.match(/OutOfOrderUpdate/, result.error?.message);
+
+        result = await updateFeed(feed, deployer, .5, .8, 70);
+        $require.match(/OutOfOrderUpdate/, result.error?.message);
+
+        result = await updateFeed(feed, deployer, .5, .8, -2 * 60 * 60);
+        $require.match(/StaleUpdate/, result.error?.message);
+
+        result = await updateFeed(feed, deployer, .1, .1);
+        $require.Null(result.error, `Errored`);
     },
 })
 
+async function updateFeed (feed: AprPairFeed, account, aprTarget: number, aprBase: number, deltaT?: number) {
+    let timestamp = (await feed.client.getBlock('latest')).timestamp;
+    timestamp += deltaT ?? 0;
+    return await $promise.caught(() => {
+        return feed.$receipt().updateRoundData(account, $apr.toWei(aprTarget), $apr.toWei(aprBase), timestamp);
+    });
+}

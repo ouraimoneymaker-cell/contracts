@@ -16,6 +16,9 @@ contract AprPairFeed is IAprPairFeed, AccessControlled {
     int64 private constant APR_BOUNDARY_MAX =    2e12; // 200%
     int64 private constant APR_BOUNDARY_MIN = -0.5e12; // -50%
 
+    // Allow validator timestamp variance and clock skew.
+    uint64 private constant MAX_FUTURE_DRIFT = 60;
+
     uint8 public constant roundsCap = 20;
     uint8 public constant decimals = 12;
 
@@ -47,6 +50,10 @@ contract AprPairFeed is IAprPairFeed, AccessControlled {
     event ProviderSet(address newProvider);
     event StalePeriodSet(uint256 stalePeriod);
     event SourcePrefChanged();
+
+    error StaleUpdate(int64 aprTarget, int64 aprBase, uint64 timestamp);
+    error OutOfOrderUpdate(int64 aprTarget, int64 aprBase, uint64 timestamp);
+
 
     function initialize(
         address owner_,
@@ -89,8 +96,8 @@ contract AprPairFeed is IAprPairFeed, AccessControlled {
     }
 
     /// @notice Push APR values into the feed from an external source and set the preferred source to Feed
-    function updateRoundData(int64 aprTarget, int64 aprBase) external onlyRole(UPDATER_FEED_ROLE) {
-        updateRoundDataInner(aprTarget, aprBase, uint64(block.timestamp));
+    function updateRoundData(int64 aprTarget, int64 aprBase, uint64 timestamp) external onlyRole(UPDATER_FEED_ROLE) {
+        updateRoundDataInner(aprTarget, aprBase, timestamp);
         ensureSourcePrefInner(ESourcePref.Feed);
     }
 
@@ -102,6 +109,12 @@ contract AprPairFeed is IAprPairFeed, AccessControlled {
     }
 
     function updateRoundDataInner(int64 aprTarget, int64 aprBase, uint64 t) internal {
+        if (uint256(t) < block.timestamp - roundStaleAfter) {
+            revert StaleUpdate(aprTarget, aprBase, t);
+        }
+        if (t <= latestRound.updatedAt || uint256(t) > block.timestamp + MAX_FUTURE_DRIFT) {
+            revert OutOfOrderUpdate(aprTarget, aprBase, t);
+        }
         ensureValid(aprTarget);
         ensureValid(aprBase);
 

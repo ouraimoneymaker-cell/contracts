@@ -60,4 +60,23 @@ UTest.create({
             ]
         });
     },
+    async '//negative APRssr' () {
+        let exec = new Executor($hh.test);
+        let srt$ = $apr.value(1000);
+        let jrt$ = $apr.value(1000);
+        let nav$ = $apr.value(2000);
+
+        await exec.run({
+            steps: [
+                { balanceFlow: [jrt$.$, 0, srt$.$, 0] },
+                { aprs: [ -0.1, 0 ] },
+                { time: '12months' },
+                { totalAssets: nav$.$ },
+                { eqAvg: [
+                    jrt$.next( 0.1, 12),
+                    srt$.next(-0.1, 12)
+                ]}
+            ]
+        });
+    },
 });

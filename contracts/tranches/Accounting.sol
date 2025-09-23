@@ -68,6 +68,7 @@ contract Accounting is IAccounting, CDOComponent {
 
     event AprPairFeedChanged(address aprPairFeed);
     event ReservePercentageChanged(uint256 reserveBps);
+    event MinimumJrtSrtRatioChanged(uint256 ratio);
 
     function initialize(
         address owner_,
@@ -384,9 +385,10 @@ contract Accounting is IAccounting, CDOComponent {
     }
 
     /// @notice Sets the minimum ratio of Junior Tranche to Senior Tranche TVL
-    function setMinimumJrtSrtRatio (uint256 bps) external onlyOwner {
-        require(bps <= RESERVE_BPS_MAX, "ReserveBpsMax");
-        reserveBps = bps;
-        emit ReservePercentageChanged(reserveBps);
+    function setMinimumJrtSrtRatio (uint256 ratio) external onlyOwner {
+        // initial: min Jrt = .05x Srt; allow up-to min Jrt = 100x Srt
+        require(ratio <= 100 * PERCENTAGE_100, "InvalidRatio");
+        minimumJrtSrtRatio = ratio;
+        emit MinimumJrtSrtRatioChanged(ratio);
     }
 }

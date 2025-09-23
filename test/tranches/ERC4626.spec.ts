@@ -15,9 +15,10 @@ await $hh.test.deploy();
 UAction.create({
     async $before () {
         let { sUSDe, strategy } = $hh.test.tranches;
+        let { deployer } = $hh.test;
         // Disable default cooldowns
-        await sUSDe.$receipt().setCooldownDuration($hh.test.deployer, 0);
-        await strategy.$receipt().setCooldowns($hh.test.deployer, 0n, 0n);
+        await sUSDe.$receipt().setCooldownDuration(deployer, 0);
+        await strategy.$receipt().setCooldowns(deployer, 0n, 0n);
     },
     async $after () {
         await $hh.test.reset();
@@ -32,7 +33,7 @@ UAction.create({
         $require.eq(await srtVault.maxDeposit($address.ZERO), 0n);
         $require.eq(await srtVault.maxMint($address.ZERO), 0n);
     },
-    async '!ERC4626::deposit/withdraw Juniors single user' () {
+    async 'ERC4626::deposit/withdraw Juniors single user' () {
         let { jrtVault, srtVault, cdo, USDe, sUSDe, acm } = $hh.test.tranches;
 
         // Deposit initial

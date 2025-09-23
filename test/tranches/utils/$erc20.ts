@@ -54,7 +54,6 @@ export namespace $erc20 {
         let amountEth = $bigint.toEther(amountWei, decimals);
         let balanceEth = $bigint.toEther(balanceWei, decimals);
         let diffWei = $bigint.abs(amountWei - balanceWei);
-        console.log(diffWei, 'max', maxDiffWei);
 
         $require.lte(diffWei, maxDiffWei, `"${await erc20.symbol()}" balance missmatch for user "${address}" (${amountEth} != ${balanceEth}) ${message ?? ''}`);
         l`✅ ${account?.name}`;

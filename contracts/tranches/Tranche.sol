@@ -165,7 +165,7 @@ contract Tranche is CDOComponent, ERC4626Upgradeable {
     /** @dev See {IERC4626-redeem}. */
     function redeem(uint256 shares, address receiver, address owner) public override returns (uint256) {
         cdo.updateAccounting();
-        uint256 assets = super.withdraw(shares, receiver, owner);
+        uint256 assets = super.redeem(shares, receiver, owner);
         return assets;
     }
     function redeem(address token, uint256 shares, address receiver, address owner) public virtual returns (uint256) {
@@ -221,7 +221,7 @@ contract Tranche is CDOComponent, ERC4626Upgradeable {
         }
 
         _burn(owner, shares);
-        cdo.withdraw(address(this), token, baseAssets, tokenAssets, receiver);
+        cdo.withdraw(address(this), token, tokenAssets, baseAssets, receiver);
         _onAfterWithdrawalChecks();
         emit Withdraw(caller, receiver, owner, baseAssets, shares);
         emit OnMetaWithdraw(receiver, token, tokenAssets, shares);

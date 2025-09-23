@@ -244,7 +244,7 @@ contract Accounting is IAccounting, CDOComponent {
             uint256 srtLoss = Math.min(srtNavT0, loss);
 
             srtNavT0 -= srtLoss;
-            jrtNavT0 += srtLoss;
+            jrtNavT1 += srtLoss;
             srtGainTarget = 0;
         }
         uint256 srtGainTargetAbs = Math.min(

@@ -124,6 +124,9 @@ contract StrataCDO is IErrors, IStrataCDO, AccessControlled {
         if (baseAssets > accounting.maxDeposit(isJrt_)) {
             revert DepositCapReached(tranche);
         }
+        if (tokenAmount == 0 || baseAssets == 0) {
+            revert ZeroAmount();
+        }
         strategy.deposit(tranche, token, tokenAmount, baseAssets, /* owner: */ tranche);
         uint jrtAssetsIn = isJrt_ ? baseAssets : 0;
         uint srtAssetsIn = isJrt_ ? 0          : baseAssets;
@@ -138,6 +141,9 @@ contract StrataCDO is IErrors, IStrataCDO, AccessControlled {
         }
         if (baseAssets > accounting.maxWithdraw(isJrt_)) {
             revert WithdrawalCapReached(tranche);
+        }
+        if (tokenAmount == 0 || baseAssets == 0) {
+            revert ZeroAmount();
         }
         strategy.withdraw(tranche, token, tokenAmount, baseAssets, receiver);
         uint jrtAssetsOut = isJrt_ ? baseAssets : 0;

@@ -20,4 +20,6 @@ interface IErrors {
     error WithdrawalCapReached(address tranche);
 
     error InvalidConfigCooldown();
+
+    error ZeroAmount();
 }

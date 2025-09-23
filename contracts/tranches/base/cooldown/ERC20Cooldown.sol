@@ -4,12 +4,12 @@ pragma solidity ^0.8.28;
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { IERC20Cooldown } from "../../interfaces/cooldown/IERC20Cooldown.sol";
-
+import { AccessControlled } from "../../../governance/AccessControlled.sol";
 /**
  * @title Strata Cooldown Vault for generic IERC20 tokens
  * @notice The Silo allows to store USDe during the cooldown process.
  */
-contract ERC20Cooldown is IERC20Cooldown {
+contract ERC20Cooldown is IERC20Cooldown, AccessControlled {
 
     event Requested(address indexed user, uint256 amount, uint256 unlockAt);
     event Claimed(address indexed user, uint256 amount);
@@ -24,8 +24,14 @@ contract ERC20Cooldown is IERC20Cooldown {
 
     mapping(address token => mapping(address account => TRequest[] requests)) public cooldowns;
 
+    function initialize(
+        address owner_,
+        address acm_
+    ) public virtual initializer {
+        AccessControlled_init(owner_, acm_);
+    }
 
-    function transfer(IERC20 token, address to, uint256 amount, uint256 cooldownSeconds) external {
+    function transfer(IERC20 token, address to, uint256 amount, uint256 cooldownSeconds) external onlyRole(COOLDOWN_WORKER_ROLE) {
         address from = msg.sender;
         if (amount == 0) {
             return;

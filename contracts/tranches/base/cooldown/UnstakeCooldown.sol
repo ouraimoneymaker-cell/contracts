@@ -43,7 +43,7 @@ contract UnstakeCooldown is IUnstakeCooldown, AccessControlled {
         AccessControlled_init(owner_, acm_);
     }
 
-    function transfer(IERC20 token, address to, uint256 amount) external {
+    function transfer(IERC20 token, address to, uint256 amount) external onlyRole(COOLDOWN_WORKER_ROLE) {
         address from = msg.sender;
         if (amount == 0) {
             return;

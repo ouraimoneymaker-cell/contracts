@@ -20,6 +20,7 @@ abstract contract AccessControlled is Initializable, Ownable2StepUpgradeable, Re
     bytes32 public constant UPDATER_FEED_ROLE           = keccak256("UPDATER_FEED_ROLE");
     bytes32 public constant UPDATER_STRAT_CONFIG_ROLE   = keccak256("UPDATER_STRAT_CONFIG_ROLE");
     bytes32 public constant RESERVE_MANAGER_ROLE        = keccak256("RESERVE_MANAGER_ROLE");
+    bytes32 public constant COOLDOWN_WORKER_ROLE        = keccak256("COOLDOWN_WORKER_ROLE");
 
     /// @notice Access control manager contract
     IAccessControlManager public acm;

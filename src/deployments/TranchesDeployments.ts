@@ -135,8 +135,11 @@ export class TranchesDeployments {
     @memd.deco.memoize()
     async ensureCooldowns () {
         const acm = await this.ensureACM();
-        const { contract: erc20Cooldown } = await this.ds.ensure(ERC20Cooldown, {
-
+        const { contract: erc20Cooldown } = await this.ds.ensureWithProxy(ERC20Cooldown, {
+            initialize: [
+                this.owner.address,
+                acm.address
+            ]
         });
         const { contract: unstakeCooldown } = await this.ds.ensureWithProxy(UnstakeCooldown, {
             initialize: [
@@ -223,6 +226,7 @@ export class TranchesDeployments {
                 unstakeCooldown.address
             ]
         });
+        await acm.grantRole(this.owner, await erc20Cooldown.COOLDOWN_WORKER_ROLE(), strategy.address);
 
         // Accounting
         const accounting = await this.ensureAccounting(cdo.address);

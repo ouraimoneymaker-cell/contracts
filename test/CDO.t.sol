@@ -137,6 +137,7 @@ contract CDOTest is Test {
                 )
             )
         );
+        acm.grantRole(erc20Cooldown.COOLDOWN_WORKER_ROLE(), address(sUSDeStrategy));
 
         // Prepare Feed
         sUSDeAprPairProvider = new SUSDeAprPairProvider(IsUSDS(address(sUSDS)), IsUSDe(address(sUSDe)));
@@ -183,6 +184,16 @@ contract CDOTest is Test {
         USDe.approve(address(jrtVault), shares);
         jrtVault.deposit(address(USDe), shares, address(0xdead));
         assertBalance(jrtVault, address(0xdead), shares, "Deposite shares failed");
+
+        USDe.mint(account, shares);
+        USDe.approve(address(jrtVault), shares);
+        jrtVault.deposit(address(USDe), shares, account);
+        jrtVault.withdraw(address(USDe), shares, account, account);
+        assertBalance(USDe, account, 0, "Cooldown period failed");
+
+        vm.warp(block.timestamp + 7 days);
+        unstakeCooldown.finalize(sUSDe, account);
+        assertBalance(USDe, account, 1 ether, "After-Cooldown period failed");
     }
 
     function depositGeneric(IERC4626 vault, uint256 amount) internal {

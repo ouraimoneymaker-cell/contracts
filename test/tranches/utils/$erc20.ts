@@ -9,6 +9,12 @@ import { l } from 'dequanto/utils/$logger';
 
 export namespace $erc20 {
 
+    export async function mint (erc20: any, minter: TEth.IAccount, receiver: $acc.Address, amount: bigint | number): Promise<void> {
+        let amountWei = await toAmount(erc20, amount);
+        let receiverAddr = $acc.toAddress(receiver);
+        await erc20.$receipt().mint(minter, receiverAddr, amountWei);
+    }
+
     export async function toAmount (token: $acc.Address, amount: bigint | number | `${number}%`, account?: $acc.Address): Promise<bigint> {
         if (typeof amount === 'bigint') {
             return amount;
@@ -32,6 +38,10 @@ export namespace $erc20 {
     }
 
     export async function eqBalance(erc20: ERC20 | any, account: $acc.Address, amount: bigint | number, message?: string) {
+        return eqBalanceDiff(erc20, account, amount, 0n, message);
+    }
+
+    export async function eqBalanceDiff(erc20: ERC20 | any, account: $acc.Address, amount: bigint | number, maxDiffWei: bigint, message?: string) {
         let decimals = await erc20.decimals();
         let amountWei = typeof amount === 'number'
             ? $bigint.toWei(amount, decimals)
@@ -43,8 +53,10 @@ export namespace $erc20 {
 
         let amountEth = $bigint.toEther(amountWei, decimals);
         let balanceEth = $bigint.toEther(balanceWei, decimals);
+        let diffWei = $bigint.abs(amountWei - balanceWei);
+        console.log(diffWei, 'max', maxDiffWei);
 
-        $require.eq(amountWei, balanceWei, `"${await erc20.symbol()}" balance missmatch for user "${address}" (${amountEth} != ${balanceEth}) ${message ?? ''}`);
+        $require.lte(diffWei, maxDiffWei, `"${await erc20.symbol()}" balance missmatch for user "${address}" (${amountEth} != ${balanceEth}) ${message ?? ''}`);
         l`✅ ${account?.name}`;
         return amountWei;
     }

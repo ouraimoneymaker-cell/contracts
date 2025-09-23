@@ -1,8 +1,5 @@
-import { HardhatProvider } from 'dequanto/hardhat/HardhatProvider';
-import { TranchesDeployments } from '../../src/deployments/TranchesDeployments';
 import { UAction, UTest } from 'atma-utest'
 import { $erc4626 } from './utils/$erc4626';
-import { $usde } from './utils/$usde';
 import { $hh } from './utils/$hh';
 import { $require } from 'dequanto/utils/$require';
 import { $address } from 'dequanto/utils/$address';

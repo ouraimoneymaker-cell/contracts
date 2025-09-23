@@ -64,6 +64,7 @@ contract Accounting is IAccounting, CDOComponent {
     uint256 public minimumJrtSrtRatio;
 
     error InvalidNavSpit(uint256 navT1, uint256 jrtAssets, uint256 srtAssets, uint256 reserveAssets);
+    error ReserveTooLow(uint256 reserveNav, uint256 requestedNav);
 
     event AprPairFeedChanged(address aprPairFeed);
     event ReservePercentageChanged(uint256 reserveBps);
@@ -116,7 +117,9 @@ contract Accounting is IAccounting, CDOComponent {
     /// @dev The CDO contract is responsible for withdrawing the appropriate amount to the treasury
     /// @param amount The amount by which to reduce the reserve NAV
     function reduceReserve (uint256 amount) external onlyCDO {
-        require(amount <= reserveNav, "NOT_ENOUGH_RESERVE");
+        if (amount > reserveNav) {
+            revert ReserveTooLow(reserveNav, amount);
+        }
         reserveNav = reserveNav - amount;
         nav = nav - amount;
     }

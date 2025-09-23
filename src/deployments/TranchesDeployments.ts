@@ -89,6 +89,7 @@ export class TranchesDeployments {
                 $contract.keccak256('PAUSER_ROLE'),
                 $contract.keccak256('UPDATER_STRAT_CONFIG_ROLE'),
                 $contract.keccak256('UPDATER_FEED_ROLE'),
+                $contract.keccak256('RESERVE_MANAGER_ROLE'),
             ]
         };
         for (let account in roles) {

@@ -68,6 +68,7 @@ contract Accounting is IAccounting, CDOComponent {
 
     event AprPairFeedChanged(address aprPairFeed);
     event ReservePercentageChanged(uint256 reserveBps);
+    event RiskParametersChanged(UD60x18 x, UD60x18 y, UD60x18 k);
     event MinimumJrtSrtRatioChanged(uint256 ratio);
 
     function initialize(
@@ -365,6 +366,7 @@ contract Accounting is IAccounting, CDOComponent {
         riskK = riskK_;
         UD60x18 risk = calculateRiskPremium();
         require(risk.unwrap() < PERCENTAGE_100, ">=100%");
+        emit RiskParametersChanged(riskX_, riskY_, riskK_);
     }
 
     /// @notice Sets the APRs Feed contract for fetching APR target and APR base

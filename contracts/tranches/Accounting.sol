@@ -67,6 +67,7 @@ contract Accounting is IAccounting, CDOComponent {
     error ReserveTooLow(uint256 reserveNav, uint256 requestedNav);
 
     event AprPairFeedChanged(address aprPairFeed);
+    event AprDataChangedViaPush(UD60x18 aprTarget, UD60x18 aprBase);
     event ReservePercentageChanged(uint256 reserveBps);
     event RiskParametersChanged(UD60x18 x, UD60x18 y, UD60x18 k);
     event MinimumJrtSrtRatioChanged(uint256 ratio);
@@ -166,6 +167,7 @@ contract Accounting is IAccounting, CDOComponent {
         jrtNav = jrtNav + jrtAssetsIn - jrtAssetsOut;
         srtNav = srtNav + srtAssetsIn - srtAssetsOut;
         nav = nav + jrtAssetsIn + srtAssetsIn - jrtAssetsOut - srtAssetsOut;
+        updateAprs();
     }
 
     /// @notice Calculates the updated Net Asset Values (NAVs) for Junior, Senior tranches, and Reserve
@@ -299,20 +301,22 @@ contract Accounting is IAccounting, CDOComponent {
     }
 
     // Fetch APRs from Feed
-    function updateAprs () internal  {
+    function updateAprs () internal returns (bool modified, UD60x18 aprTargetT1, UD60x18 aprBaseT1) {
         if (address(aprPairFeed) == address(0)) {
-            return;
+            return (false, aprTarget, aprBase);
         }
         IAprPairFeed.TRound memory round = aprPairFeed.latestRoundData();
 
-        UD60x18 aprTargetNew = normalizeAprFromFeed(round.aprTarget);
-        UD60x18 aprBaseNew = normalizeAprFromFeed(round.aprBase);
+        aprTargetT1 = normalizeAprFromFeed(round.aprTarget);
+        aprBaseT1 = normalizeAprFromFeed(round.aprBase);
 
-        if (aprTargetNew != aprTarget || aprBaseNew != aprBase) {
-            aprTarget = aprTargetNew;
-            aprBase = aprBaseNew;
-            updateIndexes(aprTargetNew, aprBaseNew);
+        if (aprTargetT1 != aprTarget || aprBaseT1 != aprBase) {
+            aprTarget = aprTargetT1;
+            aprBase = aprBaseT1;
+            updateIndexes(aprTargetT1, aprBaseT1);
+            return (true, aprTargetT1, aprBaseT1);
         }
+        return (false, aprTargetT1, aprBaseT1);
     }
 
     function updateIndexes (UD60x18 aprTarget_, UD60x18 aprBase_) internal {
@@ -348,7 +352,11 @@ contract Accounting is IAccounting, CDOComponent {
 
     // Trigger fetching new APRs to update srtTargetIndex
     function onAprChanged () external onlyRole(UPDATER_FEED_ROLE)  {
-        updateAprs();
+        updateAccountingInner(cdo.totalStrategyAssets());
+        (bool modified, UD60x18 aprTarget_, UD60x18 aprBase_) = updateAprs();
+        if (modified) {
+            emit AprDataChangedViaPush(aprTarget_, aprBase_);
+        }
     }
 
     /// @notice Sets the risk premium parameters used in calculating the risk-adjusted APR

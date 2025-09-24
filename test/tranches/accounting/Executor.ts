@@ -1,3 +1,4 @@
+import alot from 'alot';
 import { $hh } from '../utils/$hh';
 import { $bigint } from 'dequanto/utils/$bigint';
 import { StrataCDO } from '@0xc/hardhat/StrataCDO/StrataCDO';
@@ -8,6 +9,9 @@ import { l } from 'dequanto/utils/$logger';
 import { Web3Client } from 'dequanto/clients/Web3Client';
 import { $apr } from '@s/utils/$apr';
 import { $promise } from 'dequanto/utils/$promise';
+import { $ethena } from '../utils/$ethena';
+import { HardhatProvider } from 'dequanto/hardhat/HardhatProvider';
+import { ContractBase } from 'dequanto/contracts/ContractBase';
 
 let client: Web3Client;
 
@@ -22,23 +26,44 @@ export class Executor {
     async run (data: IExecutionData) {
 
         await $hh.test.reset();
-
+        let { client } = this.test;
         let { deployer } = this.test.factory;
-        let { cdo, feed } = this.test.tranches;
+
+        let hh = new HardhatProvider();
+        let { contract: mockCdo } = await hh.deployCode(`
+            contract MockCDO {
+                uint256 public totalStrategyAssets = 0;
+                function setTotalAssets (uint256 amount) external {
+                    totalStrategyAssets = amount;
+                }
+                function increment (int256 amount) external {
+                    totalStrategyAssets = amount > 0
+                        ? totalStrategyAssets + uint256(amount)
+                        : totalStrategyAssets - uint256(amount * -1);
+                }
+            }
+        `, { client });
+
+
+        let { cdo, feed, USDe, sUSDe, strategy } = this.test.tranches;
         let accounting = await this.test.factory.ensureAccounting(cdo.address);
 
-        await Updater.impersonate(cdo, accounting);
+        await accounting.storage.$set('cdo', mockCdo.address);
+
+        await Updater.impersonate(mockCdo as any, accounting);
         await Updater.totalAssets(0);
 
         for (let step of data.steps) {
             if (step.aprs != null) {
                 let aprTarget = $apr.toWei(step.aprs[0]);
                 let aprBase = $apr.toWei(step.aprs[1]);
-                await feed.$receipt().updateRoundData(deployer, aprTarget, aprBase);
+                let timestamp = (await feed.client.getBlock('latest')).timestamp;
+                await feed.$receipt().updateRoundData(deployer, aprTarget, aprBase, timestamp);
                 await accounting.$receipt().onAprChanged(deployer);
             }
             if (step.balanceFlow != null) {
                 l`gray<BalanceFlow>: cyan<${step.balanceFlow.join(' , ')}>`;
+
                 await Updater.balanceFlow(...step.balanceFlow);
             }
             if (step.time != null) {
@@ -78,15 +103,18 @@ interface IExecutionStep {
 
 
 namespace Updater {
-    let cdo: StrataCDO;
+    type MockCDO = ContractBase;
+    let cdo: MockCDO;
     let accounting: Accounting;
-    export async function impersonate (cdo_: StrataCDO, accounting_: Accounting) {
+    export async function impersonate (cdo_: MockCDO, accounting_: Accounting) {
         cdo = cdo_;
         accounting = accounting_;
         await client.debug.setBalance(cdo.address, 10n**18n);
         await client.debug.impersonateAccount(cdo.address);
     }
     export async function balanceFlow(jrtIn: number, jrtOut: number, srtIn: number, srtOut: number) {
+        let diff = $bigint.toWei(jrtIn + srtIn - jrtOut - srtOut);
+        await cdo.$receipt().increment(cdo, diff);
         await accounting.$receipt().updateBalanceFlow(
             cdo,
             $bigint.toWei(jrtIn),
@@ -96,6 +124,7 @@ namespace Updater {
         );
     }
     export async function totalAssets(currentNAV: number) {
+        await cdo.$receipt().setTotalAssets(cdo, currentNAV);
         await accounting.$receipt().updateAccounting(
             cdo,
             $bigint.toWei(currentNAV),

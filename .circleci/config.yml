@@ -21,8 +21,11 @@ jobs:
           name: Update PATH for Foundry
           command: echo 'export PATH=$PATH:/home/circleci/.foundry/bin' >> $BASH_ENV
       - run:
-          name: Run tests
+          name: Check forge
           command: forge --version
+      - run:
+          name: Compile
+          command: npm run compile
       - run:
           name: Run tests
           command: npm run test

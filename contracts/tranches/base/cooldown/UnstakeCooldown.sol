@@ -5,7 +5,7 @@ import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.s
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { Clones } from "@openzeppelin/contracts/proxy/Clones.sol";
 import { IUnstakeHandler } from "../../interfaces/cooldown/IUnstakeHandler.sol";
-import { IUnstakeCooldown } from "../../interfaces/cooldown/IUnstakeCooldown.sol";
+import { IUnstakeCooldown } from "../../interfaces/cooldown/ICooldown.sol";
 import { AccessControlled } from "../../../governance/AccessControlled.sol";
 
 
@@ -74,7 +74,6 @@ contract UnstakeCooldown is IUnstakeCooldown, AccessControlled {
             proxies.push(proxy);
             return;
         }
-
         requests.push(TRequest(uint64(unlockAt), proxy));
         emit Requested(address(token), to, amount, unlockAt);
     }
@@ -116,21 +115,42 @@ contract UnstakeCooldown is IUnstakeCooldown, AccessControlled {
         return claimed;
     }
 
-    function balanceOf (IERC20 token, address user) external view returns (uint256) {
+    function balanceOf (IERC20 token, address user) external view returns (TBalanceState memory) {
         return balanceOf(token, user, block.timestamp);
     }
 
-    function balanceOf (IERC20 token, address user, uint256 at) public view returns (uint256) {
+    function balanceOf (IERC20 token, address user, uint256 at) public view returns (TBalanceState memory) {
         TRequest[] storage requests = activeRequests[address(token)][user];
         uint256 l = requests.length;
-        uint256 balance = 0;
-        for (uint256 i = 0; i < l; i++) {
+
+        uint256 pending;
+        uint256 claimable;
+        uint256 nextUnlockAt;
+        uint256 nextUnlockAmount;
+
+        for (uint256 i; i < l; i++) {
             TRequest memory req = requests[i];
-            if (req.unlockAt <= at) {
-                balance += req.proxy.getPendingAmount();
+            uint256 amount = req.proxy.getPendingAmount();
+            if (req.unlockAt > at) {
+                pending += amount;
+                if (nextUnlockAt == 0 || req.unlockAt < nextUnlockAt) {
+                    nextUnlockAt = req.unlockAt;
+                    nextUnlockAmount = amount;
+                    continue;
+                }
+                if (req.unlockAt == nextUnlockAt) {
+                    nextUnlockAmount += amount;
+                }
+                continue;
             }
+            claimable += amount;
         }
-        return balance;
+        return TBalanceState({
+            pending: pending,
+            claimable: claimable,
+            nextUnlockAt: nextUnlockAt,
+            nextUnlockAmount: nextUnlockAmount
+        });
     }
 
     function createFor(address implementation, address user) internal returns (IUnstakeHandler proxy) {

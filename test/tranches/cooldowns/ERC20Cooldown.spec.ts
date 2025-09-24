@@ -31,7 +31,9 @@ UAction.create({
     },
     async 'transfer via cooldown' () {
 
-        let { erc20Cooldown } = await $hh.test.factory.ensureCooldowns();
+        let { erc20Cooldown, acm } = await $hh.test.factory.ensureCooldowns();
+        await acm.$receipt().grantRole($hh.test.deployer, await erc20Cooldown.COOLDOWN_WORKER_ROLE(), alice.address);
+
 
         await transfer(erc20Cooldown, USDe, alice, bob, 20n, '60s');
         await transfer(erc20Cooldown, USDe, alice, bob, 30n, '120s');
@@ -40,33 +42,34 @@ UAction.create({
 
         // no transfers yet
         await $erc20.eqBalance(USDe, bob, 0n);
-        await eqBalanceOf(erc20Cooldown, USDe, bob, 0n);
+        await eqBalanceOf(erc20Cooldown, USDe, bob, { pending: 50n, nextUnlockAmount: 20n });
 
         // fail to withdraw
-
+        console.log(await erc20Cooldown.balanceOf(USDe.address, bob.address));
         try {
             await finalize(erc20Cooldown, USDe, bob);
             throw new Error(`Unreached`)
         } catch (error) {
+            console.log(error);
             $require.notEq(error.message, 'Unreached');
         }
 
         // #1: 60s passed, withdraw 1. portion
         await $hh.test.mine(`51s`);
-        await eqBalanceOf(erc20Cooldown, USDe, bob, 20n);
+        await eqBalanceOf(erc20Cooldown, USDe, bob, { pending: 30n, claimable: 20n, nextUnlockAmount: 30n });
 
         await finalize(erc20Cooldown, USDe, bob);
         await $erc20.eqBalance(USDe, bob, 20n);
 
         // No balance yet
-        await eqBalanceOf(erc20Cooldown, USDe, bob, 0n);
+        await eqBalanceOf(erc20Cooldown, USDe, bob, { pending: 30n, claimable: 0n, nextUnlockAmount: 30n });
 
         // #2: 120s passed, withdraw 2. portion
         await $hh.test.mine(`61s`);
-        await eqBalanceOf(erc20Cooldown, USDe, bob, 30n);
+        await eqBalanceOf(erc20Cooldown, USDe, bob, { pending: 0n, claimable: 30n, nextUnlockAmount: 0n });
         await finalize(erc20Cooldown, USDe, bob);
         await $erc20.eqBalance(USDe, bob, 50n);
-        await eqBalanceOf(erc20Cooldown, USDe, bob, 0n);
+        await eqBalanceOf(erc20Cooldown, USDe, bob, { pending: 0n, claimable: 0n, nextUnlockAmount: 0n });
     },
 })
 
@@ -81,7 +84,16 @@ async function finalize (cooldown: ERC20Cooldown, token: ERC20 | any, to: $acc.A
     await cooldown.$receipt().finalize($hh.test.deployer,  token.address, $acc.toAddress(to));
 }
 
-async function eqBalanceOf(cooldown: ERC20Cooldown, token: ERC20 | any, account: $acc.Address, requireAmount: bigint) {
-    const balance = await cooldown.balanceOf(token.address, $acc.toAddress(account));
-    $require.eq(balance, requireAmount);
+async function eqBalanceOf(cooldown: ERC20Cooldown, token: ERC20 | any, account: $acc.Address, amounts: {
+    pending?: bigint,
+    claimable?: bigint
+    nextUnlockAmount?: bigint
+}) {
+    const [pending, claimable, nextUnlockAt, nextUnlockAmount] = await cooldown.balanceOf(token.address, $acc.toAddress(account));
+    let balance = { pending, claimable, nextUnlockAt, nextUnlockAmount };
+    $require.eq(balance.pending, amounts.pending ?? 0n);
+    $require.eq(balance.claimable, amounts.claimable ?? 0n);
+    if (amounts.nextUnlockAmount != null) {
+        $require.eq(balance.nextUnlockAmount, amounts.nextUnlockAmount);
+    }
 }

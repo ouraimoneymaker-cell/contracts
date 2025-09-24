@@ -10,8 +10,7 @@ import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.s
 import { IErrors } from "../../interfaces/IErrors.sol";
 import { IStrategy } from "../../interfaces/IStrategy.sol";
 import { IStrataCDO } from "../../interfaces/IStrataCDO.sol";
-import { IERC20Cooldown } from "../../interfaces/cooldown/IERC20Cooldown.sol";
-import { IUnstakeCooldown } from "../../interfaces/cooldown/IUnstakeCooldown.sol";
+import { IERC20Cooldown, IUnstakeCooldown } from "../../interfaces/cooldown/ICooldown.sol";
 
 import { Strategy } from "../../Strategy.sol";
 

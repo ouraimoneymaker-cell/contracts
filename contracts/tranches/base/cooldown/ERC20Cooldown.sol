@@ -3,7 +3,7 @@ pragma solidity ^0.8.28;
 
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import { IERC20Cooldown } from "../../interfaces/cooldown/IERC20Cooldown.sol";
+import { ICooldown, IERC20Cooldown } from "../../interfaces/cooldown/ICooldown.sol";
 import { AccessControlled } from "../../../governance/AccessControlled.sol";
 /**
  * @title Strata Cooldown Vault for generic IERC20 tokens
@@ -82,20 +82,40 @@ contract ERC20Cooldown is IERC20Cooldown, AccessControlled {
         return claimed;
     }
 
-    function balanceOf (IERC20 token, address user) external view returns (uint256) {
+    function balanceOf (IERC20 token, address user) external view returns (ICooldown.TBalanceState memory) {
         return balanceOf(token, user, block.timestamp);
     }
 
-    function balanceOf (IERC20 token, address user, uint256 at) public view returns (uint256) {
+    function balanceOf (IERC20 token, address user, uint256 at) public view returns (ICooldown.TBalanceState memory) {
         TRequest[] storage requests = cooldowns[address(token)][user];
         uint256 l = requests.length;
-        uint256 balance = 0;
-        for (uint256 i = 0; i < l; i++) {
+
+        uint256 pending;
+        uint256 claimable;
+        uint256 nextUnlockAt;
+        uint256 nextUnlockAmount;
+
+        for (uint256 i; i < l; i++) {
             TRequest memory req = requests[i];
-            if (req.unlockAt <= at) {
-                balance += req.amount;
+            if (req.unlockAt > at) {
+                pending += req.amount;
+                if (nextUnlockAt == 0 || req.unlockAt < nextUnlockAt) {
+                    nextUnlockAt = req.unlockAt;
+                    nextUnlockAmount = req.amount;
+                    continue;
+                }
+                if (req.unlockAt == nextUnlockAt) {
+                    nextUnlockAmount += req.amount;
+                }
+                continue;
             }
+            claimable += req.amount;
         }
-        return balance;
+        return TBalanceState({
+            pending: pending,
+            claimable: claimable,
+            nextUnlockAt: nextUnlockAt,
+            nextUnlockAmount: nextUnlockAmount
+        });
     }
 }

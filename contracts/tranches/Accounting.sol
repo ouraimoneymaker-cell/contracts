@@ -361,6 +361,7 @@ contract Accounting is IAccounting, CDOComponent {
         UD60x18 riskY_,
         UD60x18 riskK_
     ) external onlyRole(UPDATER_STRAT_CONFIG_ROLE) {
+        updateAccountingInner(cdo.totalStrategyAssets());
         riskX = riskX_;
         riskY = riskY_;
         riskK = riskK_;

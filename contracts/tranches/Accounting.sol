@@ -106,12 +106,12 @@ contract Accounting is IAccounting, CDOComponent {
         return (jrtNavT1, srtNavT1, reserveNavT1);
     }
 
-    /// @notice Returns the latest saved reserve value without recalculating the current TVL split
+    /// @notice Returns current reserve value
     /// @dev This method returns the maximum amount that `reduceReserve` can handle
-    /// @dev It returns the latest reserve value without affecting Srt/Jrt TVLs
     /// @return The current reserve Net Asset Value (NAV)
-    function totalReserveT0 () external view returns (uint256) {
-        return reserveNav;
+    function totalReserve () external view returns (uint256) {
+        (,,uint256 reserveNavT1) = totalAssets(cdo.totalStrategyAssets());
+        return reserveNavT1;
     }
 
     /// @notice Reduces the reserve by the specified amount
@@ -119,6 +119,7 @@ contract Accounting is IAccounting, CDOComponent {
     /// @dev The CDO contract is responsible for withdrawing the appropriate amount to the treasury
     /// @param amount The amount by which to reduce the reserve NAV
     function reduceReserve (uint256 amount) external onlyCDO {
+        updateAccountingInner(cdo.totalStrategyAssets());
         if (amount > reserveNav) {
             revert ReserveTooLow(reserveNav, amount);
         }

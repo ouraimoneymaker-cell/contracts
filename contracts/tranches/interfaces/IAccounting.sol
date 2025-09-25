@@ -15,7 +15,7 @@ interface IAccounting is ICDOComponent, IAprPairFeedListener {
     ) external;
 
     function totalAssets (uint256 navT1) external view returns (uint jrtNavT1, uint srtNavT1, uint reserveNavT1);
-    function totalReserveT0 () external view returns (uint256);
+    function totalReserve () external view returns (uint256);
     function reduceReserve (uint256 amount) external;
 
     function maxWithdraw(bool isJrt) external view returns (uint256);

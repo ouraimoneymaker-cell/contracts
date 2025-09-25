@@ -37,11 +37,9 @@ UAction.create({
 
 
         await $hh.test.mine('4hours');
-        l`Trigger accouning`;
-        await $erc4626.deposit(jrtVault, deployer, 5n);
 
-        let reserve = await accounting.reserveNav();
-        $require.eq($bigint.toEther(reserve, 18, 1n), 1000);
+        let reserve = await accounting.totalReserve();
+        $require.eq(Math.round($bigint.toEther(reserve, 18)), 1000);
 
         l`Remove 50%`;
         let sUSDeAmount = await sUSDe.previewDeposit(reserve / 2n);
@@ -49,14 +47,14 @@ UAction.create({
         await $erc20.eqBalance(sUSDe, '0xff', sUSDeAmount);
 
         l`Remains 500USDe`;
-        reserve = await accounting.reserveNav();
+        reserve = await accounting.totalReserve();
         $require.eq($bigint.toEther(reserve, 18, 1n), 500);
 
         await $hh.test.mine('4hours');
         l`Trigger accouning`;
         await $erc4626.deposit(jrtVault, deployer, 5n);
 
-        reserve = await accounting.reserveNav();
+        reserve = await accounting.totalReserve();
         l`Earn 996 in reserve, the 4USDe has earned the treasury account`;
         $require.eq($bigint.toEther(reserve, 18, 1n), 1496);
 
@@ -87,7 +85,7 @@ UAction.create({
         l`Trigger accouning`;
         await $erc4626.deposit(jrtVault, deployer, 5n);
 
-        let r = await accounting.reserveNav();
+        let r = await accounting.totalReserve();
         await cdo.$receipt().reduceReserve(deployer, USDe.address, r);
 
         let accountNav = await accounting.nav();
@@ -111,7 +109,7 @@ UAction.create({
         l`Ensure accounting`;
         await $erc4626.deposit(jrtVault, deployer, 100n);
 
-        let r = await accounting.reserveNav();
+        let r = await accounting.totalReserve();
         $require.eq(r, 0n, `No reserve must be present`);
     },
 })

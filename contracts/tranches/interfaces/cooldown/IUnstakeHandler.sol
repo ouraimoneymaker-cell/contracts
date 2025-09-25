@@ -11,4 +11,6 @@ interface IUnstakeHandler {
     function finalize() external returns (uint256);
 
     function getPendingAmount () external view returns (uint256 amount);
+
+    function isCooldownActive() external view returns (bool);
 }

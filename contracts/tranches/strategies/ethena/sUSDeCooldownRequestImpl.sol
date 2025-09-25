@@ -73,7 +73,7 @@ contract sUSDeCooldownRequestImpl is IUnstakeHandler, Initializable {
         return amount;
     }
 
-    function isCooldownActive() internal view returns (bool) {
+    function isCooldownActive() public view returns (bool) {
         return sUSDe.cooldownDuration() > 0;
     }
 }

@@ -205,6 +205,9 @@ contract sUSDeStrategy is IStrategy, Strategy {
         }
         sUSDeCooldownJrt = sUSDeCooldownJrt_;
         sUSDeCooldownSrt = sUSDeCooldownSrt_;
+
+        bool isDisabled = sUSDeCooldownJrt_ == 0 && sUSDeCooldownSrt_ == 0;
+        erc20Cooldown.setCooldownDisabled(sUSDe, isDisabled);
         emit CooldownsChanged(sUSDeCooldownJrt_, sUSDeCooldownSrt_);
     }
 }

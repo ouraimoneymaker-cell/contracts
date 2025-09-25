@@ -87,11 +87,14 @@ contract UnstakeCooldown is IUnstakeCooldown, AccessControlled {
         }
         TRequest[] storage requests = activeRequests[address(token)][user];
         IUnstakeHandler[] storage proxies = proxiesPool[address(token)][user];
+        IUnstakeHandler imp = implementations[address(token)];
 
+        // Emergency exit: check the underlying protocol if the cooldown is still active
+        bool isCooldownActive = imp.isCooldownActive();
         uint256 len = requests.length;
         for (uint256 i; i < len; ) {
             TRequest memory req = requests[i];
-            if (req.unlockAt > at) {
+            if (req.unlockAt > at && isCooldownActive) {
                 // Still pending
                 unchecked { i++; }
                 continue;
@@ -121,6 +124,9 @@ contract UnstakeCooldown is IUnstakeCooldown, AccessControlled {
 
     function balanceOf (IERC20 token, address user, uint256 at) public view returns (TBalanceState memory) {
         TRequest[] storage requests = activeRequests[address(token)][user];
+        IUnstakeHandler imp = implementations[address(token)];
+        bool isCooldownActive = imp.isCooldownActive();
+
         uint256 l = requests.length;
 
         uint256 pending;
@@ -131,7 +137,7 @@ contract UnstakeCooldown is IUnstakeCooldown, AccessControlled {
         for (uint256 i; i < l; i++) {
             TRequest memory req = requests[i];
             uint256 amount = req.proxy.getPendingAmount();
-            if (req.unlockAt > at) {
+            if (req.unlockAt > at && isCooldownActive) {
                 pending += amount;
                 if (nextUnlockAt == 0 || req.unlockAt < nextUnlockAt) {
                     nextUnlockAt = req.unlockAt;

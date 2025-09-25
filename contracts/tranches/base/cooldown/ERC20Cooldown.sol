@@ -23,6 +23,7 @@ contract ERC20Cooldown is IERC20Cooldown, AccessControlled {
     }
 
     mapping(address token => mapping(address account => TRequest[] requests)) public cooldowns;
+    mapping(address token => bool isCooldownDisabled) public cooldownDisabled;
 
     function initialize(
         address owner_,
@@ -56,11 +57,12 @@ contract ERC20Cooldown is IERC20Cooldown, AccessControlled {
             revert InvalidTime();
         }
         TRequest[] storage requests = cooldowns[address(token)][user];
+        bool isCooldownActive = cooldownDisabled[address(token)] == false;
 
         uint256 len = requests.length;
-        for (uint256 i; i < len; ) {
+        for (uint256 i; i < len;) {
             TRequest memory req = requests[i];
-            if (req.unlockAt > at) {
+            if (req.unlockAt > at && isCooldownActive) {
                 // still pending
                 unchecked { i++; }
                 continue;
@@ -88,8 +90,9 @@ contract ERC20Cooldown is IERC20Cooldown, AccessControlled {
 
     function balanceOf (IERC20 token, address user, uint256 at) public view returns (ICooldown.TBalanceState memory) {
         TRequest[] storage requests = cooldowns[address(token)][user];
-        uint256 l = requests.length;
+        bool isCooldownActive = cooldownDisabled[address(token)] == false;
 
+        uint256 l = requests.length;
         uint256 pending;
         uint256 claimable;
         uint256 nextUnlockAt;
@@ -97,7 +100,7 @@ contract ERC20Cooldown is IERC20Cooldown, AccessControlled {
 
         for (uint256 i; i < l; i++) {
             TRequest memory req = requests[i];
-            if (req.unlockAt > at) {
+            if (req.unlockAt > at && isCooldownActive) {
                 pending += req.amount;
                 if (nextUnlockAt == 0 || req.unlockAt < nextUnlockAt) {
                     nextUnlockAt = req.unlockAt;
@@ -118,4 +121,15 @@ contract ERC20Cooldown is IERC20Cooldown, AccessControlled {
             nextUnlockAmount: nextUnlockAmount
         });
     }
+
+    /**
+    * @notice Toggles cooldown for a token, allowing immediate withdrawals in emergencies
+    * @dev For emergency exits, cooldown worker (Strategy) can disable cooldowns
+    * @param token The ERC20 token to set cooldown state
+    * @param isCooldownDisabled True to disable cooldown, false to enable (default behavior)
+    */
+    function setCooldownDisabled(IERC20 token, bool isCooldownDisabled) external onlyRole(COOLDOWN_WORKER_ROLE) {
+        cooldownDisabled[address(token)] = isCooldownDisabled;
+    }
+
 }

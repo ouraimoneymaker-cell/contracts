@@ -21,6 +21,7 @@ interface ICooldown {
 
 interface IERC20Cooldown is ICooldown {
     function transfer(IERC20 token, address to, uint256 amount, uint256 cooldownSeconds) external;
+    function setCooldownDisabled(IERC20 token, bool isCooldownDisabled) external;
 }
 
 interface IUnstakeCooldown is ICooldown {

@@ -11,8 +11,8 @@ import { AccessControlled } from "../../../governance/AccessControlled.sol";
  */
 contract ERC20Cooldown is IERC20Cooldown, AccessControlled {
 
-    event Requested(address indexed user, uint256 amount, uint256 unlockAt);
-    event Claimed(address indexed user, uint256 amount);
+    event Requested(IERC20 indexed token, address indexed user, uint256 amount, uint256 unlockAt);
+    event Claimed(IERC20 indexed token, address indexed user, uint256 amount);
 
     error InvalidTime ();
     error NothingToFinalize ();
@@ -45,7 +45,7 @@ contract ERC20Cooldown is IERC20Cooldown, AccessControlled {
         uint256 unlockAt = block.timestamp + cooldownSeconds;
         cooldowns[address(token)][to].push(TRequest(uint64(unlockAt), uint192(amount)));
 
-        emit Requested(to, amount, unlockAt);
+        emit Requested(token, to, amount, unlockAt);
     }
 
     function finalize(IERC20 token, address user) external returns (uint256 claimed) {
@@ -75,7 +75,7 @@ contract ERC20Cooldown is IERC20Cooldown, AccessControlled {
         }
         if (claimed > 0) {
             SafeERC20.safeTransfer(token, user, claimed);
-            emit Claimed(user, claimed);
+            emit Claimed(token, user, claimed);
         } else {
             revert NothingToFinalize();
         }

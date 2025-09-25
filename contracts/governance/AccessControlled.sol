@@ -28,7 +28,7 @@ abstract contract AccessControlled is Initializable, Ownable2StepUpgradeable, Re
     uint256[49] private __gap;
 
     /// @notice Emitted when access control manager contract address is changed
-    event NewAccessControlManager(address accessControllManager);
+    event NewAccessControlManager(address accessControlManager);
 
     /// @notice Thrown when the action is prohibited by AccessControlManager
     error Unauthorized(address sender, address calledContract, bytes4 sel);

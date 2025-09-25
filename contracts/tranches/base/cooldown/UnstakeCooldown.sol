@@ -8,7 +8,6 @@ import { IUnstakeHandler } from "../../interfaces/cooldown/IUnstakeHandler.sol";
 import { IUnstakeCooldown } from "../../interfaces/cooldown/ICooldown.sol";
 import { AccessControlled } from "../../../governance/AccessControlled.sol";
 
-
 /**
  * @title Strata sUSDe redemption worker
  */
@@ -61,6 +60,9 @@ contract UnstakeCooldown is IUnstakeCooldown, AccessControlled {
         if (len > 0) {
             proxy = IUnstakeHandler(proxies[len - 1]);
             proxies.pop();
+            if (impl != getImplementation(address(proxy))) {
+                proxy = createFor(impl, to);
+            }
         } else {
             proxy = createFor(impl, to);
         }
@@ -177,6 +179,15 @@ contract UnstakeCooldown is IUnstakeCooldown, AccessControlled {
             implementations[token] = impl;
             emit UserProxyImplementationSet(token, address(impl));
             unchecked { i++; }
+        }
+    }
+
+    function getImplementation(address proxy) internal view returns (address implementation) {
+        assembly {
+            // Clones.clone := 0x363d3d373d3d3d363d73<20-byte implementation>5af43d82803e903d91602b57fd5bf3
+            let ptr := mload(0x40)
+            extcodecopy(proxy, ptr, 10, 32)
+            implementation := shr(96, mload(ptr)) // right-shift to 20 bytes
         }
     }
 }

@@ -12,6 +12,9 @@ import { UnstakeCooldown } from '@0xc/hardhat/UnstakeCooldown/UnstakeCooldown';
 import { $hh } from '../utils/$hh';
 import { $promise } from 'dequanto/utils/$promise';
 import { $testCooldown } from './$testCooldown';
+import { $hex } from 'dequanto/utils/$hex';
+import { SUSDeCooldownRequestImpl } from '@0xc/hardhat/sUSDeCooldownRequestImpl/sUSDeCooldownRequestImpl';
+import { l } from 'dequanto/utils/$logger';
 
 
 
@@ -89,6 +92,43 @@ UAction.create({
         await $testCooldown.eqBalanceOf(unstakeCooldown, sUSDe, bob, { pending: 0n, claimable: 21n, nextUnlockAmount: 0n, nextUnlockAt: 0n });
         await $testCooldown.finalize(unstakeCooldown, sUSDe, bob.address);
         await $erc20.eqBalance(USDe, bob, 21n);
+    },
+    async 'ensure pooled proxies are not reused when implementation changes' () {
+
+        let implV1 = await unstakeCooldown.implementations(sUSDe.address);
+        await transfer(unstakeCooldown, sUSDe, alice, bob.address, 10n);
+        await $hh.test.mine(`7days`);
+        await $testCooldown.finalize(unstakeCooldown, sUSDe, bob.address);
+
+        let pooledAddress = await unstakeCooldown.proxiesPool(sUSDe.address, bob.address, 0n);
+        let code = await $hh.test.client.getCode(pooledAddress);
+        let implStored = '0x' + $hex.raw(code).substring(20, 60);
+        $require.eq(implV1.toLowerCase(), implStored);
+
+        l`One more circle, check the pooled proxy is reused`;
+        await transfer(unstakeCooldown, sUSDe, alice, bob.address, 10n);
+        await $hh.test.mine(`7days`);
+        await $testCooldown.finalize(unstakeCooldown, sUSDe, bob.address);
+        let pooledAddress_Reused = await unstakeCooldown.proxiesPool(sUSDe.address, bob.address, 0n);
+        $require.eq(pooledAddress, pooledAddress_Reused, `Pooled proxy was not reused`);
+
+        l`Create new implementation and ensure it was used in new transfer request`;
+        let { contract: implV2Contract } = await $hh.test.factory.ds.ensure(SUSDeCooldownRequestImpl, {
+            id: 'SUSDeCooldownRequestImplV2',
+            arguments: [ sUSDe.address ]
+        });
+        await unstakeCooldown.$receipt().setImplementations($hh.test.deployer, [sUSDe.address], [implV2Contract.address]);
+
+        await transfer(unstakeCooldown, sUSDe, alice, bob.address, 10n);
+        await $hh.test.mine(`7days`);
+        await $testCooldown.finalize(unstakeCooldown, sUSDe, bob.address);
+
+        let pooledAddress_V2 = await unstakeCooldown.proxiesPool(sUSDe.address, bob.address, 0n);
+
+        $require.notEq(pooledAddress, pooledAddress_V2, `Old pooled address was reused`);
+
+        l`After 3 loops Bob has 30wei`;
+        await $erc20.eqBalance(USDe, bob, 30n);
     }
 })
 

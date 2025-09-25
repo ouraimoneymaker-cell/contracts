@@ -19,8 +19,8 @@ contract Accounting is IAccounting, CDOComponent {
 
     uint256 constant SECONDS_PER_YEAR = 31_536_000;
 
-    int64   private constant APR_BOUNDARY_MAX = 200e12;
-    int64   private constant APR_BOUNDARY_MIN = 0;
+    int64   private constant APR_FEED_BOUNDARY_MAX = 2e12; // 200%
+    int64   private constant APR_FEED_BOUNDARY_MIN = 0;
     uint256 private constant APR_FEED_DECIMALS = 12;
 
     /// @dev The oracle to fetch the latest APR floor and APR base.
@@ -339,12 +339,15 @@ contract Accounting is IAccounting, CDOComponent {
     }
 
     /// @dev Converts APR from Feed's compact format (12 decimal places, stored in 1 SLOT) to UD60x18
+    /// @dev Ensures the APR is within the acceptable range for Accounting
     /// @return The APR value as a UD60x18
     function normalizeAprFromFeed (/* SD7x12 */ int64 apr) internal pure returns (UD60x18) {
-        require(
-            APR_BOUNDARY_MIN <= apr && apr <= APR_BOUNDARY_MAX,
-            "invalid apr"
-        );
+        if (apr < APR_FEED_BOUNDARY_MIN) {
+            apr = APR_FEED_BOUNDARY_MIN;
+        }
+        if (apr > APR_FEED_BOUNDARY_MAX) {
+            apr = APR_FEED_BOUNDARY_MAX;
+        }
         return UD60x18.wrap(uint256(int256(apr)) * (10 ** (18 - APR_FEED_DECIMALS)));
     }
 

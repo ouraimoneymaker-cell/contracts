@@ -293,9 +293,13 @@ contract Accounting is IAccounting, CDOComponent {
 
 
     function calculateRiskPremium () internal view returns (UD60x18){
-        // RiskPremium = x + y * TVL_ratio_sr ^ k
         UD60x18 tvlRatio = UD60x18.wrap(srtNav == 0 ? 0 : (srtNav * 1e18 / (srtNav + jrtNav)));
-        UD60x18 riskPremium = riskX + riskY * pow(tvlRatio, riskK);
+        UD60x18 riskPremium = calculateRiskPremiumInner(riskX, riskY, riskK, tvlRatio);
+        return riskPremium;
+    }
+    function calculateRiskPremiumInner (UD60x18 x, UD60x18 y, UD60x18 k, UD60x18 tvlRatioSrt) internal pure returns (UD60x18){
+        // RiskPremium = x + y * TVL_ratio_sr ^ k
+        UD60x18 riskPremium = x + y * pow(tvlRatioSrt, k);
         return riskPremium;
     }
 
@@ -372,7 +376,7 @@ contract Accounting is IAccounting, CDOComponent {
         riskX = riskX_;
         riskY = riskY_;
         riskK = riskK_;
-        UD60x18 risk = calculateRiskPremium();
+        UD60x18 risk = calculateRiskPremiumInner(riskX_, riskY_, riskK_, UD60x18.wrap(1e18));
         require(risk.unwrap() < PERCENTAGE_100, ">=100%");
         emit RiskParametersChanged(riskX_, riskY_, riskK_);
     }

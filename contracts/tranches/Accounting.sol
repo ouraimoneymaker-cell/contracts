@@ -9,7 +9,6 @@ import { IStrataCDO } from "./interfaces/IStrataCDO.sol";
 import { IAprPairFeed } from "./interfaces/IAprPairFeed.sol";
 import { CDOComponent } from "./base/CDOComponent.sol";
 import { UD60x18Ext } from "./utils/UD60x18Ext.sol";
-import { MathExt } from "./utils/MathExt.sol";
 
 
 /**

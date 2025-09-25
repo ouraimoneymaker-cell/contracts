@@ -9,8 +9,6 @@ pragma solidity ^0.8.28;
 |____/ \__|_|  \__,_|\__\__,_| \____|____/ \___/
 */
 
-
-import { IERC4626 } from "@openzeppelin/contracts/interfaces/IERC4626.sol";
 import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
 import { AccessControlled } from "../governance/AccessControlled.sol";
 import { IErrors } from "./interfaces/IErrors.sol";

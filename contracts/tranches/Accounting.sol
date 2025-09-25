@@ -277,7 +277,7 @@ contract Accounting is IAccounting, CDOComponent {
         return calculateTargetIndex(srtTargetIndex, indexTimestamp, block.timestamp, aprSrt);
     }
 
-    /// @notice Calculates the target index based on the latest index, time period, and APR using compound interest formula
+    /// @notice Computes the accrual index at t1 given the prior index, elapsed time, and APR
     function calculateTargetIndex (uint256 targetIndex, uint256 t0, uint256 t1, UD60x18 apr) internal pure returns (uint256) {
         uint256 dt = t1 - t0;
         if (dt == 0) {

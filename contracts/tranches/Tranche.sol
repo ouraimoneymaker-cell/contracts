@@ -5,12 +5,13 @@ import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { IERC4626 } from "@openzeppelin/contracts/interfaces/IERC4626.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import { ERC20Upgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
 import { ERC4626Upgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC20/extensions/ERC4626Upgradeable.sol";
-
+import { ERC20PermitUpgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC20/extensions/ERC20PermitUpgradeable.sol";
 import { IStrataCDO }  from "./interfaces/IStrataCDO.sol";
 import { CDOComponent }  from "./base/CDOComponent.sol";
 
-contract Tranche is CDOComponent, ERC4626Upgradeable {
+contract Tranche is CDOComponent, ERC4626Upgradeable, ERC20PermitUpgradeable {
 
     /// @notice Minimum non-zero shares amount to prevent donation attack
     uint256 private constant MIN_SHARES = 0.1 ether;
@@ -28,9 +29,20 @@ contract Tranche is CDOComponent, ERC4626Upgradeable {
     ) public virtual initializer {
         __ERC20_init_unchained(name, symbol);
         __ERC4626_init_unchained(stakedAsset);
+        __ERC20Permit_init(name);
         AccessControlled_init(owner_, acm_);
 
         cdo = cdo_;
+    }
+
+
+    /// @return uint256 The total assets for this tranche
+    function totalAssets() public view override returns (uint256) {
+        return cdo.totalAssets(address(this));
+    }
+
+    function decimals() public view override(ERC20Upgradeable, ERC4626Upgradeable) returns (uint8) {
+        return super.decimals();
     }
 
     /**
@@ -38,11 +50,6 @@ contract Tranche is CDOComponent, ERC4626Upgradeable {
      *              ERC4626 max* methods
      * ============================================
      */
-
-    /// @return uint256 The total assets for this tranche
-    function totalAssets() public view override returns (uint256) {
-        return cdo.totalAssets(address(this));
-    }
 
     /** @dev Extends {IERC4626-maxDeposit} to handle the paused state and the TVL ratio */
     function maxDeposit(address owner) public view override returns (uint256) {

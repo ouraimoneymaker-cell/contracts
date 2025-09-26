@@ -9,6 +9,10 @@ import { $number } from 'dequanto/utils/$number';
 import { $erc20 } from './utils/$erc20';
 import { l } from 'dequanto/utils/$logger';
 import { $promise } from 'dequanto/utils/$promise';
+import { $ethena } from './utils/$ethena';
+import { $date } from 'dequanto/utils/$date';
+import { $signSerializer } from 'dequanto/utils/$signSerializer';
+import { $sig } from 'dequanto/utils/$sig';
 
 await $hh.test.deploy();
 
@@ -159,5 +163,69 @@ UAction.create({
             await $erc20.eqBalance(USDe, withdrawer.user, withdrawer.amount);
         }
 
+    },
+    async 'ERC4626::permit' () {
+        let { USDe } = $hh.test.ethena;
+        let { jrtVault } = $hh.test.tranches;
+
+        let alice = await $hh.test.createAccount('alice');
+        let bob = await $hh.test.createAccount('bob');
+
+        const amount = $bigint.toWei(5000);
+        await $erc20.mint(USDe, alice, alice, amount);
+        await $erc4626.deposit(jrtVault, alice, amount)
+
+
+
+        const nonce = await jrtVault.nonces(alice.address);
+        const deadline = $date.tool().add('1year').toUnixTimestamp();
+
+        let typedData = {
+            types: {
+                EIP712Domain: [
+                    { name: 'name', type: 'string' },
+                    { name: 'version', type: 'string' },
+                    { name: 'chainId', type: 'uint256' },
+                    { name: 'verifyingContract', type: 'address' },
+                ],
+                Permit: [
+                    { type: 'address', name: 'owner' },
+                    { type: 'address', name: 'spender' },
+                    { type: 'uint256', name: 'value' },
+                    { type: 'uint256', name: 'nonce' },
+                    { type: 'uint256', name: 'deadline' },
+                ],
+            },
+            primaryType: 'Permit',
+            domain: {
+                name: await jrtVault.name(),
+                version: '1',
+                chainId: $hh.test.client.chainId,
+                verifyingContract: jrtVault.address,
+            },
+            message: {
+                owner: alice.address,
+                spender: bob.address,
+                value: amount,
+                nonce: nonce,
+                deadline: deadline
+            }
+        };
+
+        let hashed = $signSerializer.serializeTypedData(typedData);
+        let { v, r, s } = await $sig.sign(hashed, alice);
+
+        l`Bob request`;
+        await jrtVault.$receipt().permit(bob,
+            alice.address,
+            bob.address,
+            amount,
+            BigInt(deadline),
+            Number(v),
+            r,
+            s,
+        );
+        await jrtVault.$receipt().transferFrom(bob, alice.address, bob.address, amount);
+        await $erc20.eqBalance(jrtVault, bob, amount)
     }
 })

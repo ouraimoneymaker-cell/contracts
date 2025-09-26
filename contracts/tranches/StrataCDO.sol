@@ -51,10 +51,15 @@ contract StrataCDO is IErrors, IStrataCDO, AccessControlled {
     /// @dev Controls the ability to deposit into or withdraw from the senior tranche
     TActionState public actionsSrt;
 
+    /// @dev Configurable minimum JRT price per share, below which the protocol automatically pauses deposits
+    uint256 public jrtShortfallPausePrice;
+
     event DepositsStateChanged(address indexed tranche, bool enabled);
     event WithdrawalsStateChanged(address indexed tranche, bool enabled);
     event ReserveReduced(address token, uint256 amount);
     event TreasurySet(address treasury);
+    event ShortfallPaused();
+    event JrtShortfallPausePriceSet(uint256 pricePerShare);
 
 
     /// @notice
@@ -70,6 +75,7 @@ contract StrataCDO is IErrors, IStrataCDO, AccessControlled {
         address acm_
     ) public virtual initializer {
         AccessControlled_init(owner_, acm_);
+        jrtShortfallPausePrice = 0.01e18;
     }
 
     /// @notice Calculates the total assets for a specific tranche
@@ -80,7 +86,7 @@ contract StrataCDO is IErrors, IStrataCDO, AccessControlled {
     ///      1. Gets the total TVL from the strategy
     ///      2. Uses the accounting contract to calculate the asset split
     ///      3. Returns the assets allocated to the specified tranche
-    function totalAssets(address tranche) external view returns (uint256) {
+    function totalAssets(address tranche) public view returns (uint256) {
         uint totalAssetsOverall = strategy.totalAssets();
         (uint256 jrtAssets, uint256 srtAssets, ) = accounting.totalAssets(
             totalAssetsOverall
@@ -96,6 +102,12 @@ contract StrataCDO is IErrors, IStrataCDO, AccessControlled {
     /// @return uint256 The current total assets in the strategy
     function totalStrategyAssets() public view returns (uint256) {
         return strategy.totalAssets();
+    }
+
+    function pricePerShare(address tranche) public view returns (uint256) {
+        uint256 assets = totalAssets(tranche);
+        uint256 supply = ITranche(tranche).totalSupply();
+        return calculatePricePerShare(assets, supply);
     }
 
     function maxDeposit(address tranche) external view returns (uint256) {
@@ -136,6 +148,7 @@ contract StrataCDO is IErrors, IStrataCDO, AccessControlled {
         uint jrtAssetsIn = isJrt_ ? baseAssets : 0;
         uint srtAssetsIn = isJrt_ ? 0          : baseAssets;
         accounting.updateBalanceFlow(jrtAssetsIn, 0, srtAssetsIn, 0);
+        shortfallPauser();
     }
 
     function withdraw(address tranche, address token, uint256 tokenAmount, uint256 baseAssets, address receiver) external onlyTranche nonReentrant {
@@ -154,6 +167,7 @@ contract StrataCDO is IErrors, IStrataCDO, AccessControlled {
         uint jrtAssetsOut = isJrt_ ? baseAssets : 0;
         uint srtAssetsOut = isJrt_ ? 0          : baseAssets;
         accounting.updateBalanceFlow(0, jrtAssetsOut, 0, srtAssetsOut);
+        shortfallPauser();
     }
 
     /// @notice Determines if the given address is the Junior (BB) Tranche
@@ -241,5 +255,31 @@ contract StrataCDO is IErrors, IStrataCDO, AccessControlled {
             state.isWithdrawEnabled = isWithdrawEnabled;
             emit WithdrawalsStateChanged(tranche, isWithdrawEnabled);
         }
+    }
+
+    /// @notice Sets the JRT shortfall price to automatically pause the deposits, when the price falls below this price
+    function setJrtShortfallPausePrice (uint256 jrtShortfallPausePrice_) external onlyRole(PAUSER_ROLE) {
+        // Should it be greater, the Pauser must pause the deposits instead
+        require(jrtShortfallPausePrice_ <= pricePerShare(address(jrtVault)), "ShortfallPriceTooLarge");
+        jrtShortfallPausePrice = jrtShortfallPausePrice_;
+        emit JrtShortfallPausePriceSet(jrtShortfallPausePrice_);
+    }
+
+    function shortfallPauser () internal {
+        (uint256 jrtNav,,) = accounting.totalAssetsT0();
+        uint256 jrtPrice = calculatePricePerShare(jrtNav, jrtVault.totalSupply());
+        if (jrtPrice <= jrtShortfallPausePrice) {
+            actionsJrt.isDepositEnabled = false;
+            actionsSrt.isDepositEnabled = false;
+            emit DepositsStateChanged(address(jrtVault), false);
+            emit DepositsStateChanged(address(srtVault), false);
+            emit ShortfallPaused();
+        }
+    }
+
+    function calculatePricePerShare (uint256 assets, uint256 supply) internal pure returns (uint256) {
+        return supply == 0
+            ? 1e18
+            : Math.mulDiv(assets, 1e18, supply, Math.Rounding.Floor);
     }
 }

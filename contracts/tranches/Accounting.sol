@@ -91,7 +91,7 @@ contract Accounting is IAccounting, CDOComponent {
         minimumJrtSrtRatio = 0.05e18;
     }
 
-    /// @notice Returns the current total assets for each tranche and the reserve
+    /// @notice Returns the updated total assets for each tranche and the reserve
     /// @dev This method is used by the Tranches to get their updated total assets for the current block
     /// @param navT1 The current total Net Asset Value
     /// @return jrtNavT1 The updated Junior Tranche TVL
@@ -104,6 +104,15 @@ contract Accounting is IAccounting, CDOComponent {
             reserveNavT1
         ) = calculateNAVSplit(nav, jrtNav, srtNav, reserveNav, navT1);
         return (jrtNavT1, srtNavT1, reserveNavT1);
+    }
+
+    /// @notice Returns the current saved total assets for each tranche and the reserve
+    /// @dev These values represent the state at the last update, not necessarily the current block
+    /// @return jrtNavT0 The last saved Junior Tranche TVL
+    /// @return srtNavT0 The last saved Senior Tranche TVL
+    /// @return reserveNavT0 The last saved Reserve TVL
+    function totalAssetsT0 () public view returns (uint256 jrtNavT0, uint256 srtNavT0, uint256 reserveNavT0) {
+        return (jrtNav, srtNav, reserveNav);
     }
 
     /// @notice Returns current reserve value

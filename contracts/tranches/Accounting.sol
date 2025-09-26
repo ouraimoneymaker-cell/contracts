@@ -206,6 +206,10 @@ contract Accounting is IAccounting, CDOComponent {
 
         uint256 navT1
     ) public view returns (uint jrtNavT1, uint srtNavT1, uint reserveNavT1) {
+        if (jrtNavT0 == 0 && srtNavT0 == 0 && navT1 > 0) {
+            // No deposits yet, however Strategy reports gain, move all to reserve.
+            return (0, 0, navT1);
+        }
         int256 gain_dT = int256(navT1) - int256(navT0);
 
         if (gain_dT < 0) {

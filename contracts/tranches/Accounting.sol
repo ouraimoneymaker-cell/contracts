@@ -167,7 +167,11 @@ contract Accounting is IAccounting, CDOComponent {
         jrtNav = jrtNav + jrtAssetsIn - jrtAssetsOut;
         srtNav = srtNav + srtAssetsIn - srtAssetsOut;
         nav = nav + jrtAssetsIn + srtAssetsIn - jrtAssetsOut - srtAssetsOut;
-        updateAprs();
+        (bool modified, UD60x18 aprTarget_, UD60x18 aprBase_) = updateAprs();
+        if (modified == false) {
+            // Recalculates aprSrt based on new TVL ratio and old APRs
+            updateIndexes(aprTarget_, aprBase_);
+        }
     }
 
     /// @notice Calculates the updated Net Asset Values (NAVs) for Junior, Senior tranches, and Reserve

@@ -56,7 +56,7 @@ contract Accounting is IAccounting, CDOComponent {
     UD60x18 public riskY;
     UD60x18 public riskK;
 
-    /// @dev minimum TVL ratio: TVLjrt/TVLsrt, e.g. >= 0.05%
+    /// @dev minimum TVL ratio: TVLjrt/TVLsrt, e.g. >= 5%
     /// @dev This ratio helps maintain a balance between Jrt and Srt, ensuring JRT always has a minimum share of the total TVL
     /// @dev It limits withdrawals from Jrt and deposits to Srt to maintain this ratio
     /// @dev In case of low APR, Jrt will still be responsible for funding Srt returns, even if it falls below this ratio

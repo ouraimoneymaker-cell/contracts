@@ -24,11 +24,11 @@ contract Tranche is CDOComponent, ERC4626Upgradeable, ERC20PermitUpgradeable {
         address acm_,
         string memory name,
         string memory symbol,
-        IERC20 stakedAsset,
+        IERC20 baseAsset,
         IStrataCDO cdo_
     ) public virtual initializer {
         __ERC20_init_unchained(name, symbol);
-        __ERC4626_init_unchained(stakedAsset);
+        __ERC4626_init_unchained(baseAsset);
         __ERC20Permit_init(name);
         AccessControlled_init(owner_, acm_);
 

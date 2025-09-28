@@ -234,7 +234,7 @@ export class TranchesDeployments {
         const accounting = await this.ensureAccounting(cdo.address);
 
         // Oracle
-        const { feed } = await this.ensureFeeds();
+        const { feed, sUSDeAprPairProvider } = await this.ensureFeeds();
 
 
         const { jrtVault, srtVault } = await this.ensureEthenaTranches(cdo);
@@ -263,7 +263,8 @@ export class TranchesDeployments {
             unstakeCooldown,
             feed,
             USDe,
-            sUSDe
+            sUSDe,
+            sUSDeAprPairProvider
         };
 
         await this.configure(info, output);

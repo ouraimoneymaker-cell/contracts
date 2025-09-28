@@ -176,10 +176,10 @@ contract Accounting is IAccounting, CDOComponent {
         jrtNav = jrtNav + jrtAssetsIn - jrtAssetsOut;
         srtNav = srtNav + srtAssetsIn - srtAssetsOut;
         nav = nav + jrtAssetsIn + srtAssetsIn - jrtAssetsOut - srtAssetsOut;
-        (bool modified, UD60x18 aprTarget_, UD60x18 aprBase_) = updateAprs();
+        (bool modified, UD60x18 aprTarget_, UD60x18 aprBase_) = fetchAprs();
         if (modified == false) {
             // Recalculates aprSrt based on new TVL ratio and old APRs
-            updateIndexes(aprTarget_, aprBase_);
+            updateAprSrt(aprTarget_, aprBase_);
         }
     }
 
@@ -282,8 +282,7 @@ contract Accounting is IAccounting, CDOComponent {
             uint256 srtNavT1,
             uint256 reserveNavT1
         ) = calculateNAVSplit(nav, jrtNav, srtNav, reserveNav, navT1);
-
-        updateIndexes(aprTarget, aprBase);
+        updateIndex();
         nav = navT1;
         jrtNav = jrtNavT1;
         srtNav = srtNavT1;
@@ -322,7 +321,7 @@ contract Accounting is IAccounting, CDOComponent {
     }
 
     // Fetch APRs from Feed
-    function updateAprs () internal returns (bool modified, UD60x18 aprTargetT1, UD60x18 aprBaseT1) {
+    function fetchAprs () internal returns (bool modified, UD60x18 aprTargetT1, UD60x18 aprBaseT1) {
         if (address(aprPairFeed) == address(0)) {
             return (false, aprTarget, aprBase);
         }
@@ -334,19 +333,20 @@ contract Accounting is IAccounting, CDOComponent {
         if (aprTargetT1 != aprTarget || aprBaseT1 != aprBase) {
             aprTarget = aprTargetT1;
             aprBase = aprBaseT1;
-            updateIndexes(aprTargetT1, aprBaseT1);
+            updateAprSrt(aprTargetT1, aprBaseT1);
             return (true, aprTargetT1, aprBaseT1);
         }
         return (false, aprTargetT1, aprBaseT1);
     }
 
-    function updateIndexes (UD60x18 aprTarget_, UD60x18 aprBase_) internal {
-        UD60x18 risk = calculateRiskPremium();
-        UD60x18 aprSrt1 = mul(aprBase_, UD60x18.wrap(1e18) - risk);
-
-        aprSrt = UD60x18Ext.max(aprTarget_, aprSrt1);
+    function updateIndex () internal {
         srtTargetIndex = getSrtTargetIndexT1();
         indexTimestamp = block.timestamp;
+    }
+    function updateAprSrt (UD60x18 aprTarget_, UD60x18 aprBase_) internal {
+        UD60x18 risk = calculateRiskPremium();
+        UD60x18 aprSrt1 = mul(aprBase_, UD60x18.wrap(1e18) - risk);
+        aprSrt = UD60x18Ext.max(aprTarget_, aprSrt1);
     }
 
     /// @dev Calculates the desired gain based on the change in target index over a period
@@ -377,7 +377,7 @@ contract Accounting is IAccounting, CDOComponent {
     // Trigger fetching new APRs to update srtTargetIndex
     function onAprChanged () external onlyRole(UPDATER_FEED_ROLE)  {
         updateAccountingInner(cdo.totalStrategyAssets());
-        (bool modified, UD60x18 aprTarget_, UD60x18 aprBase_) = updateAprs();
+        (bool modified, UD60x18 aprTarget_, UD60x18 aprBase_) = fetchAprs();
         if (modified) {
             emit AprDataChangedViaPush(aprTarget_, aprBase_);
         }
@@ -400,6 +400,7 @@ contract Accounting is IAccounting, CDOComponent {
         UD60x18 risk = calculateRiskPremiumInner(riskX_, riskY_, riskK_, UD60x18.wrap(1e18));
         require(risk.unwrap() < PERCENTAGE_100, ">=100%");
         emit RiskParametersChanged(riskX_, riskY_, riskK_);
+        updateAprSrt(aprTarget, aprBase);
     }
 
     /// @notice Sets the APRs Feed contract for fetching APR target and APR base

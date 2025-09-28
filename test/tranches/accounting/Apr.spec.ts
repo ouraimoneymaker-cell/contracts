@@ -1,7 +1,8 @@
 import { UTest } from 'atma-utest'
 import { $hh } from '../utils/$hh';
-import { Executor } from './Executor';
+import { AccountingExecutor } from './AccountingExecutor';
 import { $apr } from '@s/utils/$apr';
+import { ProtocolExecutor } from '../utils/ProtocolExecutor';
 
 await $hh.test.deploy();
 
@@ -9,8 +10,11 @@ UTest.create({
     async $teardown () {
         await $hh.test.reset();
     },
+    async $after () {
+        await $hh.test.reset();
+    },
     async 'changes APR in the middle' () {
-        let exec = new Executor($hh.test);
+        let exec = new AccountingExecutor($hh.test);
         let srt$ = $apr.value(1000);
         let jrt$ = $apr.value(1000);
         let nav$ = $apr.value(2000);
@@ -36,7 +40,7 @@ UTest.create({
         });
     },
     async 'changes APRssr only' () {
-        let exec = new Executor($hh.test);
+        let exec = new AccountingExecutor($hh.test);
         let srt$ = $apr.value(1000);
         let jrt$ = $apr.value(1000);
         let nav$ = $apr.value(2000);
@@ -60,8 +64,35 @@ UTest.create({
             ]
         });
     },
+    async '!drastically change the APR due to TVL ratio' () {
+        let exec = new ProtocolExecutor($hh.test);
+
+        await exec.run({
+            steps: [
+                { aprsFixed: { target: 0, base: 0.5 } },
+                { risk: [0, .9, 1] },
+                { user: 'alice' },
+                { deposit: { jrt: 1000 } },
+                { eqAprSrt: .5 * (1 - (0 + .9 * (0) ** 1)) },
+
+                { time: '1min' },
+                { user: 'bob' },
+                { deposit: { srt: 1000  } },
+
+                { user: 'alice'},
+
+                { deposit: { srt: 3000  } },
+                { eqAprSrt: .5 * (1 - (0 + .9 * (0.8) ** 1)) }, // 4K Srt and 1K Jrt (TVLsrt 0.8)
+                { time: '1month' },
+                { logNav: true },
+                //{ eqUserAssets: { srt: $apr.final(3000, .5 * (1 - (0 + .9 * (0.8) ** 1)), '1month') } }
+
+
+            ]
+        });
+    },
     async '//negative APRssr' () {
-        let exec = new Executor($hh.test);
+        let exec = new AccountingExecutor($hh.test);
         let srt$ = $apr.value(1000);
         let jrt$ = $apr.value(1000);
         let nav$ = $apr.value(2000);

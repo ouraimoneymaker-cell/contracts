@@ -1,14 +1,19 @@
 import { UTest } from 'atma-utest'
 import { $hh } from '../utils/$hh';
-import { Executor } from './Executor';
+import { AccountingExecutor } from './AccountingExecutor';
+import { $apr } from '@s/utils/$apr';
 
 await $hh.test.deploy();
 
 UTest.create({
+    async $after () {
+        await AccountingExecutor.teardown();
+        await $hh.test.reset();
+    },
     'sUSDe APY ⬆️🟢 SSR': {
         '➡️ deposit 50/50': {
             async 'accrue after 1 year' () {
-                let exec = new Executor($hh.test);
+                let exec = new AccountingExecutor($hh.test);
                 await exec.run({
                     steps: [
                         { balanceFlow: [1000, 0, 1000, 0] },
@@ -24,23 +29,45 @@ UTest.create({
                 });
             },
             async 'update in 0.5 year without yield' () {
-                let exec = new Executor($hh.test);
+                let total = $apr.value(2000);
+                let jrt = $apr.value(1000);
+                let srt = $apr.value(1000);
+
+                let exec = new AccountingExecutor($hh.test);
                 await exec.run({
                     steps: [
-                        { balanceFlow: [1000, 0, 1000, 0] },
+                        { balanceFlow: [jrt.$, 0, srt.$, 0] },
                         { aprs: [ 0.1, 0.2 ] },
                         { eqNav: 2000 },
+                        { eqAprSrt: $apr.calcAprSrt({
+                                tvls: { jrt: jrt.$, srt: srt.$ },
+                                risk: [ 0.2, 0.2, 0.3],
+                                aprs: { target: 0.1, base: 0.2 }
+                            })
+                        },
                         { time: '0.5year' },
+                        { totalAssets: total.next(.2, 6) },
                         // TVL will be rebalanced
                         { balanceFlow: [0, 0, 1, 0] },
                         { balanceFlow: [0, 0, 0, 1] },
 
-                        { time: '0.5year' },
-                        { totalAssets: 2400 },
                         { eqAvg: [
-                            1000 * 1.272, // ~27.2%
-                            1000 * 1.127, // ~12.7%
-                        ]}
+                            jrt.next(.272, 6), // ~27.2%
+                            srt.next(.127, 6), // ~12.7%
+                        ]},
+
+                        { eqAprSrt: $apr.calcAprSrt({
+                                tvls: { jrt: jrt.$, srt: srt.$ },
+                                risk: [ 0.2, 0.2, 0.3],
+                                aprs: { target: 0.1, base: 0.2 }
+                            })
+                        },
+                        { time: '0.5year' },
+                        { totalAssets: total.next(.2, 6) },
+                        { eqAvg: [
+                            null,
+                            srt.next(0.12783, 6),
+                        ]},
                     ]
                 });
             },
@@ -48,7 +75,7 @@ UTest.create({
 
         '↗️ deposit 80srt/20jrt': {
             async 'accrue after 1 year' () {
-                let exec = new Executor($hh.test);
+                let exec = new AccountingExecutor($hh.test);
                 await exec.run({
                     steps: [
                         { balanceFlow: [1600, 0, 400, 0] },
@@ -64,27 +91,52 @@ UTest.create({
                 });
             },
             async 'update in 0.5 year without yield' () {
-                let exec = new Executor($hh.test);
+                let total = $apr.value(2000);
+                let jrt = $apr.value(1600);
+                let srt = $apr.value(400);
+
+                let exec = new AccountingExecutor($hh.test);
                 await exec.run({
                     steps: [
-                        { balanceFlow: [1600, 0, 400, 0] },
+                        { balanceFlow: [jrt.$, 0, srt.$, 0] },
                         { aprs: [ 0.1, 0.2 ] },
-                        { eqNav: 2000 },
+                        { eqNav: total.$ },
+                        { eqAprSrt: $apr.calcAprSrt({
+                                tvls: { jrt: jrt.$, srt: srt.$ },
+                                risk: [ 0.2, 0.2, 0.3],
+                                aprs: { target: 0.1, base: 0.2 }
+                            })
+                        },
                         { time: '0.5year' },
-                        { totalAssets: 2000 },
-                        { time: '0.5year' },
-                        { totalAssets: 2400 },
+                        { totalAssets: total.next(.2, 6) },
+                        // TVL will be rebalanced
+                        { balanceFlow: [0, 0, 1, 0] },
+                        { balanceFlow: [0, 0, 0, 1] },
+
                         { eqAvg: [
-                            1600 * 1.216, // ~21.6% // 1944041424556765048577n
-                            400 * 1.135, // ~13.5%  // 455958575443234951423n
-                        ]}
+                            jrt.next(.216, 6), // ~21.6%
+                            srt.next(.135, 6), // ~13.5%
+                        ]},
+
+                        { eqAprSrt: $apr.calcAprSrt({
+                                tvls: { jrt: jrt.$, srt: srt.$ },
+                                risk: [ 0.2, 0.2, 0.3],
+                                aprs: { target: 0.1, base: 0.2 }
+                            })
+                        },
+                        { time: '0.5year' },
+                        { totalAssets: total.next(.2, 6) },
+                        { eqAvg: [
+                            null,
+                            srt.next(0.13553, 6),
+                        ]},
                     ]
                 });
             },
         },
         '↘️ deposit 20srt/80jrt': {
             async 'accrue after 1 year' () {
-                let exec = new Executor($hh.test);
+                let exec = new AccountingExecutor($hh.test);
                 await exec.run({
                     steps: [
                         { balanceFlow: [400, 0, 1600, 0] },
@@ -100,7 +152,7 @@ UTest.create({
                 });
             },
             async 'update in 0.5 year without yield' () {
-                let exec = new Executor($hh.test);
+                let exec = new AccountingExecutor($hh.test);
                 await exec.run({
                     steps: [
                         { balanceFlow: [400, 0, 1600, 0] },
@@ -110,6 +162,7 @@ UTest.create({
                         { totalAssets: 2000 },
                         { time: '0.5year' },
                         { totalAssets: 2400 },
+                        // TVL ratio has little influence on aprSrt
                         { eqAvg: [
                             400 * 1.504, //  ~50.4% // 597844558129791419106n
                             1600 * 1.124, // ~12.3% // 1802155441870208580894n
@@ -122,7 +175,7 @@ UTest.create({
     'sUSDe APY ⬇️🔴 SSR': {
         '➡️ deposit 50/50': {
             async 'accrue after 1 year' () {
-                let exec = new Executor($hh.test);
+                let exec = new AccountingExecutor($hh.test);
                 await exec.run({
                     steps: [
                         { balanceFlow: [1000, 0, 1000, 0] },
@@ -138,7 +191,7 @@ UTest.create({
                 });
             },
             async 'update in 0.5 year without yield' () {
-                let exec = new Executor($hh.test);
+                let exec = new AccountingExecutor($hh.test);
                 await exec.run({
                     steps: [
                         { balanceFlow: [1000, 0, 1000, 0] },
@@ -158,7 +211,7 @@ UTest.create({
         },
         '↗️ deposit 80srt/20jrt': {
             async 'accrue after 1 year' () {
-                let exec = new Executor($hh.test);
+                let exec = new AccountingExecutor($hh.test);
                 await exec.run({
                     steps: [
                         { balanceFlow: [1600, 0, 400, 0] },
@@ -175,7 +228,7 @@ UTest.create({
             },
             async 'update in 0.5 year without yield' () {
 
-                let exec = new Executor($hh.test);
+                let exec = new AccountingExecutor($hh.test);
                 await exec.run({
                     steps: [
                         { balanceFlow: [1600, 0, 400, 0] },
@@ -196,7 +249,7 @@ UTest.create({
         },
         '↘️ deposit 20srt/80jrt': {
             async 'accrue after 1 year' () {
-                let exec = new Executor($hh.test);
+                let exec = new AccountingExecutor($hh.test);
                 await exec.run({
                     steps: [
                         { balanceFlow: [400, 0, 1600, 0] },
@@ -212,7 +265,7 @@ UTest.create({
                 });
             },
             async 'update in 0.5 year without yield' () {
-                let exec = new Executor($hh.test);
+                let exec = new AccountingExecutor($hh.test);
                 await exec.run({
                     steps: [
                         { balanceFlow: [400, 0, 1600, 0] },

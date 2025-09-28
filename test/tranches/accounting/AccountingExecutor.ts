@@ -1,21 +1,18 @@
-import alot from 'alot';
 import { $hh } from '../utils/$hh';
 import { $bigint } from 'dequanto/utils/$bigint';
-import { StrataCDO } from '@0xc/hardhat/StrataCDO/StrataCDO';
 import { Accounting } from '@0xc/hardhat/Accounting/Accounting';
 import { $require } from 'dequanto/utils/$require';
 import { $date } from 'dequanto/utils/$date';
 import { l } from 'dequanto/utils/$logger';
 import { Web3Client } from 'dequanto/clients/Web3Client';
 import { $apr } from '@s/utils/$apr';
-import { $promise } from 'dequanto/utils/$promise';
-import { $ethena } from '../utils/$ethena';
 import { HardhatProvider } from 'dequanto/hardhat/HardhatProvider';
 import { ContractBase } from 'dequanto/contracts/ContractBase';
+import { $test } from '../utils/$test';
 
 let client: Web3Client;
 
-export class Executor {
+export class AccountingExecutor {
     srtNav: bigint
     jrtNav: bigint
 
@@ -49,6 +46,7 @@ export class Executor {
         let accounting = await this.test.factory.ensureAccounting(cdo.address);
 
         await accounting.storage.$set('cdo', mockCdo.address);
+        await feed.$receipt().setRoundStaleAfter(this.test.deployer, BigInt($date.parseTimespan('2years', { get: 's' })));
 
         await Updater.impersonate(mockCdo as any, accounting);
         await Updater.totalAssets(0);
@@ -60,6 +58,12 @@ export class Executor {
                 let timestamp = (await feed.client.getBlock('latest')).timestamp;
                 await feed.$receipt().updateRoundData(deployer, aprTarget, aprBase, timestamp);
                 await accounting.$receipt().onAprChanged(deployer);
+            }
+            if (step.risk != null) {
+                let x = $bigint.toWei(step.risk[0]);
+                let y = $bigint.toWei(step.risk[1]);
+                let k = $bigint.toWei(step.risk[2]);
+                await accounting.$receipt().setRiskParameters(deployer, x, y, k);
             }
             if (step.balanceFlow != null) {
                 l`gray<BalanceFlow>: cyan<${step.balanceFlow.join(' , ')}>`;
@@ -84,8 +88,19 @@ export class Executor {
             if (step.eqNav != null) {
                 await Balance.eq(accounting.nav(), step.eqNav);
             }
+            if (step.logNav != null) {
+                console.log(`JrtNav:`, $bigint.toEther(await accounting.jrtNav()));
+                console.log(`SrtNav:`, $bigint.toEther(await accounting.srtNav()));
+            }
+            if (step.eqAprSrt != null) {
+                let srtApr = $bigint.toEther(await accounting.aprSrt());
+                console.log(`SRT APR:`, srtApr);
+                $test.eqDiff(srtApr, step.eqAprSrt, .1, `SRT APR should be ${step.eqAprSrt} but got ${srtApr}`);
+            }
         }
-
+    }
+    static async teardown () {
+        await Updater.stopImpersonate()
     }
 }
 
@@ -94,11 +109,14 @@ interface IExecutionData {
 }
 interface IExecutionStep {
     aprs?: [targetApr: number, baseApr: number]
+    risk?: [x: number, y: number, k: number]
     balanceFlow?: [jrtIn: number, jrtOut: number, srtIn: number, srtOut: number]
     time?: string
     totalAssets?: number
     eqAvg?: [jrtNav: number, srtNav: number]
     eqNav?: number
+    eqAprSrt?: number
+    logNav?: boolean
 }
 
 
@@ -112,6 +130,9 @@ namespace Updater {
         await client.debug.setBalance(cdo.address, 10n**18n);
         await client.debug.impersonateAccount(cdo.address);
     }
+    export async function stopImpersonate () {
+        await client.debug.stopImpersonatingAccount(cdo.address);
+    }
     export async function balanceFlow(jrtIn: number, jrtOut: number, srtIn: number, srtOut: number) {
         let diff = $bigint.toWei(jrtIn + srtIn - jrtOut - srtOut);
         await cdo.$receipt().increment(cdo, diff);
@@ -124,7 +145,8 @@ namespace Updater {
         );
     }
     export async function totalAssets(currentNAV: number) {
-        await cdo.$receipt().setTotalAssets(cdo, currentNAV);
+        l`Setting totalAssets cyan<${ currentNAV }>`;
+        await cdo.$receipt().setTotalAssets(cdo, $bigint.toWei(currentNAV));
         await accounting.$receipt().updateAccounting(
             cdo,
             $bigint.toWei(currentNAV),

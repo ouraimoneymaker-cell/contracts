@@ -7,11 +7,19 @@ import { $acc } from './$acc';
 import { $erc20 } from './$erc20';
 import { $require } from 'dequanto/utils/$require';
 import { Tranche } from '@0xc/hardhat/Tranche/Tranche';
+import { l } from 'dequanto/utils/$logger';
+import { MockUSDe } from '@0xc/hardhat/MockUSDe/MockUSDe';
 
 export namespace $erc4626 {
     export async function deposit (erc4626: IERC4626, sender: TEth.IAccount,  amount: bigint | number | `${number}%`) {
         let erc20 = await Tools.getAsset(erc4626);
         let amountWei = await $erc20.toAmount(erc20, amount, sender);
+        let balance = await erc20.balanceOf(sender.address);
+        if (balance < amountWei) {
+            l`Not enough ${await erc20.symbol()} to deposit. Minting ...`;
+            let mintable = new MockUSDe(erc20.address, erc20.client);
+            await mintable.$receipt().mint(sender, sender.address, amountWei);
+        }
 
         await erc20.$receipt().approve(sender, erc4626.address, amountWei);
         await erc4626.$receipt().deposit(sender, amountWei, sender.address);

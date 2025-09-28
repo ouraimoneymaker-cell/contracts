@@ -7,7 +7,7 @@ import { ICooldown, IERC20Cooldown } from "../../interfaces/cooldown/ICooldown.s
 import { AccessControlled } from "../../../governance/AccessControlled.sol";
 /**
  * @title Strata Cooldown Vault for generic IERC20 tokens
- * @notice The Silo allows to store USDe during the cooldown process.
+ * @notice The Silo allows storing ERC20 tokens during the cooldown process.
  */
 contract ERC20Cooldown is IERC20Cooldown, AccessControlled {
 

@@ -68,7 +68,7 @@ contract Accounting is IAccounting, CDOComponent {
     ///      Jrt withdrawals remain possible until the hard minimum is reached.
     uint256 public minimumJrtSrtRatioBuffer;
 
-    error InvalidNavSpit(uint256 navT1, uint256 jrtAssets, uint256 srtAssets, uint256 reserveAssets);
+    error InvalidNavSplit(uint256 navT1, uint256 jrtAssets, uint256 srtAssets, uint256 reserveAssets);
     error ReserveTooLow(uint256 reserveNav, uint256 requestedNav);
 
     event AprPairFeedChanged(address aprPairFeed);
@@ -213,7 +213,7 @@ contract Accounting is IAccounting, CDOComponent {
         uint256 reserveNavT0,
 
         uint256 navT1
-    ) public view returns (uint jrtNavT1, uint srtNavT1, uint reserveNavT1) {
+    ) public view returns (uint256 jrtNavT1, uint256 srtNavT1, uint256 reserveNavT1) {
         if (jrtNavT0 == 0 && srtNavT0 == 0 && navT1 > 0) {
             // No deposits yet, however Strategy reports gain, move all to reserve.
             return (0, 0, navT1);
@@ -278,7 +278,7 @@ contract Accounting is IAccounting, CDOComponent {
 
 
         if (navT1 != (jrtNavT1 + srtNavT1 + reserveNavT1)) {
-            revert InvalidNavSpit(navT1, jrtNavT1, srtNavT1, reserveNavT1);
+            revert InvalidNavSplit(navT1, jrtNavT1, srtNavT1, reserveNavT1);
         }
 
         return (jrtNavT1, srtNavT1, reserveNavT1);

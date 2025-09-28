@@ -9,7 +9,7 @@ import { IUnstakeCooldown } from "../../interfaces/cooldown/ICooldown.sol";
 import { AccessControlled } from "../../../governance/AccessControlled.sol";
 
 /**
- * @title Strata sUSDe redemption worker
+ * @title Strata Unstake Cooldown Manager
  */
 contract UnstakeCooldown is IUnstakeCooldown, AccessControlled {
 
@@ -169,7 +169,7 @@ contract UnstakeCooldown is IUnstakeCooldown, AccessControlled {
     }
 
     /**
-     * @dev Updates the implementations for a tokens. Implementation can be ZERO address in case we want to remove supported token.
+     * @dev Updates the implementations for tokens. Implementation can be ZERO address in case we want to remove supported token.
      */
     function setImplementations(address[] calldata tokens_, IUnstakeHandler[] calldata implementations_) external onlyOwner {
         uint256 len = tokens_.length;

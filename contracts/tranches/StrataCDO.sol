@@ -33,12 +33,11 @@ contract StrataCDO is IErrors, IStrataCDO, AccessControlled {
     /// @dev Interacts directly with external protocol to generate returns
     IStrategy public strategy;
 
-    // Junior (BB) Tranche
+    /// @notice Junior (BB) Tranche
     ITranche public jrtVault;
 
-    // Sinior (AA) Tranche
+    /// @notice Senior (AA) Tranche
     ITranche public srtVault;
-
 
     /// @dev Address of the treasury wallet
     /// @dev Used as the recipient when reducing reserves
@@ -62,7 +61,7 @@ contract StrataCDO is IErrors, IStrataCDO, AccessControlled {
     event JrtShortfallPausePriceSet(uint256 pricePerShare);
 
 
-    /// @notice
+    /// @notice Restricts function access to only the junior (JRT) or senior (SRT) tranche contracts
     modifier onlyTranche() {
         if (msg.sender != address(jrtVault) && msg.sender != address(srtVault)) {
             revert InvalidCaller(msg.sender);
@@ -87,7 +86,7 @@ contract StrataCDO is IErrors, IStrataCDO, AccessControlled {
     ///      2. Uses the accounting contract to calculate the asset split
     ///      3. Returns the assets allocated to the specified tranche
     function totalAssets(address tranche) public view returns (uint256) {
-        uint totalAssetsOverall = strategy.totalAssets();
+        uint256 totalAssetsOverall = strategy.totalAssets();
         (uint256 jrtAssets, uint256 srtAssets, ) = accounting.totalAssets(
             totalAssetsOverall
         );
@@ -145,8 +144,8 @@ contract StrataCDO is IErrors, IStrataCDO, AccessControlled {
             revert ZeroAmount();
         }
         strategy.deposit(tranche, token, tokenAmount, baseAssets, /* owner: */ tranche);
-        uint jrtAssetsIn = isJrt_ ? baseAssets : 0;
-        uint srtAssetsIn = isJrt_ ? 0          : baseAssets;
+        uint256 jrtAssetsIn = isJrt_ ? baseAssets : 0;
+        uint256 srtAssetsIn = isJrt_ ? 0          : baseAssets;
         accounting.updateBalanceFlow(jrtAssetsIn, 0, srtAssetsIn, 0);
         shortfallPauser();
     }
@@ -164,8 +163,8 @@ contract StrataCDO is IErrors, IStrataCDO, AccessControlled {
             revert ZeroAmount();
         }
         strategy.withdraw(tranche, token, tokenAmount, baseAssets, receiver);
-        uint jrtAssetsOut = isJrt_ ? baseAssets : 0;
-        uint srtAssetsOut = isJrt_ ? 0          : baseAssets;
+        uint256 jrtAssetsOut = isJrt_ ? baseAssets : 0;
+        uint256 srtAssetsOut = isJrt_ ? 0          : baseAssets;
         accounting.updateBalanceFlow(0, jrtAssetsOut, 0, srtAssetsOut);
         shortfallPauser();
     }
@@ -259,7 +258,7 @@ contract StrataCDO is IErrors, IStrataCDO, AccessControlled {
 
     /// @notice Sets the JRT shortfall price to automatically pause the deposits, when the price falls below this price
     function setJrtShortfallPausePrice (uint256 jrtShortfallPausePrice_) external onlyRole(PAUSER_ROLE) {
-        // Should it be greater, the Pauser must pause the deposits instead
+        // If the shortfall pause price is above current price, deposits must be paused manually by the Pauser
         require(jrtShortfallPausePrice_ <= pricePerShare(address(jrtVault)), "ShortfallPriceTooLarge");
         jrtShortfallPausePrice = jrtShortfallPausePrice_;
         emit JrtShortfallPausePriceSet(jrtShortfallPausePrice_);

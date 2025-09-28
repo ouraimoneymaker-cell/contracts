@@ -56,11 +56,17 @@ contract Accounting is IAccounting, CDOComponent {
     UD60x18 public riskY;
     UD60x18 public riskK;
 
-    /// @dev minimum TVL ratio: TVLjrt/TVLsrt, e.g. >= 5%
-    /// @dev This ratio helps maintain a balance between Jrt and Srt, ensuring JRT always has a minimum share of the total TVL
-    /// @dev It limits withdrawals from Jrt and deposits to Srt to maintain this ratio
-    /// @dev In case of low APR, Jrt will still be responsible for funding Srt returns, even if it falls below this ratio
+    /// @notice The hard minimum TVLjrt/TVLsrt ratio.
+    /// @dev If the Jrt TVL falls below this ratio relative to Srt,
+    ///      Jrt withdrawals are no longer allowed.
+    //       In case of low APR, Jrt will still be responsible for funding Srt returns, even if it falls below this ratio
     uint256 public minimumJrtSrtRatio;
+
+    /// @notice The protective buffer above the minimum Jrt/Srt ratio.
+    /// @dev If the ratio falls below this threshold, deposits into the Srt vault
+    ///      are disabled earlier to prevent front-running the hard floor.
+    ///      Jrt withdrawals remain possible until the hard minimum is reached.
+    uint256 public minimumJrtSrtRatioBuffer;
 
     error InvalidNavSpit(uint256 navT1, uint256 jrtAssets, uint256 srtAssets, uint256 reserveAssets);
     error ReserveTooLow(uint256 reserveNav, uint256 requestedNav);
@@ -70,6 +76,7 @@ contract Accounting is IAccounting, CDOComponent {
     event ReservePercentageChanged(uint256 reserveBps);
     event RiskParametersChanged(UD60x18 x, UD60x18 y, UD60x18 k);
     event MinimumJrtSrtRatioChanged(uint256 ratio);
+    event MinimumJrtSrtRatioBufferChanged(uint256 ratio);
 
     function initialize(
         address owner_,
@@ -89,6 +96,7 @@ contract Accounting is IAccounting, CDOComponent {
         srtTargetIndex = 1e18;
         indexTimestamp = block.timestamp;
         minimumJrtSrtRatio = 0.05e18;
+        minimumJrtSrtRatioBuffer = 0.06e18;
     }
 
     /// @notice Returns the updated total assets for each tranche and the reserve
@@ -148,7 +156,7 @@ contract Accounting is IAccounting, CDOComponent {
         if (isJrt) {
             return type(uint256).max;
         }
-        uint256 maxSrt = jrtNav * 1e18 / minimumJrtSrtRatio;
+        uint256 maxSrt = jrtNav * 1e18 / minimumJrtSrtRatioBuffer;
         return Math.saturatingSub(maxSrt, srtNav);
     }
 
@@ -425,11 +433,20 @@ contract Accounting is IAccounting, CDOComponent {
         emit ReservePercentageChanged(reserveBps);
     }
 
-    /// @notice Sets the minimum ratio of Junior Tranche to Senior Tranche TVL
+    /// @notice Sets the hard minimum Jrt/Srt ratio below which Jrt withdrawals are blocked.
     function setMinimumJrtSrtRatio (uint256 ratio) external onlyOwner {
         // initial: min Jrt = .05x Srt; allow up-to min Jrt = 100x Srt
-        require(ratio <= 100 * PERCENTAGE_100, "InvalidRatio");
+        require(ratio <= minimumJrtSrtRatioBuffer, "RatioAboveSoftFloor");
         minimumJrtSrtRatio = ratio;
         emit MinimumJrtSrtRatioChanged(ratio);
+    }
+
+    /// @notice Sets the protective buffer ratio at which Srt deposits are halted.
+    function setMinimumJrtSrtRatioBuffer (uint256 ratio) external onlyOwner {
+        // initial: min Jrt = .05x Srt; allow up-to min Jrt = 100x Srt
+        require(ratio <= 100 * PERCENTAGE_100, "RatioTooHigh");
+        require(ratio >= minimumJrtSrtRatio, "RatioBelowHardFloor");
+        minimumJrtSrtRatioBuffer = ratio;
+        emit MinimumJrtSrtRatioBufferChanged(ratio);
     }
 }

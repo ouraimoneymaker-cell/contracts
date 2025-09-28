@@ -13,6 +13,7 @@ import { $ethena } from './utils/$ethena';
 import { $date } from 'dequanto/utils/$date';
 import { $signSerializer } from 'dequanto/utils/$signSerializer';
 import { $sig } from 'dequanto/utils/$sig';
+import { $bigfloat } from 'dequanto/utils/$bigfloat';
 
 await $hh.test.deploy();
 
@@ -41,13 +42,24 @@ UAction.create({
         let { jrtVault, srtVault, cdo, USDe, sUSDe, acm } = $hh.test.tranches;
 
         // Deposit initial
-        await USDe.$receipt().mint($hh.test.deployer, $hh.test.deployer.address, 10n**18n);
-        await $erc4626.deposit(jrtVault, $hh.test.deployer, 10n**18n);
+        await $erc4626.deposit(jrtVault, $hh.test.deployer, 1);
+        $require.eq(
+            await srtVault.maxDeposit($address.ZERO),
+            $bigfloat.from('1e18').div(.06).toBigInt(),
+            `Srt TVL = 0$, Jrt TVL = 1$, max srt deposit to get soft 6% of Jrt TVL`
+        );
 
-        $require.eq(await srtVault.maxDeposit($address.ZERO), (10n**18n) * 20n); // max 20x
+        await $erc4626.deposit(srtVault, $hh.test.deployer, 1);
+        $require.eq(
+            await jrtVault.maxWithdraw($hh.test.deployer.address),
+            $bigfloat.from('1e18').mul(.95).toBigInt(),
+            `Srt TVL = 1$, Jrt TVL = 1$, max jrt withdraw to get hard 5% of Jrt TVL`
+        );
+
+
 
         let alice = await $hh.test.createAccount('alice');
-        await USDe.$receipt().mint(alice, alice.address, 1000n * 10n**18n);
+        await $erc20.mint(USDe, alice, alice.address, 1000);
 
         return UTest.create({
             async 'some access checks' () {
@@ -89,11 +101,11 @@ UAction.create({
 
         // Deposit initial
         await USDe.$receipt().mint($hh.test.deployer, $hh.test.deployer.address, 1000_000n * 10n**18n);
-        await $erc4626.deposit(jrtVault, $hh.test.deployer, 500_000n * 10n**18n);
-        await $erc4626.deposit(srtVault, $hh.test.deployer, 10n**18n);
+        await $erc4626.deposit(jrtVault, $hh.test.deployer, 500_000);
+        await $erc4626.deposit(srtVault, $hh.test.deployer, 500_000);
 
         let bob = await $hh.test.createAccount('bob');
-        await USDe.$receipt().mint(bob, bob.address, 1000n * 10n**18n);
+        await $erc20.mint(USDe, bob, bob.address, 1000);
 
         return UTest.create({
             async 'USDe' () {

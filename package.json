@@ -25,6 +25,7 @@
   "homepage": "https://github.com/Strata-Money/contracts-tranches#readme",
   "devDependencies": {
     "@nomicfoundation/hardhat-toolbox": "^5.0.0",
+    "atma": "^0.15.24",
     "hardhat": "^2.24.2"
   },
   "dependencies": {

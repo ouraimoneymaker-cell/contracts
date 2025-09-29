@@ -1,5 +1,4 @@
 import { HardhatProvider } from 'dequanto/hardhat/HardhatProvider';
-import { TranchesDeployments } from '../../../src/deployments/TranchesDeployments';
 import { UAction } from 'atma-utest'
 import { $usde } from '../utils/$usde';
 import { $erc20 } from '../utils/$erc20';
@@ -12,7 +11,10 @@ import { $require } from 'dequanto/utils/$require';
 import { $hh } from '../utils/$hh';
 import { $testCooldown } from './$testCooldown';
 import { $promise } from 'dequanto/utils/$promise';
+import { l } from 'dequanto/utils/$logger';
 
+
+const _7DAYS = BigInt(7 * 24 * 60 * 60);
 
 let hh = new HardhatProvider();
 let alice = await hh.deployer(1);
@@ -31,13 +33,13 @@ await $hh.test.snapshot('erc20Cooldown');
 
 
 UAction.create({
-    async $teardown () {
+    async $teardown() {
         await $hh.test.reset('erc20Cooldown');
     },
-    async $after () {
+    async $after() {
         await $hh.test.reset();
     },
-    async 'transfer via cooldown' () {
+    async 'transfer via cooldown'() {
 
         await transfer(erc20Cooldown, USDe, alice, bob, 20n, '60s');
         await transfer(erc20Cooldown, USDe, alice, bob, 30n, '120s');
@@ -76,7 +78,7 @@ UAction.create({
         await $testCooldown.eqBalanceOf(erc20Cooldown, USDe, bob, { pending: 0n, claimable: 0n, nextUnlockAmount: 0n });
     },
 
-    async 'emergency disable' () {
+    async 'emergency disable'() {
 
         await transfer(erc20Cooldown, USDe, alice, bob.address, 21n, '7days');
 
@@ -87,12 +89,78 @@ UAction.create({
         await $testCooldown.eqBalanceOf(erc20Cooldown, USDe, bob, { pending: 0n, claimable: 21n, nextUnlockAmount: 0n, nextUnlockAt: 0n });
         await $testCooldown.finalize(erc20Cooldown, USDe, bob.address);
         await $erc20.eqBalance(USDe, bob, 21n);
+    },
+    async 'ensure unstake request is reused within single block'() {
+
+        await USDe.$receipt().approve(alice, erc20Cooldown.address, 50n);
+        await $hh.test.client.debug.setAutomine(false);
+        let tx1 = await erc20Cooldown.transfer(alice, USDe.address, alice.address, bob.address, 23n, _7DAYS);
+        let tx2 = await erc20Cooldown.transfer(alice, USDe.address, alice.address, bob.address, 27n, _7DAYS);
+        await $hh.test.client.debug.setAutomine(true);
+        await $hh.test.client.debug.mine(1);
+
+        await Promise.all([tx1.wait(), tx2.wait()]);
+
+        l`1 request only, as 2 requests were made in the same block`;
+
+        await $testCooldown.eqBalanceOf(erc20Cooldown, USDe, bob, {
+            pending: 50n,
+            nextUnlockAmount: 50n,
+            totalRequests: 1n
+        });
+
+        await $hh.test.mine(`7days`);
+        await $testCooldown.finalize(erc20Cooldown, USDe, bob.address);
+        await $erc20.eqBalance(USDe, bob, 50n);
+    },
+    async 'max active requests'() {
+        await USDe.$receipt().approve(alice, erc20Cooldown.address, 80n);
+        const MAX = 71;
+        for (let i = 0; i < MAX; i++) {
+            await erc20Cooldown.$receipt().transfer(alice, USDe.address, bob.address, bob.address, 1n, _7DAYS);
+        }
+        await $testCooldown.eqBalanceOf(erc20Cooldown, USDe, bob, {
+            pending: 71n,
+            nextUnlockAmount: 1n,
+            totalRequests: 70n
+        });
+        await $hh.test.mine(`8days`);
+        await $testCooldown.finalize(erc20Cooldown, USDe, bob.address);
+        await $erc20.eqBalance(USDe, bob, 71n);
+    },
+    async 'max external requests'() {
+        await USDe.$receipt().approve(alice, erc20Cooldown.address, 80n);
+        const MAX = 40;
+        for (let i = 0; i < MAX; i++) {
+            await erc20Cooldown.$receipt().transfer(alice, USDe.address, alice.address, bob.address, 1n, _7DAYS);
+        }
+        await $testCooldown.eqBalanceOf(erc20Cooldown, USDe, bob, {
+            pending: 40n,
+            nextUnlockAmount: 1n,
+            totalRequests: 40n
+        });
+
+        let result = await $promise.caught(() => {
+            return erc20Cooldown.$receipt().transfer(alice, USDe.address, alice.address, bob.address, 1n, _7DAYS);
+        });
+        $require.match(/ExternalReceiverRequestLimitRiched/, result.error?.message);
+
+        await erc20Cooldown.$receipt().transfer(alice, USDe.address, bob.address, bob.address, 5n, _7DAYS);
+        await $testCooldown.eqBalanceOf(erc20Cooldown, USDe, bob, {
+            pending: 45n,
+            nextUnlockAmount: 1n,
+            totalRequests: 41n
+        });
+
+        await $hh.test.mine(`8days`);
+        await $testCooldown.finalize(erc20Cooldown, USDe, bob.address);
+        await $erc20.eqBalance(USDe, bob, 45n);
     }
 })
 
 
-async function transfer (cooldown: ERC20Cooldown, token: ERC20 | any, from: TEth.IAccount, to: $acc.Address, amount: bigint, timespan: string) {
+async function transfer(cooldown: ERC20Cooldown, token: ERC20 | any, from: TEth.IAccount, to: $acc.Address, amount: bigint, timespan: string) {
     let cooldownSeconds = BigInt(Math.floor($date.parseTimespan(timespan) / 1000));
     await token.$receipt().approve(from, cooldown.address, amount);
-    await cooldown.$receipt().transfer(from, token.address, $acc.toAddress(to), amount, cooldownSeconds);
+    await cooldown.$receipt().transfer(from, token.address, from.address, $acc.toAddress(to), amount, cooldownSeconds);
 }

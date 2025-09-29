@@ -12,7 +12,7 @@ interface IStrataCDO {
     function updateAccounting () external;
 
     function deposit (address tranche, address token, uint256 tokenAmount, uint256 baseAssets) external;
-    function withdraw (address tranche, address token, uint256 tokenAmount, uint256 baseAssets, address receiver) external;
+    function withdraw (address tranche, address token, uint256 tokenAmount, uint256 baseAssets, address owner, address receiver) external;
 
     function maxWithdraw(address tranche) external view returns (uint256);
     function maxDeposit(address tranche) external view returns (uint256);

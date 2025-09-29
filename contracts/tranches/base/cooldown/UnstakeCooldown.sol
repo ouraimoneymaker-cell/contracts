@@ -6,21 +6,17 @@ import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { Clones } from "@openzeppelin/contracts/proxy/Clones.sol";
 import { IUnstakeHandler } from "../../interfaces/cooldown/IUnstakeHandler.sol";
 import { IUnstakeCooldown } from "../../interfaces/cooldown/ICooldown.sol";
-import { AccessControlled } from "../../../governance/AccessControlled.sol";
+import { CooldownBase } from "./CooldownBase.sol";
 
 /**
  * @title Strata Unstake Cooldown Manager
  */
-contract UnstakeCooldown is IUnstakeCooldown, AccessControlled {
+contract UnstakeCooldown is IUnstakeCooldown, CooldownBase {
 
-    event Requested(address indexed token, address indexed user, uint256 amount, uint256 unlockAt);
+
     event Unstaked(address indexed token, address indexed user, uint256 amount);
     event UserProxyCreated(address indexed user, address proxy);
     event UserProxyImplementationSet(address token, address impl);
-
-    error InvalidTime ();
-    error UnsupportedToken(address token);
-    error NothingToFinalize ();
 
     struct TRequest {
         uint64 unlockAt;
@@ -35,15 +31,9 @@ contract UnstakeCooldown is IUnstakeCooldown, AccessControlled {
     /// @dev Maintain proxies Pool, after the request is completed, the proxy is returned to the pool
     mapping(address token => mapping(address account => IUnstakeHandler[] proxy)) public proxiesPool;
 
-    function initialize(
-        address owner_,
-        address acm_
-    ) public virtual initializer {
-        AccessControlled_init(owner_, acm_);
-    }
 
-    function transfer(IERC20 token, address to, uint256 amount) external onlyRole(COOLDOWN_WORKER_ROLE) {
-        address from = msg.sender;
+    function transfer(IERC20 token, address initialFrom, address to, uint256 amount) external onlyRole(COOLDOWN_WORKER_ROLE) {
+        address worker = msg.sender;
         if (amount == 0) {
             return;
         }
@@ -56,28 +46,50 @@ contract UnstakeCooldown is IUnstakeCooldown, AccessControlled {
         IUnstakeHandler[] storage proxies = proxiesPool[address(token)][to];
 
         IUnstakeHandler proxy;
-        uint256 len = proxies.length;
-        if (len > 0) {
-            proxy = IUnstakeHandler(proxies[len - 1]);
-            proxies.pop();
-            if (impl != getImplementation(address(proxy))) {
+        bool shouldReuseRequest = false;
+        uint256 requestsCount = requests.length;
+        if (initialFrom != to && requestsCount >= PUBLIC_REQUEST_SLOTS_CAP) {
+            revert ExternalReceiverRequestLimitRiched(token, initialFrom, to, amount);
+        }
+        if (requestsCount > 0) {
+            // Check if we should create a new request or extend the last one
+            shouldReuseRequest = requestsCount >= MAX_ACTIVE_REQUEST_SLOTS
+                || requests[requestsCount - 1].proxy.requestedAt() == block.timestamp;
+        }
+        if (shouldReuseRequest) {
+            proxy = requests[requestsCount - 1].proxy;
+        } else {
+            uint256 len = proxies.length;
+            if (len > 0) {
+                proxy = IUnstakeHandler(proxies[len - 1]);
+                proxies.pop();
+                if (impl != getImplementation(address(proxy))) {
+                    proxy = createFor(impl, to);
+                }
+            } else {
                 proxy = createFor(impl, to);
             }
-        } else {
-            proxy = createFor(impl, to);
         }
 
-
-        SafeERC20.safeTransferFrom(token, from, address(proxy), amount);
+        SafeERC20.safeTransferFrom(token, worker, address(proxy), amount);
 
         uint256 unlockAt = proxy.request();
+        emit TransferRequested(token, initialFrom, to, amount, unlockAt);
+
+        if (shouldReuseRequest) {
+            if (unlockAt > block.timestamp) {
+                // If not an instant transfer, update the existing unlockAt
+                requests[requestsCount - 1].unlockAt = uint64(unlockAt);
+            }
+            // exit, do not modify requests and proxies
+            return;
+        }
         if (unlockAt <= block.timestamp) {
-            // Already transfered, return proxy to pool and exit
+            // already transferred (instant transfer), return proxy to pool and exit
             proxies.push(proxy);
             return;
         }
         requests.push(TRequest(uint64(unlockAt), proxy));
-        emit Requested(address(token), to, amount, unlockAt);
     }
 
     function finalize(IERC20 token, address user) external returns (uint256 claimed) {
@@ -157,7 +169,8 @@ contract UnstakeCooldown is IUnstakeCooldown, AccessControlled {
             pending: pending,
             claimable: claimable,
             nextUnlockAt: nextUnlockAt,
-            nextUnlockAmount: nextUnlockAmount
+            nextUnlockAmount: nextUnlockAmount,
+            totalRequests: l
         });
     }
 

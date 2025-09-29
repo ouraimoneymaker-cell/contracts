@@ -4,49 +4,57 @@ pragma solidity ^0.8.28;
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { ICooldown, IERC20Cooldown } from "../../interfaces/cooldown/ICooldown.sol";
-import { AccessControlled } from "../../../governance/AccessControlled.sol";
+import { CooldownBase } from "./CooldownBase.sol";
 /**
  * @title Strata Cooldown Vault for generic IERC20 tokens
  * @notice The Silo allows storing ERC20 tokens during the cooldown process.
  */
-contract ERC20Cooldown is IERC20Cooldown, AccessControlled {
+contract ERC20Cooldown is IERC20Cooldown, CooldownBase {
 
-    event Requested(IERC20 indexed token, address indexed user, uint256 amount, uint256 unlockAt);
     event Claimed(IERC20 indexed token, address indexed user, uint256 amount);
-
-    error InvalidTime ();
-    error NothingToFinalize ();
 
     struct TRequest {
         uint64 unlockAt;
         uint192 amount;
     }
 
-    mapping(address token => mapping(address account => TRequest[] requests)) public cooldowns;
+    mapping(address token => mapping(address account => TRequest[] requests)) public activeRequests;
     mapping(address token => bool isCooldownDisabled) public cooldownDisabled;
 
-    function initialize(
-        address owner_,
-        address acm_
-    ) public virtual initializer {
-        AccessControlled_init(owner_, acm_);
-    }
-
-    function transfer(IERC20 token, address to, uint256 amount, uint256 cooldownSeconds) external onlyRole(COOLDOWN_WORKER_ROLE) {
-        address from = msg.sender;
+    function transfer(IERC20 token, address initialFrom, address to, uint256 amount, uint256 cooldownSeconds) external onlyRole(COOLDOWN_WORKER_ROLE) {
+        address worker = msg.sender;
         if (amount == 0) {
             return;
         }
         if (cooldownSeconds == 0) {
-            SafeERC20.safeTransferFrom(token, from, to, amount);
+            SafeERC20.safeTransferFrom(token, worker, to, amount);
             return;
         }
-        SafeERC20.safeTransferFrom(token, from, address(this), amount);
+
+        TRequest[] storage requests = activeRequests[address(token)][to];
+
+        uint256 requestsCount = requests.length;
+        if (initialFrom != to && requestsCount >= PUBLIC_REQUEST_SLOTS_CAP) {
+            revert ExternalReceiverRequestLimitRiched(token, initialFrom, to, amount);
+        }
 
         uint256 unlockAt = block.timestamp + cooldownSeconds;
-        cooldowns[address(token)][to].push(TRequest(uint64(unlockAt), uint192(amount)));
+        if (requestsCount < MAX_ACTIVE_REQUEST_SLOTS) {
+            if (requestsCount > 0 && requests[requestsCount - 1].unlockAt == unlockAt) {
+                // is requested within current block
+                TRequest storage last = requests[requestsCount - 1];
+                last.amount += uint192(amount);
+            } else {
+                requests.push(TRequest(uint64(unlockAt), uint192(amount)));
+            }
+        } else {
+            TRequest storage last = requests[requestsCount - 1];
+            last.amount += uint192(amount);
+            last.unlockAt = uint64(unlockAt);
+        }
 
-        emit Requested(token, to, amount, unlockAt);
+        SafeERC20.safeTransferFrom(token, worker, address(this), amount);
+        emit TransferRequested(token, initialFrom, to, amount, unlockAt);
     }
 
     function finalize(IERC20 token, address user) external returns (uint256 claimed) {
@@ -56,7 +64,7 @@ contract ERC20Cooldown is IERC20Cooldown, AccessControlled {
         if (at > block.timestamp) {
             revert InvalidTime();
         }
-        TRequest[] storage requests = cooldowns[address(token)][user];
+        TRequest[] storage requests = activeRequests[address(token)][user];
         bool isCooldownActive = cooldownDisabled[address(token)] == false;
 
         uint256 len = requests.length;
@@ -75,12 +83,12 @@ contract ERC20Cooldown is IERC20Cooldown, AccessControlled {
             requests.pop();
             unchecked { len--; }
         }
-        if (claimed > 0) {
-            SafeERC20.safeTransfer(token, user, claimed);
-            emit Claimed(token, user, claimed);
-        } else {
+        if (claimed == 0) {
             revert NothingToFinalize();
         }
+
+        SafeERC20.safeTransfer(token, user, claimed);
+        emit Claimed(token, user, claimed);
         return claimed;
     }
 
@@ -89,7 +97,7 @@ contract ERC20Cooldown is IERC20Cooldown, AccessControlled {
     }
 
     function balanceOf (IERC20 token, address user, uint256 at) public view returns (ICooldown.TBalanceState memory) {
-        TRequest[] storage requests = cooldowns[address(token)][user];
+        TRequest[] storage requests = activeRequests[address(token)][user];
         bool isCooldownActive = cooldownDisabled[address(token)] == false;
 
         uint256 l = requests.length;
@@ -118,7 +126,8 @@ contract ERC20Cooldown is IERC20Cooldown, AccessControlled {
             pending: pending,
             claimable: claimable,
             nextUnlockAt: nextUnlockAt,
-            nextUnlockAmount: nextUnlockAmount
+            nextUnlockAmount: nextUnlockAmount,
+            totalRequests: l
         });
     }
 

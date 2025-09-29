@@ -150,7 +150,7 @@ contract StrataCDO is IErrors, IStrataCDO, AccessControlled {
         shortfallPauser();
     }
 
-    function withdraw(address tranche, address token, uint256 tokenAmount, uint256 baseAssets, address receiver) external onlyTranche nonReentrant {
+    function withdraw(address tranche, address token, uint256 tokenAmount, uint256 baseAssets, address sender, address receiver) external onlyTranche nonReentrant {
         bool isJrt_ = isJrt(tranche);
         bool enabled = isJrt_ ? actionsJrt.isWithdrawEnabled : actionsSrt.isWithdrawEnabled;
         if (!enabled) {
@@ -162,7 +162,7 @@ contract StrataCDO is IErrors, IStrataCDO, AccessControlled {
         if (tokenAmount == 0 || baseAssets == 0) {
             revert ZeroAmount();
         }
-        strategy.withdraw(tranche, token, tokenAmount, baseAssets, receiver);
+        strategy.withdraw(tranche, token, tokenAmount, baseAssets, sender, receiver);
         uint256 jrtAssetsOut = isJrt_ ? baseAssets : 0;
         uint256 srtAssetsOut = isJrt_ ? 0          : baseAssets;
         accounting.updateBalanceFlow(0, jrtAssetsOut, 0, srtAssetsOut);

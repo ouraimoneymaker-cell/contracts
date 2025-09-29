@@ -210,7 +210,7 @@ contract Tranche is CDOComponent, ERC4626Upgradeable, ERC20PermitUpgradeable {
             _spendAllowance(owner, caller, shares);
         }
         _burn(owner, shares);
-        cdo.withdraw(address(this), asset(), assets, assets, receiver);
+        cdo.withdraw(address(this), asset(), assets, assets, owner, receiver);
         _onAfterWithdrawalChecks();
         emit Withdraw(caller, receiver, owner, assets, shares);
     }
@@ -232,7 +232,7 @@ contract Tranche is CDOComponent, ERC4626Upgradeable, ERC20PermitUpgradeable {
         }
 
         _burn(owner, shares);
-        cdo.withdraw(address(this), token, tokenAssets, baseAssets, receiver);
+        cdo.withdraw(address(this), token, tokenAssets, baseAssets, owner, receiver);
         _onAfterWithdrawalChecks();
         emit Withdraw(caller, receiver, owner, baseAssets, shares);
         emit OnMetaWithdraw(receiver, token, tokenAssets, shares);

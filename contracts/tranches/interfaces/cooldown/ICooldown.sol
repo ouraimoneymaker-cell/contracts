@@ -9,7 +9,15 @@ interface ICooldown {
         uint256 claimable;
         uint256 nextUnlockAt;
         uint256 nextUnlockAmount;
+        uint256 totalRequests;
     }
+
+    event TransferRequested(IERC20 indexed token, address indexed from, address indexed to, uint256 amount, uint256 unlockAt);
+
+    error InvalidTime ();
+    error UnsupportedToken(address token);
+    error NothingToFinalize ();
+    error ExternalReceiverRequestLimitRiched(IERC20 token, address from, address to, uint256 amount);
 
     function finalize(IERC20 token, address user) external returns (uint256 claimed);
     function finalize(IERC20 token, address user, uint256 at) external returns (uint256 claimed);
@@ -20,10 +28,10 @@ interface ICooldown {
 
 
 interface IERC20Cooldown is ICooldown {
-    function transfer(IERC20 token, address to, uint256 amount, uint256 cooldownSeconds) external;
+    function transfer(IERC20 token, address initialFrom, address to, uint256 amount, uint256 cooldownSeconds) external;
     function setCooldownDisabled(IERC20 token, bool isCooldownDisabled) external;
 }
 
 interface IUnstakeCooldown is ICooldown {
-    function transfer(IERC20 token, address to, uint256 amount) external;
+    function transfer(IERC20 token, address initialFrom, address to, uint256 amount) external;
 }

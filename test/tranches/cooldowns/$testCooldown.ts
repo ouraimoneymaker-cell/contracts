@@ -18,14 +18,17 @@ export namespace $testCooldown {
         claimable?: bigint
         nextUnlockAmount?: bigint
         nextUnlockAt?: string | bigint
+        totalRequests?: bigint
     }) {
         const balance = await cooldown.balanceOf(token.address, $acc.toAddress(account));
-
 
         $require.eq(balance.pending, amounts.pending ?? 0n, 'invalid pending');
         $require.eq(balance.claimable, amounts.claimable ?? 0n, 'invalid claimable');
         if (amounts.nextUnlockAmount != null) {
             $require.eq(balance.nextUnlockAmount, amounts.nextUnlockAmount, 'invalid nextUnlockAmount');
+        }
+        if (amounts.totalRequests != null) {
+            $require.eq(balance.totalRequests, amounts.totalRequests, 'invalid totalRequests');
         }
         if (typeof amounts.nextUnlockAt ==='string') {
             let now = (await cooldown.client.getBlock('latest')).timestamp;

@@ -19,7 +19,8 @@ contract sUSDeCooldownRequestImpl is IUnstakeHandler, Initializable {
     address public handler;
     address public user;
     address public receiver;
-    bool public pending;
+    uint256 public requestedAt;
+    bool    public pending;
 
     error HasActiveRequest();
 
@@ -37,7 +38,7 @@ contract sUSDeCooldownRequestImpl is IUnstakeHandler, Initializable {
         return request(user);
     }
     function request(address receiver_) public returns (uint256 unlockAt) {
-        require(msg.sender == handler, "NOT_AUTHORIZED");
+        require(msg.sender == handler, "NotAuthorized");
 
         uint256 shares = sUSDe.balanceOf(address(this));
 
@@ -46,13 +47,10 @@ contract sUSDeCooldownRequestImpl is IUnstakeHandler, Initializable {
             sUSDe.redeem(shares, receiver_, address(this));
             return block.timestamp;
         }
-        uint256 currentEnd = sUSDe.cooldowns(address(this)).cooldownEnd;
-        if (currentEnd > block.timestamp) {
-            revert HasActiveRequest();
-        }
         sUSDe.cooldownShares(shares);
-        pending = true;
+        requestedAt = block.timestamp;
         receiver = receiver_;
+        pending = true;
         return sUSDe.cooldowns(address(this)).cooldownEnd;
     }
 
@@ -61,7 +59,7 @@ contract sUSDeCooldownRequestImpl is IUnstakeHandler, Initializable {
      * Can be called by the UnstakeHandler, which can be triggered permissionlessly.
      */
     function finalize() external returns (uint256 amount)  {
-        require(msg.sender == handler, "NOT_AUTHORIZED");
+        require(msg.sender == handler, "NotAuthorized");
         amount = sUSDe.cooldowns(address(this)).underlyingAmount;
         sUSDe.unstake(receiver);
         pending = false;

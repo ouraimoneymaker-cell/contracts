@@ -90,17 +90,18 @@ contract sUSDeStrategy is IStrategy, Strategy {
      * @param tokenAmount The amount of tokens to be withdrawn (not used in this implementation)
      * @param baseAssets The amount of base assets to be withdrawn
      * @param receiver The address that will receive the withdrawn assets
+     * @param sender The account that initiated the withdrawal
      * @return The amount of tokens withdrawn (shares for sUSDe, baseAssets for USDe)
      */
-    function withdraw (address tranche, address token, uint256 tokenAmount, uint256 baseAssets, address receiver) external onlyCDO returns (uint256) {
+    function withdraw (address tranche, address token, uint256 tokenAmount, uint256 baseAssets, address sender, address receiver) external onlyCDO returns (uint256) {
         uint256 shares = sUSDe.previewWithdraw(baseAssets);
         if (token == address(sUSDe)) {
             uint256 cooldownSeconds = cdo.isJrt (tranche) ? sUSDeCooldownJrt : sUSDeCooldownSrt;
-            erc20Cooldown.transfer(sUSDe, receiver, shares, cooldownSeconds);
+            erc20Cooldown.transfer(sUSDe, sender, receiver, shares, cooldownSeconds);
             return shares;
         }
         if (token == address(USDe)) {
-            unstakeCooldown.transfer(sUSDe, receiver, shares);
+            unstakeCooldown.transfer(sUSDe, sender, receiver, shares);
             return baseAssets;
         }
         revert UnsupportedToken(token);
@@ -118,13 +119,13 @@ contract sUSDeStrategy is IStrategy, Strategy {
      */
     function reduceReserve (address token, uint256 tokenAmount, address receiver) external onlyCDO {
         if (token == address(sUSDe)) {
-            erc20Cooldown.transfer(sUSDe, receiver, tokenAmount, 0);
+            erc20Cooldown.transfer(sUSDe, address(cdo), receiver, tokenAmount, 0);
             return;
         }
         if (token == address(USDe)) {
             // tokenAmount is in USDe, convert to sUSDe shares (Rounding.Floor/in favor of protocol) and trigger unstaking
             uint256 shares = sUSDe.convertToShares(tokenAmount);
-            unstakeCooldown.transfer(sUSDe, receiver, shares);
+            unstakeCooldown.transfer(sUSDe, address(cdo), receiver, shares);
             return;
         }
         revert UnsupportedToken(token);

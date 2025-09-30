@@ -7,10 +7,15 @@ import { HardhatProvider } from 'dequanto/hardhat/HardhatProvider';
 UAction.create({
     async 'deploy and configure' () {
         const hh = new HardhatProvider();
-        const config = await Config.fetch({});
+        const config = await Config.fetch({
+            configGlobal: './config/dequanto.yml',
+        });
         const platform = config.$get('chain') ?? 'hardhat';
         const client = await Web3ClientFactory.getAsync(platform);
-        const deployer = config.$get('accounts.deployer') ?? hh.deployer(0);
+
+        const deployer = client.network === 'hardhat'
+            ? hh.deployer(0)
+            : config.accounts?.find(x => x.name === `${client.network}/deployer`);
 
         const depl = new TranchesDeployments({
             client,

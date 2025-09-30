@@ -23,23 +23,29 @@ import { $date } from 'dequanto/utils/$date';
 import { AprPairFeed } from '@0xc/hardhat/AprPairFeed/AprPairFeed';
 import { SUSDeAprPairProvider } from '@0xc/hardhat/sUSDeAprPairProvider/sUSDeAprPairProvider';
 import { MockStakedUSDS } from '@0xc/hardhat/MockStakedUSDS/MockStakedUSDS';
+import { $erc4626 } from '../../test/tranches/utils/$erc4626';
 
 
 export class TranchesDeployments {
 
     ds: Deployments
     platform: IPlatform
-    owner: TEth.EoAccount
+    owner: TEth.IAccount
     deployer: TEth.EoAccount
+    client: Web3Client
 
     constructor (params: {
         client: Web3Client
         deployer: TEth.EoAccount
+        owner?: TEth.IAccount
     }) {
         this.deployer = params.deployer;
-        this.ds = new Deployments(params.client, params.deployer, {});
+        this.ds = new Deployments(params.client, params.deployer, {
+            directory: './deployments/',
+        });
         this.platform = Platforms[params.client.platform];
-        this.owner = params.deployer;
+        this.owner = params.owner ?? params.deployer;
+        this.client = params.client;
     }
 
     @memd.deco.memoize()
@@ -63,6 +69,20 @@ export class TranchesDeployments {
 
             return { USDe, sUSDe, sUSDs };
         }
+        if (platform === 'hoodi') {
+            let USDeAddress = $require.Address(this.platform.Tokens['USDe'].address);
+            let sUSDeAddress = $require.Address(this.platform.Tokens['sUSDe'].address);
+            let sUSDs = await this.ds.ensureContract(MockStakedUSDS, {
+                arguments: [
+                    USDeAddress,
+                ]
+            });
+            return {
+                USDe: new MockUSDe (USDeAddress, this.ds.client),
+                sUSDe: new MockStakedUSDe(sUSDeAddress, this.ds.client),
+                sUSDs: sUSDs
+            };
+        }
 
         let USDeAddress = $require.Address(this.platform.Tokens['USDe'].address);
         let sUSDeAddress = $require.Address(this.platform.Tokens['sUSDe'].address);
@@ -76,14 +96,21 @@ export class TranchesDeployments {
 
     @memd.deco.memoize()
     async ensureACM () {
-        const owner = this.ds.deployer.address!;
+        const owner = this.owner!;
         return this.ds.ensureContract(AccessControlManager, {
-            arguments: [ owner ]
+            arguments: [ owner.address ]
         });
     }
 
+    async ensureRole (role: TEth.Hex, account: TEth.Address) {
+        let acm = await this.ensureACM();
+        let has = await acm.hasRole(role, account);
+        if (has === false) {
+            await acm.$receipt().grantRole(this.owner, role, account);
+        }
+    }
+
     async addRoles () {
-        const acm = await this.ensureACM();
         let roles = {
             [this.owner.address]: [
                 $contract.keccak256('PAUSER_ROLE'),
@@ -94,7 +121,7 @@ export class TranchesDeployments {
         };
         for (let account in roles) {
             for (let role of roles[account]) {
-                await acm.$receipt().grantRole(this.owner, role, account as TEth.Address);
+                await this.ensureRole(role, account as TEth.Address);
             }
         }
     }
@@ -109,8 +136,8 @@ export class TranchesDeployments {
             initialize: [
                 this.owner.address,
                 acm.address,
+                info.jrt.symbol,
                 info.jrt.name,
-                info.jrt.description,
                 USDe.address,
                 cdo.address,
             ]
@@ -120,8 +147,8 @@ export class TranchesDeployments {
             initialize: [
                 this.owner.address,
                 acm.address,
+                info.srt.symbol,
                 info.srt.name,
-                info.srt.description,
                 USDe.address,
                 cdo.address,
             ]
@@ -150,8 +177,11 @@ export class TranchesDeployments {
         });
 
         let { sUSDe } = await this.ensureEthena();
-        const { contract: sUSDeCooldownRequestImpl } = await this.ds.ensure(SUSDeCooldownRequestImpl, {
-            arguments: [ sUSDe.address ]
+        const { contractBeaconProxy: sUSDeCooldownRequestImpl } = await this.ds.ensureWithBeacon(SUSDeCooldownRequestImpl, {
+        //const { contract: sUSDeCooldownRequestImpl } = await this.ds.ensureWithProxy(SUSDeCooldownRequestImpl, {
+            id: 'SUSDeCooldownRequestBeacon',
+            arguments: [ sUSDe.address ],
+            initialize: [ $address.ZERO, $address.ZERO ]
         });
 
         await this.ds.configure(unstakeCooldown, {
@@ -228,7 +258,8 @@ export class TranchesDeployments {
                 unstakeCooldown.address
             ]
         });
-        await acm.grantRole(this.owner, await erc20Cooldown.COOLDOWN_WORKER_ROLE(), strategy.address);
+        await this.ensureRole(await erc20Cooldown.COOLDOWN_WORKER_ROLE(), strategy.address)
+
 
         // Accounting
         const accounting = await this.ensureAccounting(cdo.address);
@@ -306,13 +337,19 @@ export class TranchesDeployments {
             feed,
         } = contracts;
 
-        $require.eq(this.ds.client.platform, 'hardhat', 'Mainnet configuration must be set atomic via multisig');
+
+
+        //$require.eq(this.ds.client.platform, 'hardhat', 'Mainnet configuration must be set atomic via multisig');
 
         await this.addRoles();
 
-        await acm.$receipt().grantRole(this.owner, $contract.keccak256('UPDATER_CDO_APR_ROLE'), feed.address);
-
+        await this.ensureRole($contract.keccak256('UPDATER_CDO_APR_ROLE'), feed.address);
         await this.setCooldown(strategy, info);
+
+        if (await jrtVault.totalSupply() === 0n) {
+            await this.initialDeposit({ jrtVault, srtVault, cdo });
+        }
+
         await this.setTrancheActions(cdo, jrtVault, info, 'jrt');
         await this.setTrancheActions(cdo, srtVault, info, 'srt');
     }
@@ -362,4 +399,39 @@ export class TranchesDeployments {
             }
         });
     }
+
+    private async initialDeposit (tranches: { jrtVault: Tranche, srtVault: Tranche, cdo: StrataCDO }) {
+        let { USDe } = await this.ensureEthena();
+        let { jrtVault, srtVault, cdo } = tranches;
+
+        if (this.owner.type === 'safe') {
+            throw new Error(`Mainnet deployment not ready`);
+        }
+        const AMOUNT = 20n * 10n**18n;
+        let balance = await USDe.balanceOf(this.owner.address);
+        if (balance < AMOUNT) {
+            if (this.client.platform === 'hardhat' || this.client.platform === 'hoodi') {
+                await USDe.$receipt().mint(this.owner, this.owner.address, AMOUNT * 100n);
+            } else {
+                throw new Error(`Not enough balance for initial deposit.`);
+            }
+        }
+
+        await cdo.$receipt().setActionStates(
+            this.owner,
+            $address.ZERO,
+            true,
+            false,
+        );
+        await $erc4626.deposit(jrtVault as any, this.owner, AMOUNT / 2n);
+        await $erc4626.deposit(srtVault as any, this.owner, AMOUNT / 2n);
+        await cdo.$receipt().setActionStates(
+            this.owner,
+            $address.ZERO,
+            false,
+            false,
+        );
+    }
+
+
 }

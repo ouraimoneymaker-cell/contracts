@@ -2,15 +2,15 @@ export const Tranches = {
     'ethena': {
         base: 'USDe',
         jrt: {
-            name: 'JRT',
-            description: 'Junior Tranch',
+            symbol: 'jrUSDe',
+            name: 'Strata Junior USDe',
             depositsEnabled: true,
             withdrawalsEnabled: true,
             sUSDeCooldown: '7days'
         },
         srt: {
-            name: 'SRT',
-            description: 'Senior Tranch',
+            symbol: 'srUSDe',
+            name: 'Strata Senior USDe',
             depositsEnabled: true,
             withdrawalsEnabled: true,
             sUSDeCooldown: 0

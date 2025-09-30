@@ -9,19 +9,6 @@ const Tokens = {
 
 export const Eth: IPlatform = {
     Tokens: Tokens,
-    Tranches: {
-        ethena: {
-            base: Tokens.USDe,
-            jrt: {
-                name: 'JRT',
-                description: 'Junior Tranch',
-            },
-            srt: {
-                name: 'SRT',
-                description: 'Senior Tranch',
-            }
-        }
-    },
     Feed: {
         stalePeriodAfter: '4hours'
     }

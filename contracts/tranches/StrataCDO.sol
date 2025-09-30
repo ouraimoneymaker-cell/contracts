@@ -175,9 +175,6 @@ contract StrataCDO is IErrors, IStrataCDO, AccessControlled {
     /// @return bool True if the address is the Junior Tranche, false if it's the Senior Tranche
     /// @dev Reverts with InvalidTranche error if the address is neither Junior nor Senior Tranche
     function isJrt (address tranche) public view returns (bool) {
-        if (tranche == address(0)) {
-            revert InvalidTranche(tranche);
-        }
         if (tranche == address(jrtVault)) {
             return true;
         }

@@ -16,6 +16,7 @@ import { sUSDeAprPairProvider, IsUSDS } from "../../../contracts/tranches/strate
 import { IsUSDe } from "../../../contracts/tranches/strategies/ethena/IsUSDe.sol";
 import { ERC20Cooldown } from "../../../contracts/tranches/base/cooldown/ERC20Cooldown.sol";
 import { UnstakeCooldown } from "../../../contracts/tranches/base/cooldown/UnstakeCooldown.sol";
+import { CooldownBase } from "../../../contracts/tranches/base/cooldown/CooldownBase.sol";
 import { IUnstakeHandler } from "../../../contracts/tranches/interfaces/cooldown/IUnstakeHandler.sol";
 import { IAccounting } from "../../../contracts/tranches/interfaces/IAccounting.sol";
 import { IStrategy } from "../../../contracts/tranches/interfaces/IStrategy.sol";
@@ -128,7 +129,7 @@ contract StrataProtocolDeploymentBase is Test {
             address(
                 new ERC1967Proxy(
                     address(erc20CooldownImpl),
-                    abi.encodeWithSelector(ERC20Cooldown.initialize.selector, owner, address(acm))
+                    abi.encodeWithSelector(CooldownBase.initialize.selector, owner, address(acm))
                 )
             )
         );
@@ -140,7 +141,7 @@ contract StrataProtocolDeploymentBase is Test {
             address(
                 new ERC1967Proxy(
                     address(unstakeCooldownImpl),
-                    abi.encodeWithSelector(UnstakeCooldown.initialize.selector, owner, address(acm))
+                    abi.encodeWithSelector(CooldownBase.initialize.selector, owner, address(acm))
                 )
             )
         );

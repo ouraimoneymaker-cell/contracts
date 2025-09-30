@@ -15,6 +15,7 @@ import { sUSDeAprPairProvider, IsUSDS } from "../../../contracts/tranches/strate
 import { IsUSDe } from "../../../contracts/tranches/strategies/ethena/IsUSDe.sol";
 import { ERC20Cooldown } from "../../../contracts/tranches/base/cooldown/ERC20Cooldown.sol";
 import { UnstakeCooldown } from "../../../contracts/tranches/base/cooldown/UnstakeCooldown.sol";
+import { CooldownBase } from "../../../contracts/tranches/base/cooldown/CooldownBase.sol";
 import { IUnstakeHandler } from "../../../contracts/tranches/interfaces/cooldown/IUnstakeHandler.sol";
 import { IAccounting } from "../../../contracts/tranches/interfaces/IAccounting.sol";
 import { IStrategy } from "../../../contracts/tranches/interfaces/IStrategy.sol";
@@ -89,7 +90,7 @@ contract WithdrawGriefingDoS is Test {
             address(
                 new ERC1967Proxy(
                     address(eRC20CooldownImpl),
-                    abi.encodeWithSelector(ERC20Cooldown.initialize.selector, owner, address(acm))
+                    abi.encodeWithSelector(CooldownBase.initialize.selector, owner, address(acm))
                 )
             )
         );
@@ -100,7 +101,7 @@ contract WithdrawGriefingDoS is Test {
             address(
                 new ERC1967Proxy(
                     address(unstakeCooldownImpl),
-                    abi.encodeWithSelector(UnstakeCooldown.initialize.selector, owner, address(acm))
+                    abi.encodeWithSelector(CooldownBase.initialize.selector, owner, address(acm))
                 )
             )
         );
@@ -244,7 +245,7 @@ contract WithdrawGriefingDoS is Test {
 
         // eve gives 1 wei of USDe to bob
         vm.startPrank(EVE);
-        erc20Cooldown.transfer(IERC20(USDE), BOB, 1, 1);
+        erc20Cooldown.transfer(IERC20(USDE), EVE, BOB, 1, 1);
         vm.stopPrank();
 
         vm.warp(block.timestamp + 2);
@@ -258,7 +259,7 @@ contract WithdrawGriefingDoS is Test {
         // eve does the same 25 times in a loop
         vm.startPrank(EVE);
         for (uint256 i = 0; i < 25; i++) {
-            erc20Cooldown.transfer(IERC20(USDE), BOB, 1, 1);
+            erc20Cooldown.transfer(IERC20(USDE), EVE, BOB, 1, 1);
         }
         vm.stopPrank();
 

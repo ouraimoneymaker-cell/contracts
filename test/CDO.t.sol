@@ -29,6 +29,7 @@ import { StrataCDO} from "../contracts/tranches/StrataCDO.sol";
 
 import { ERC20Cooldown } from "../contracts/tranches/base/cooldown/ERC20Cooldown.sol";
 import { UnstakeCooldown } from "../contracts/tranches/base/cooldown/UnstakeCooldown.sol";
+import { CooldownBase } from "../contracts/tranches/base/cooldown/CooldownBase.sol";
 
 
 import { IsUSDe } from "../contracts/tranches/strategies/ethena/IsUSDe.sol";
@@ -118,7 +119,7 @@ contract CDOTest is Test {
             address(
                 new ERC1967Proxy(
                     address(new UnstakeCooldown()),
-                    abi.encodeWithSelector(UnstakeCooldown.initialize.selector, owner, address(acm))
+                    abi.encodeWithSelector(CooldownBase.initialize.selector, owner, address(acm))
                 )
             )
         );

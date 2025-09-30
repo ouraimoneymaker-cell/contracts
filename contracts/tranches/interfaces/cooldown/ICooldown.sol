@@ -13,6 +13,7 @@ interface ICooldown {
     }
 
     event TransferRequested(IERC20 indexed token, address indexed from, address indexed to, uint256 amount, uint256 unlockAt);
+    event Finalized(IERC20 indexed token, address indexed user, uint256 amount);
 
     error InvalidTime ();
     error UnsupportedToken(address token);

@@ -13,8 +13,6 @@ import { CooldownBase } from "./CooldownBase.sol";
  */
 contract UnstakeCooldown is IUnstakeCooldown, CooldownBase {
 
-
-    event Unstaked(address indexed token, address indexed user, uint256 amount);
     event UserProxyCreated(address indexed user, address proxy);
     event UserProxyImplementationSet(address token, address impl);
 
@@ -87,6 +85,7 @@ contract UnstakeCooldown is IUnstakeCooldown, CooldownBase {
         if (unlockAt <= block.timestamp) {
             // already transferred (instant transfer), return proxy to pool and exit
             proxies.push(proxy);
+            emit Finalized(token, to, amount);
             return;
         }
         requests.push(TRequest(uint64(unlockAt), proxy));
@@ -128,7 +127,7 @@ contract UnstakeCooldown is IUnstakeCooldown, CooldownBase {
             revert NothingToFinalize();
         }
 
-        emit Unstaked(address(token), user, claimed);
+        emit Finalized(token, user, claimed);
         return claimed;
     }
 

@@ -11,8 +11,6 @@ import { CooldownBase } from "./CooldownBase.sol";
  */
 contract ERC20Cooldown is IERC20Cooldown, CooldownBase {
 
-    event Claimed(IERC20 indexed token, address indexed user, uint256 amount);
-
     struct TRequest {
         uint64 unlockAt;
         uint192 amount;
@@ -28,6 +26,7 @@ contract ERC20Cooldown is IERC20Cooldown, CooldownBase {
         }
         if (cooldownSeconds == 0) {
             SafeERC20.safeTransferFrom(token, worker, to, amount);
+            emit Finalized(token, to, amount);
             return;
         }
 
@@ -88,7 +87,7 @@ contract ERC20Cooldown is IERC20Cooldown, CooldownBase {
         }
 
         SafeERC20.safeTransfer(token, user, claimed);
-        emit Claimed(token, user, claimed);
+        emit Finalized(token, user, claimed);
         return claimed;
     }
 

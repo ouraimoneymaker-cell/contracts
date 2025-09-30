@@ -436,6 +436,7 @@ contract Accounting is IAccounting, CDOComponent {
     function setMinimumJrtSrtRatio (uint256 ratio) external onlyOwner {
         // initial: min Jrt = .05x Srt; allow up-to min Jrt = 100x Srt
         require(ratio <= minimumJrtSrtRatioBuffer, "RatioAboveSoftFloor");
+        require(ratio >= 0.0001e18, "RatioTooLow");
         minimumJrtSrtRatio = ratio;
         emit MinimumJrtSrtRatioChanged(ratio);
     }

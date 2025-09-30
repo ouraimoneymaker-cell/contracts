@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.28;
 
-import { OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
 import { UD60x18, pow, mul } from "@prb/math/src/ud60x18/Math.sol";
 import { IAccounting } from "./interfaces/IAccounting.sol";

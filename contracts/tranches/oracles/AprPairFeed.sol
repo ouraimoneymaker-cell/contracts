@@ -68,6 +68,9 @@ contract AprPairFeed is IAprPairFeed, AccessControlled {
         roundStaleAfter = roundStaleAfter_;
     }
 
+    /// @notice Retrieves the latest round data, either from the feed or the strategy provider
+    /// @return TRound The latest round data containing APR target, APR base, update time, and round ID
+    /// @dev Returns feed data if not stale, otherwise falls back to strategy provider data
     function latestRoundData() external view returns (TRound memory) {
         TRound memory round = latestRound;
 
@@ -80,6 +83,8 @@ contract AprPairFeed is IAprPairFeed, AccessControlled {
         }
 
         (int64 aprTarget, int64 aprBase, uint64 t1) = provider.getAprPair();
+        ensureValid(aprTarget);
+        ensureValid(aprBase);
         return TRound({
             aprTarget: aprTarget,
             aprBase: aprBase,
@@ -88,10 +93,13 @@ contract AprPairFeed is IAprPairFeed, AccessControlled {
         });
     }
 
+    /// @notice Retrieves the round data for a specific round Id from storage
+    /// @param roundId The Id of the round to fetch
+    /// @return TRound The round data for the specified round Id
     function getRoundData(uint64 roundId) public view returns (TRound memory) {
         uint64 roundIdx = roundId % roundsCap;
         TRound memory round = rounds[roundIdx];
-        require(round.updatedAt > 0, "No data present");
+        require(round.updatedAt > 0, "NoDataPresent");
         return round;
     }
 
@@ -133,7 +141,8 @@ contract AprPairFeed is IAprPairFeed, AccessControlled {
         emit AnswerUpdated(aprTarget, aprBase, roundId, t);
     }
 
-
+    /// @notice Sets a new APR provider and performs compatibility checks
+    /// @param provider_ The new APR provider to be set
     function setProvider(IStrategyAprPairProvider provider_) external onlyOwner {
         // compatibility check
         (int64 aprTarget, int64 aprBase, ) = provider_.getAprPair();
@@ -143,15 +152,15 @@ contract AprPairFeed is IAprPairFeed, AccessControlled {
         emit ProviderSet(address(provider_));
     }
 
+    /// @notice Sets the duration after which a round is considered stale
+    /// @param roundStaleAfter_ The new stale period in seconds
     function setRoundStaleAfter(uint256 roundStaleAfter_) external onlyOwner {
         // compatibility check
         roundStaleAfter = roundStaleAfter_;
         emit StalePeriodSet(roundStaleAfter_);
     }
 
-
-    //
-
+    /// @dev Sets preferred source based on which updateRoundData method is called (push or pull).
     function ensureSourcePrefInner(ESourcePref sourcePref_) internal {
         if (sourcePref != sourcePref_) {
             sourcePref = sourcePref_;
@@ -159,12 +168,11 @@ contract AprPairFeed is IAprPairFeed, AccessControlled {
         }
     }
 
-
     /// @dev Validates that the given APR is within acceptable bounds
     function ensureValid(int64 answer) internal pure {
         require(
             APR_BOUNDARY_MIN <= answer && answer <= APR_BOUNDARY_MAX,
-            "INVALID_APR"
+            "InvalidApr"
         );
     }
 }

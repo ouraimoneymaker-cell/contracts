@@ -100,6 +100,7 @@ contract AprPairFeed is IAprPairFeed, AccessControlled {
         uint64 roundIdx = roundId % roundsCap;
         TRound memory round = rounds[roundIdx];
         require(round.updatedAt > 0, "NoDataPresent");
+        require(round.answeredInRound == roundId, "OldRound");
         return round;
     }
 

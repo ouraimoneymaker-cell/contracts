@@ -9,6 +9,7 @@ import { ERC20Upgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC2
 import { ERC4626Upgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC20/extensions/ERC4626Upgradeable.sol";
 import { ERC20PermitUpgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC20/extensions/ERC20PermitUpgradeable.sol";
 import { IStrataCDO }  from "./interfaces/IStrataCDO.sol";
+import { IStrategy } from "./interfaces/IStrategy.sol";
 import { CDOComponent }  from "./base/CDOComponent.sol";
 
 contract Tranche is CDOComponent, ERC4626Upgradeable, ERC20PermitUpgradeable {
@@ -246,10 +247,10 @@ contract Tranche is CDOComponent, ERC4626Upgradeable, ERC20PermitUpgradeable {
      *      Here, we allow the strategy to fetch the assets from the Vault.
      */
     function configure () external onlyCDO {
-        IERC20[] memory tokens = cdo.strategy().getSupportedTokens();
-        uint256 len = tokens.length;
         address strategy = address(cdo.strategy());
-        for (uint256 i = 0; i < len; ) {
+        IERC20[] memory tokens = IStrategy(strategy).getSupportedTokens();
+        uint256 len = tokens.length;
+        for (uint256 i; i < len; ) {
             SafeERC20.forceApprove(tokens[i], strategy, type(uint256).max);
             unchecked { i++; }
         }

@@ -21,6 +21,7 @@ contract UnstakeCooldown is IUnstakeCooldown, CooldownBase {
         IUnstakeHandler proxy;
     }
 
+    /// @dev Unstaking implementations for each supported token and protocol
     mapping(address token => IUnstakeHandler unstakeImpl) public implementations;
 
     /// @dev Active requests
@@ -29,7 +30,14 @@ contract UnstakeCooldown is IUnstakeCooldown, CooldownBase {
     /// @dev Maintain proxies Pool, after the request is completed, the proxy is returned to the pool
     mapping(address token => mapping(address account => IUnstakeHandler[] proxy)) public proxiesPool;
 
-
+    /// @notice Transfers assets from msg.sender (Strategy) to the specified user by creating an unstake request in the underlying protocol
+    /// @dev After the cooldown period elapses in the underlying protocol,
+    /// @dev the requests can be finalized and the funds are unlocked and transferred to the user
+    /// @param token The ERC20 token being transferred
+    /// @param initialFrom The original sender of the assets, specified by the strategy
+    /// @param to The recipient of the unstaked assets
+    /// @param amount The amount of tokens to transfer
+    /// @custom:access Restricted to COOLDOWN_WORKER_ROLE
     function transfer(IERC20 token, address initialFrom, address to, uint256 amount) external onlyRole(COOLDOWN_WORKER_ROLE) {
         address worker = msg.sender;
         if (amount == 0) {
@@ -91,9 +99,17 @@ contract UnstakeCooldown is IUnstakeCooldown, CooldownBase {
         requests.push(TRequest(uint64(unlockAt), proxy));
     }
 
+    /// @notice Finalizes the requests up to the current block timestamp
+    /// @see finalize(IERC20 token, address user, uint256 at) for more detailed documentation
     function finalize(IERC20 token, address user) external returns (uint256 claimed) {
         return finalize(token, user, block.timestamp);
     }
+
+    /// @notice Finalizes unstake requests for a user, processing all eligible requests up to the specified timestamp
+    /// @param token The ERC20 token being unstaked
+    /// @param user The address of the user whose requests are being finalized
+    /// @param at The timestamp up to which requests should be processed
+    /// @return claimed The total amount of tokens claimed from finalized requests
     function finalize(IERC20 token, address user, uint256 at) public returns (uint256 claimed) {
         if (at > block.timestamp) {
             revert InvalidTime();
@@ -131,10 +147,18 @@ contract UnstakeCooldown is IUnstakeCooldown, CooldownBase {
         return claimed;
     }
 
+    /// @notice Returns the user's balance state at the current block timestamp
+    /// @see balanceOf(IERC20 token, address user, uint256 at) for more detailed documentation
     function balanceOf (IERC20 token, address user) external view returns (TBalanceState memory) {
         return balanceOf(token, user, block.timestamp);
     }
 
+    /// @notice Returns the user's balance state for a given unstakable token at a specific timestamp
+    /// @dev Balance includes pending and claimable amounts in underlying tokens
+    /// @param token The unstakable token address
+    /// @param user The user's address
+    /// @param at The timestamp for which to calculate the balance
+    /// @return TBalanceState struct containing pending, claimable, and next unlock details in underlying tokens
     function balanceOf (IERC20 token, address user, uint256 at) public view returns (TBalanceState memory) {
         TRequest[] storage requests = activeRequests[address(token)][user];
         IUnstakeHandler imp = implementations[address(token)];

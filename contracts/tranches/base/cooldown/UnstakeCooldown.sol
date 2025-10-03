@@ -100,7 +100,7 @@ contract UnstakeCooldown is IUnstakeCooldown, CooldownBase {
     }
 
     /// @notice Finalizes the requests up to the current block timestamp
-    /// @see finalize(IERC20 token, address user, uint256 at) for more detailed documentation
+    /// @custom:see finalize(IERC20 token, address user, uint256 at) for more detailed documentation
     function finalize(IERC20 token, address user) external returns (uint256 claimed) {
         return finalize(token, user, block.timestamp);
     }
@@ -148,7 +148,7 @@ contract UnstakeCooldown is IUnstakeCooldown, CooldownBase {
     }
 
     /// @notice Returns the user's balance state at the current block timestamp
-    /// @see balanceOf(IERC20 token, address user, uint256 at) for more detailed documentation
+    /// @custom:see balanceOf(IERC20 token, address user, uint256 at) for more detailed documentation
     function balanceOf (IERC20 token, address user) external view returns (TBalanceState memory) {
         return balanceOf(token, user, block.timestamp);
     }

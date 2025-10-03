@@ -346,9 +346,9 @@ export class TranchesDeployments {
         await this.ensureRole($contract.keccak256('UPDATER_CDO_APR_ROLE'), feed.address);
         await this.setCooldown(strategy, info);
 
-        if (await jrtVault.totalSupply() === 0n) {
-            await this.initialDeposit({ jrtVault, srtVault, cdo });
-        }
+        // if (await jrtVault.totalSupply() === 0n) {
+        //     await this.initialDeposit({ jrtVault, srtVault, cdo });
+        // }
 
         await this.setTrancheActions(cdo, jrtVault, info, 'jrt');
         await this.setTrancheActions(cdo, srtVault, info, 'srt');

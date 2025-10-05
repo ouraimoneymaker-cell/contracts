@@ -71,7 +71,7 @@ contract ERC20Cooldown is IERC20Cooldown, CooldownBase {
         uint256 len = requests.length;
         for (uint256 i; i < len;) {
             TRequest memory req = requests[i];
-            if (req.unlockAt > at && isCooldownActive) {
+            if (isCooldownActive && req.unlockAt > at) {
                 // still pending
                 unchecked { i++; }
                 continue;
@@ -109,7 +109,7 @@ contract ERC20Cooldown is IERC20Cooldown, CooldownBase {
 
         for (uint256 i; i < l; i++) {
             TRequest memory req = requests[i];
-            if (req.unlockAt > at && isCooldownActive) {
+            if (isCooldownActive && req.unlockAt > at) {
                 pending += req.amount;
                 if (nextUnlockAt == 0 || req.unlockAt < nextUnlockAt) {
                     nextUnlockAt = req.unlockAt;

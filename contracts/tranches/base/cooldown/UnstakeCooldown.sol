@@ -123,7 +123,7 @@ contract UnstakeCooldown is IUnstakeCooldown, CooldownBase {
         uint256 len = requests.length;
         for (uint256 i; i < len; ) {
             TRequest memory req = requests[i];
-            if (req.unlockAt > at && isCooldownActive) {
+            if (isCooldownActive && req.unlockAt > at) {
                 // Still pending
                 unchecked { i++; }
                 continue;
@@ -174,7 +174,7 @@ contract UnstakeCooldown is IUnstakeCooldown, CooldownBase {
         for (uint256 i; i < l; i++) {
             TRequest memory req = requests[i];
             uint256 amount = req.proxy.getPendingAmount();
-            if (req.unlockAt > at && isCooldownActive) {
+            if (isCooldownActive && req.unlockAt > at) {
                 pending += amount;
                 if (nextUnlockAt == 0 || req.unlockAt < nextUnlockAt) {
                     nextUnlockAt = req.unlockAt;

@@ -141,6 +141,13 @@ contract Accounting is IAccounting, CDOComponent {
         }
         reserveNav = reserveNav - amount;
         nav = nav - amount;
+
+        // Fetch APRs and force recalculate aprSrt, as JRT and SRT TVLs may have changed.
+        (bool modified, UD60x18 aprTarget_, UD60x18 aprBase_) = fetchAprs();
+        if (modified == false) {
+            // Recalculates aprSrt based on new TVL ratio and old APRs
+            updateAprSrt(aprTarget_, aprBase_);
+        }
     }
 
     function maxWithdraw(bool isJrt) external view returns (uint256) {

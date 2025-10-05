@@ -37,19 +37,21 @@ contract ERC20Cooldown is IERC20Cooldown, CooldownBase {
             revert ExternalReceiverRequestLimitRiched(token, initialFrom, to, amount);
         }
 
-        uint256 unlockAt = block.timestamp + cooldownSeconds;
+        uint64 unlockAt = uint64(block.timestamp + cooldownSeconds);
         if (requestsCount < MAX_ACTIVE_REQUEST_SLOTS) {
             if (requestsCount > 0 && requests[requestsCount - 1].unlockAt == unlockAt) {
                 // is requested within current block
                 TRequest storage last = requests[requestsCount - 1];
                 last.amount += uint192(amount);
             } else {
-                requests.push(TRequest(uint64(unlockAt), uint192(amount)));
+                requests.push(TRequest(unlockAt, uint192(amount)));
             }
         } else {
             TRequest storage last = requests[requestsCount - 1];
             last.amount += uint192(amount);
-            last.unlockAt = uint64(unlockAt);
+            if (last.unlockAt < unlockAt) {
+                last.unlockAt = unlockAt;
+            }
         }
 
         SafeERC20.safeTransferFrom(token, worker, address(this), amount);

@@ -34,7 +34,7 @@ contract ERC20Cooldown is IERC20Cooldown, CooldownBase {
 
         uint256 requestsCount = requests.length;
         if (initialFrom != to && requestsCount >= PUBLIC_REQUEST_SLOTS_CAP) {
-            revert ExternalReceiverRequestLimitRiched(token, initialFrom, to, amount);
+            revert ExternalReceiverRequestLimitReached(token, initialFrom, to, amount);
         }
 
         uint64 unlockAt = uint64(block.timestamp + cooldownSeconds);

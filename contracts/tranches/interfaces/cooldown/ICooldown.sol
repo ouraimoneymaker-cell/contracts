@@ -18,7 +18,7 @@ interface ICooldown {
     error InvalidTime ();
     error UnsupportedToken(address token);
     error NothingToFinalize ();
-    error ExternalReceiverRequestLimitRiched(IERC20 token, address from, address to, uint256 amount);
+    error ExternalReceiverRequestLimitReached(IERC20 token, address from, address to, uint256 amount);
 
     function finalize(IERC20 token, address user) external returns (uint256 claimed);
     function finalize(IERC20 token, address user, uint256 at) external returns (uint256 claimed);

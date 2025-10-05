@@ -55,7 +55,7 @@ contract UnstakeCooldown is IUnstakeCooldown, CooldownBase {
         bool shouldReuseRequest = false;
         uint256 requestsCount = requests.length;
         if (initialFrom != to && requestsCount >= PUBLIC_REQUEST_SLOTS_CAP) {
-            revert ExternalReceiverRequestLimitRiched(token, initialFrom, to, amount);
+            revert ExternalReceiverRequestLimitReached(token, initialFrom, to, amount);
         }
         if (requestsCount > 0) {
             // Check if we should create a new request or extend the last one

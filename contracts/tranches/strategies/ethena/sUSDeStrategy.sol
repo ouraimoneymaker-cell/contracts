@@ -119,13 +119,13 @@ contract sUSDeStrategy is IStrategy, Strategy {
      */
     function reduceReserve (address token, uint256 tokenAmount, address receiver) external onlyCDO {
         if (token == address(sUSDe)) {
-            erc20Cooldown.transfer(sUSDe, address(cdo), receiver, tokenAmount, 0);
+            erc20Cooldown.transfer(sUSDe, receiver, receiver, tokenAmount, 0);
             return;
         }
         if (token == address(USDe)) {
             // tokenAmount is in USDe, convert to sUSDe shares (Rounding.Floor/in favor of protocol) and trigger unstaking
             uint256 shares = sUSDe.convertToShares(tokenAmount);
-            unstakeCooldown.transfer(sUSDe, address(cdo), receiver, shares);
+            unstakeCooldown.transfer(sUSDe, receiver, receiver, shares);
             return;
         }
         revert UnsupportedToken(token);

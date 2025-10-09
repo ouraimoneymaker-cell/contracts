@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.28;
 
-import { IERC4626 } from "@openzeppelin/contracts/interfaces/IERC4626.sol";
 import { ICDOComponent } from "./ICDOComponent.sol";
+import { IMetaVault } from "./IMetaVault.sol";
 
-interface ITranche is ICDOComponent, IERC4626 {
+interface ITranche is ICDOComponent, IMetaVault {
 
     function configure () external;
 }

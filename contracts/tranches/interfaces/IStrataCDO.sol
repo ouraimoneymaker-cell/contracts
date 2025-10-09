@@ -2,6 +2,7 @@
 pragma solidity ^0.8.28;
 
 import { IStrategy } from "./IStrategy.sol";
+import { ITranche } from "./ITranche.sol";
 
 interface IStrataCDO {
 
@@ -19,4 +20,7 @@ interface IStrataCDO {
 
     // reverts if neither Jrt nor Srt
     function isJrt (address tranche) external view returns (bool);
+
+    function jrtVault() external view returns (ITranche);
+    function srtVault() external view returns (ITranche);
 }

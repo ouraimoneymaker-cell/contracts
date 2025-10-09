@@ -10,5 +10,19 @@ export const Hoodi: IPlatform = {
     Tokens: Tokens,
     Feed: {
         stalePeriodAfter: '48hours'
+    },
+    Tranches: {
+        'ethena': {
+            jrt: {
+                depositsEnabled: true,
+                withdrawalsEnabled: true,
+                sUSDeCooldown: '1hour'
+            },
+            srt: {
+                depositsEnabled: true,
+                withdrawalsEnabled: true,
+                sUSDeCooldown: 0
+            }
+        }
     }
 }

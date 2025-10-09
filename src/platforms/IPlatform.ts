@@ -7,4 +7,17 @@ export interface IPlatform {
     Feed?: {
         stalePeriodAfter: string | '4hours'
     }
+
+    Tranches?: Record<string, {
+         jrt?: {
+            depositsEnabled?: boolean
+            withdrawalsEnabled?: boolean
+            sUSDeCooldown?: string | number
+        },
+        srt?: {
+            depositsEnabled?: boolean
+            withdrawalsEnabled?: boolean
+            sUSDeCooldown: string | number
+        }
+    }>
 }

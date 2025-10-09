@@ -38,7 +38,7 @@ UAction.create({
             owner,
         });
 
-        //await depl.ensureEthenaCDO();
+        await depl.ensureEthenaCDO();
         await depl.ensureDepositor();
     }
 })

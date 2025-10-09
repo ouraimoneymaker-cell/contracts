@@ -462,39 +462,6 @@
     ]
   },
   {
-    "id": "USDeJrtProxy",
-    "slots": [
-      {
-        "slot": 0,
-        "position": 0,
-        "name": "acm",
-        "size": 160,
-        "type": "address"
-      },
-      {
-        "slot": 1,
-        "position": 0,
-        "name": "__gap$",
-        "size": 12544,
-        "type": "uint256[49]"
-      },
-      {
-        "slot": 50,
-        "position": 0,
-        "name": "cdo",
-        "size": 160,
-        "type": "address"
-      },
-      {
-        "slot": 51,
-        "position": 0,
-        "name": "__gap",
-        "size": 12544,
-        "type": "uint256[49]"
-      }
-    ]
-  },
-  {
     "id": "USDeSrtProxy",
     "slots": [
       {

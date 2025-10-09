@@ -32,6 +32,7 @@ export namespace $hh {
         tranches: Awaited<ReturnType<TranchesDeployments['ensureEthenaCDO']>>;
         ethena: Awaited<ReturnType<TranchesDeployments['ensureEthena']>>;
         deployer: TEth.IAccount
+        depositor: Awaited<ReturnType<TranchesDeployments['ensureDepositor']>>
 
         @memd.deco.memoize()
         async init () {
@@ -60,6 +61,7 @@ export namespace $hh {
 
             this.ethena = await this.factory.ensureEthena();
             this.tranches = await this.factory.ensureEthenaCDO();
+            this.depositor = await this.factory.ensureDepositor();
             await this.snapshot();
             return {
                 ...this.tranches,

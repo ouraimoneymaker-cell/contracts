@@ -32,6 +32,7 @@ UAction.create({
 
         let { jrtVault, srtVault,  } = $hh.test.tranches;
 
+        $require.eq(await jrtVault.totalSupply(), 0n, 'Has already supply');
         $require.eq(await jrtVault.maxDeposit($address.ZERO), $bigint.MAX_UINT256);
         $require.eq(await jrtVault.maxMint($address.ZERO), $bigint.MAX_UINT256);
         // Jrt is empty, Srt deposits are not allowed

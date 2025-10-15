@@ -100,8 +100,7 @@ contract TrancheDepositor is AccessControlled {
         emit CdoAdded(address(cdo));
     }
 
-
-    /**
+   /**
      * @notice Deposits assets into the vault
      * @dev Accepts three types of assets:
      *      1. Supported by the strategy: Deposited as-is
@@ -110,14 +109,7 @@ contract TrancheDepositor is AccessControlled {
      * @param vault The tranche Vault to deposit into
      * @param asset The address of the asset to deposit
      * @param amount The amount of the asset to deposit
-     * @return shares The amount of shares minted
-     */
-    function deposit(IMetaVault vault, IERC20 asset, uint256 amount, address receiver) internal returns (uint256 shares) {
-        return _deposit(vault, asset, amount, receiver, TDepositParams(0, 0, address(0), 0));
-    }
-
-    /**
-     * @notice Includes deposit parameters, e.g. to configure the swap
+     * @param params Additional deposit parameters (e.g., swap configuration, minSharesOut)
      * @return shares The amount of shares minted
      */
     function deposit(IMetaVault vault, IERC20 asset, uint256 amount, address receiver, TDepositParams calldata params) external returns (uint256 shares) {

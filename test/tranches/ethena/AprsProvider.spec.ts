@@ -23,9 +23,9 @@ UAction.create({
 
     async 'aprs' () {
         let { factory, deployer } = $hh.test
-        let { sUSDs, sUSDe, USDe } = await factory.ensureEthena();
+        let { sUSDS, sUSDe, USDe } = await factory.ensureEthena();
 
-        await sUSDs.$receipt().setSsr(deployer, 1000000001471536429740616381n);
+        await sUSDS.$receipt().setSsr(deployer, 1000000001471536429740616381n);
         await USDe.$receipt().mint(deployer, deployer.address, 1000n * 10n**18n);
         await $erc4626.deposit(sUSDe, deployer, '50%');
 
@@ -34,7 +34,7 @@ UAction.create({
 
         let { contract: provider } = await factory.ds.ensure(SUSDeAprPairProvider, {
             arguments:[
-                sUSDs.address,
+                sUSDS.address,
                 sUSDe.address,
             ]
         });

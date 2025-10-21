@@ -1,8 +1,19 @@
 import { $bigint } from 'dequanto/utils/$bigint';
 import { $date } from 'dequanto/utils/$date';
+import { $number } from 'dequanto/utils/$number';
 
 export namespace $apr {
     const DECIMALS = 12;
+
+    export function toApy (apr: number | bigint) {
+        if (typeof apr === 'bigint') {
+            apr = $bigint.toEther(apr, 12);
+        }
+        if (apr > 1) apr /= 100;
+        let apy = (1 + apr / 365) ** 365 - 1;
+        apy *= 100;
+        return $number.round(apy, 2, 'round');
+    }
 
     export function toWei (apr: number) {
         return Number($bigint.toWei(apr, DECIMALS));

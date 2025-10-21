@@ -3,6 +3,7 @@ import { Addresses } from '@s/constants';
 import { BlockDateResolver } from 'dequanto/blocks/BlockDateResolver';
 import { Web3Client } from 'dequanto/clients/Web3Client';
 import { Web3ClientFactory } from 'dequanto/clients/Web3ClientFactory';
+import { TAddress } from 'dequanto/models/TAddress';
 import { $bigint } from 'dequanto/utils/$bigint';
 import { $date } from 'dequanto/utils/$date';
 import { $number } from 'dequanto/utils/$number';
@@ -42,6 +43,7 @@ export namespace $ethena {
     }
 
     export async function getAPRbaseFromDeltaT (
+        erc4626Address: TAddress,
         p0_: { blockNr?: number, timestamp?: number },
         p1_: { blockNr?: number, timestamp?: number }
     ) {
@@ -50,10 +52,10 @@ export namespace $ethena {
         let p0 = await getTPoint(client, p0_);
         let p1 = await getTPoint(client, p1_);
 
-        let sUSDe = new IsUSDe( Addresses.eth.sUSDe, client);
+        let erc4626 = new IsUSDe( erc4626Address, client);
 
-        let a0 = await getAssets(sUSDe, p0.blockNr);
-        let a1 = await getAssets(sUSDe, p1.blockNr);
+        let a0 = await getAssets(erc4626, p0.blockNr);
+        let a1 = await getAssets(erc4626, p1.blockNr);
 
         let deltaT = p1.timestamp - p0.timestamp;
 
@@ -82,15 +84,15 @@ export namespace $ethena {
             timestamp
         };
     }
-    async function getAssets (sUSDe: IsUSDe, blockNr: number) {
-        sUSDe = sUSDe.forBlock(blockNr);
+    async function getAssets (vault: IsUSDe, blockNr: number) {
+        vault = vault.forBlock(blockNr);
 
         let [
             totalAssets,
             totalSupply
         ] = await Promise.all([
-            sUSDe.totalAssets(),
-            sUSDe.totalSupply()
+            vault.totalAssets(),
+            vault.totalSupply()
         ]);
 
         return {

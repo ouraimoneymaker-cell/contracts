@@ -35,3 +35,5 @@ medusa*/
 0xweb.json
 contracts/backlog/
 config/
+
+deployments/deployments-hardhat*

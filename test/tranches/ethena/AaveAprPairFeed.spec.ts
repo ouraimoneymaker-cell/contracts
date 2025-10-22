@@ -1,7 +1,7 @@
 import { TranchesDeployments } from '../../../src/deployments/TranchesDeployments';
 import { UTest } from 'atma-utest'
 import { $require } from 'dequanto/utils/$require';
-
+import memd from 'memd';
 
 import { $hh } from '../utils/$hh';
 import { $apr } from '@s/utils/$apr';
@@ -11,18 +11,25 @@ import { $bigint } from 'dequanto/utils/$bigint';
 import { TEth } from 'dequanto/models/TEth';
 import { l } from 'dequanto/utils/$logger';
 
+await $hh.test.init();
 
 let forked: TranchesDeployments;
 
 UTest.create({
 
     async $before () {
-        await $hh.test.snapshot('aave-fork');
         forked = await $hh.forked();
     },
 
     async $after () {
-        await $hh.test.reset('aave-fork');
+        await forked.client.debug.reset({});
+        memd.fn.clearMemoized($hh.test.factory.ensureEthenaCDO);
+        memd.fn.clearMemoized($hh.test.factory.ensureEthena);
+        memd.fn.clearMemoized($hh.test.factory.ensureACM);
+        memd.fn.clearMemoized($hh.test.factory.ensureCooldowns);
+        memd.fn.clearMemoized($hh.test.deploy);
+        memd.fn.clearMemoized($hh.test.init);
+        forked.client.configureFork(null);
     },
 
     async 'aave feed' () {

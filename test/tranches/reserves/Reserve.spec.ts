@@ -1,14 +1,10 @@
-import { UAction, UTest } from 'atma-utest'
+import { UAction } from 'atma-utest'
 import { $erc4626 } from '../utils/$erc4626';
 import { $hh } from '../utils/$hh';
 import { $require } from 'dequanto/utils/$require';
-import { $address } from 'dequanto/utils/$address';
 import { $bigint } from 'dequanto/utils/$bigint';
-import alot from 'alot';
-import { $number } from 'dequanto/utils/$number';
 import { $erc20 } from '../utils/$erc20';
 import { l } from 'dequanto/utils/$logger';
-import { $promise } from 'dequanto/utils/$promise';
 import { $ethena } from '../utils/$ethena';
 
 await $hh.test.deploy();
@@ -33,13 +29,13 @@ UAction.create({
 
         let { jrtVault, srtVault,  } = $hh.test.tranches;
         await $erc4626.deposit(jrtVault, deployer, 100_000);
-        await $ethena.distribute(sUSDe, USDe, deployer, 100_000);
+        await $ethena.distribute(sUSDe, USDe, deployer, 1_00);
 
 
         await $hh.test.mine('4hours');
 
         let reserve = await accounting.totalReserve();
-        $require.eq(Math.round($bigint.toEther(reserve, 18)), 1000);
+        $require.eq(Math.round($bigint.toEther(reserve, 18)), 1);
 
         l`Remove 50%`;
         let sUSDeAmount = await sUSDe.previewDeposit(reserve / 2n);
@@ -48,16 +44,16 @@ UAction.create({
 
         l`Remains 500USDe`;
         reserve = await accounting.totalReserve();
-        $require.eq($bigint.toEther(reserve, 18, 1n), 500);
+        $require.eq($bigint.toEther(reserve, 18, 10n), 0.5);
 
         await $hh.test.mine('4hours');
         l`Trigger accouning`;
         await $erc4626.deposit(jrtVault, deployer, 5n);
 
         reserve = await accounting.totalReserve();
-        l`Earn 996 in reserve, the 4USDe has earned the treasury account`;
-        $require.eq($bigint.toEther(reserve, 18, 1n), 1496);
+        l`Earn ~1.499 in reserve, the .5USDe has earned the treasury account`;
 
+        $require.eq($bigint.toEther(reserve, 18, 1000n), 1.499);
 
         await cdo.$receipt().reduceReserve(deployer, USDe.address, reserve);
 
@@ -100,7 +96,7 @@ UAction.create({
         console.log(`Balance`, await USDe.balanceOf(deployer.address));
 
         await $erc4626.deposit(jrtVault, deployer, 1_000);
-        await $ethena.distribute(sUSDe, USDe, deployer, 5000);
+        await $ethena.distribute(sUSDe, USDe, deployer, 2000);
 
         await $hh.test.mine('8hours');
         l`Set reserve after distribution is over`;

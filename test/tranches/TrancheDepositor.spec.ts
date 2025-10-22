@@ -146,6 +146,20 @@ UAction.create({
         });
         $require.match(/MintedSharesBelowMin/, error?.message);
     },
+    async 'deposit via swap' () {
+        let { jrtVault, srtVault,  USDe, sUSDe, pUSDe, acm } = $hh.test.tranches;
+        let { depositor, deployer } = $hh.test;
+
+        let amount = $bigint.toWei(42);
+        await $erc20.mint(USDe, deployer, deployer, amount * 2n);
+        await $erc4626.deposit(pUSDe, deployer, amount * 2n);
+
+        l`jrtVault deposit pUSDe`;
+        let { error } = await $promise.caught(() => {
+            return $helper.deposit(depositor, jrtVault, deployer, pUSDe, amount, { minShares: amount + 1n })
+        });
+        $require.match(/MintedSharesBelowMin/, error?.message);
+    },
 })
 
 namespace $helper {

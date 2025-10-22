@@ -1,14 +1,7 @@
 import { UAction, UTest } from 'atma-utest'
 import { $erc4626 } from './utils/$erc4626';
 import { $hh } from './utils/$hh';
-import { $require } from 'dequanto/utils/$require';
-import { $address } from 'dequanto/utils/$address';
-import { $bigint } from 'dequanto/utils/$bigint';
-import alot from 'alot';
-import { $number } from 'dequanto/utils/$number';
 import { $erc20 } from './utils/$erc20';
-import { l } from 'dequanto/utils/$logger';
-import { $promise } from 'dequanto/utils/$promise';
 import { $ethena } from './utils/$ethena';
 
 await $hh.test.deploy();
@@ -24,7 +17,7 @@ UAction.create({
         // include rewards vesting
         await $erc20.mint(USDe, deployer, deployer, 1000_000);
         await $erc4626.deposit(sUSDe, deployer,  100_000);
-        await $ethena.distribute(sUSDe, USDe, deployer, 100_000);
+        await $ethena.distribute(sUSDe, USDe, deployer, 100);
 
         // min shares
         await $erc4626.deposit(jrtVault, deployer, 10);

@@ -143,7 +143,7 @@ UAction.create({
         let result = await $promise.caught(() => {
             return erc20Cooldown.$receipt().transfer(alice, USDe.address, alice.address, bob.address, 1n, _7DAYS);
         });
-        $require.match(/ExternalReceiverRequestLimitRiched/, result.error?.message);
+        $require.match(/ExternalReceiverRequestLimitReached/, result.error?.message);
 
         await erc20Cooldown.$receipt().transfer(alice, USDe.address, bob.address, bob.address, 5n, _7DAYS);
         await $testCooldown.eqBalanceOf(erc20Cooldown, USDe, bob, {

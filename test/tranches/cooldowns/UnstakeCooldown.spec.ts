@@ -187,7 +187,7 @@ UAction.create({
         let result = await $promise.caught(() => {
             return unstakeCooldown.$receipt().transfer(alice, sUSDe.address, alice.address, bob.address, 1n);
         });
-        $require.match(/ExternalReceiverRequestLimitRiched/, result.error?.message);
+        $require.match(/ExternalReceiverRequestLimitReached/, result.error?.message);
 
         await unstakeCooldown.$receipt().transfer(alice, sUSDe.address, bob.address, bob.address, 5n);
         await $testCooldown.eqBalanceOf(unstakeCooldown, sUSDe, bob, {

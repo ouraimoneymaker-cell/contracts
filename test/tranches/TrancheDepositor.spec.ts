@@ -146,19 +146,43 @@ UAction.create({
         });
         $require.match(/MintedSharesBelowMin/, error?.message);
     },
-    async 'deposit via swap' () {
-        let { jrtVault, srtVault,  USDe, sUSDe, pUSDe, acm } = $hh.test.tranches;
-        let { depositor, deployer } = $hh.test;
+    async 'deposit with wrong permit, but existing allowance' () {
+        let { jrtVault, srtVault, USDe, sUSDe} = $hh.test.tranches;
+        let { depositor } = $hh.test;
+        let alice = await $hh.test.createAccount('permit-alice');
 
         let amount = $bigint.toWei(42);
-        await $erc20.mint(USDe, deployer, deployer, amount * 2n);
-        await $erc4626.deposit(pUSDe, deployer, amount * 2n);
+        await $erc20.mint(USDe, alice, alice, amount * 4n);
+        await $erc4626.deposit(sUSDe, alice, amount * 2n);
 
-        l`jrtVault deposit pUSDe`;
-        let { error } = await $promise.caught(() => {
-            return $helper.deposit(depositor, jrtVault, deployer, pUSDe, amount, { minShares: amount + 1n })
-        });
-        $require.match(/MintedSharesBelowMin/, error?.message);
+        await sUSDe.$receipt().approve(alice, depositor.address, amount);
+
+        let { deadline, v, r, s } = await $helper.createPermit(
+            sUSDe as any as ERC20Permit,
+            alice as TEth.EoAccount,
+            depositor,
+            amount,
+            $date.toUnixTimestamp($date.additive(new Date(), '-1day'))
+        );
+        await depositor.$receipt().depositWithPermit(
+            alice,
+            jrtVault.address,
+            sUSDe.address,
+            amount,
+            alice.address,
+            {
+                minShares: 0n,
+                swapAmountOutMinimum: 0n,
+                swapDeadline: 0n,
+                swapTokenOut: $address.ZERO
+            },
+            BigInt(deadline),
+            Number(v),
+            r,
+            s,
+        );
+        await $erc20.eqBalance(jrtVault, alice, amount);
+
     },
 })
 
@@ -168,10 +192,11 @@ namespace $helper {
         erc20Permit: ERC20Permit,
         owner: TEth.EoAccount,
         depositor: TrancheDepositor,
-        amount: bigint
+        amount: bigint,
+        deadline?: number
     ) {
         const nonce = await erc20Permit.nonces(owner.address);
-        const deadline = $date.tool().add('1year').toUnixTimestamp();
+        deadline ??= $date.tool().add('1year').toUnixTimestamp();
 
         let typedData = {
             types: {

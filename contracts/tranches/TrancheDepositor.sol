@@ -142,7 +142,11 @@ contract TrancheDepositor is AccessControlled {
         uint8 v, bytes32 r, bytes32 s
     ) external nonReentrant returns (uint256 shares) {
         address user = _msgSender();
-        IERC20Permit(address(asset)).permit(user, address(this), amount, deadline, v, r, s);
+        // Use permit if available, otherwise fallback to check allowance.
+        try IERC20Permit(address(asset)).permit(user, address(this), amount, deadline, v, r, s) {}
+        catch {
+            require(IERC20(address(asset)).allowance(user, address(this)) >= amount,"InsufficientAllowance");
+        }
         SafeERC20.safeTransferFrom(asset, user, address(this), amount);
         return _deposit(vault, asset, address(this), amount, receiver, params);
     }

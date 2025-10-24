@@ -5,6 +5,7 @@ import { $require } from 'dequanto/utils/$require';
 import { Web3Client } from 'dequanto/clients/Web3Client';
 import { TEth } from 'dequanto/models/TEth';
 import { $sig } from 'dequanto/utils/$sig';
+import { HardhatWeb3Client } from 'dequanto/hardhat/HardhatWeb3Client';
 
 
 
@@ -17,12 +18,25 @@ export namespace $hh {
     export async function forked () {
         const hh = new HardhatProvider();
         const client = await hh.forked({ platform: 'eth' });
+        //const client = await hh.client('localhost');
+        client.configureFork('eth');
         const deployer = await hh.deployer(0);
         const depl = new TranchesDeployments({
             client,
             deployer
         });
         return depl;
+    }
+
+    export async function reset (client: Web3Client) {
+        await client.debug.reset({});
+        memd.fn.clearMemoized($hh.test.factory.ensureEthenaCDO);
+        memd.fn.clearMemoized($hh.test.factory.ensureEthena);
+        memd.fn.clearMemoized($hh.test.factory.ensureACM);
+        memd.fn.clearMemoized($hh.test.factory.ensureCooldowns);
+        memd.fn.clearMemoized($hh.test.deploy);
+        memd.fn.clearMemoized($hh.test.init);
+        (client as HardhatWeb3Client).configureFork(null);
     }
 
     export class Test {

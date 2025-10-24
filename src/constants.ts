@@ -10,6 +10,9 @@ export const Addresses = {
         // https://etherscan.io/token/0xa3931d71877C0E7a3148CB7Eb4463524FEc27fbD
         sUSDS: '0xa3931d71877C0E7a3148CB7Eb4463524FEc27fbD',
         pUSDe: '0xA62B204099277762d1669d283732dCc1B3AA96CE',
+        USDC: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
+        USDT: '0xdac17f958d2ee523a2206206994597c13d831ec7',
+        AavePool: '0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2',
     },
     hoodi: {
         USDe: "0x7054A803361640970176Edbd91992DcC52B7D235",
@@ -18,8 +21,11 @@ export const Addresses = {
     }
 } as Record<string, {
     USDe: TEth.Address;
+    USDC?: TEth.Address;
+    USDT?: TEth.Address;
     sUSDe: TEth.Address;
     sUSDS?: TEth.Address;
     pUSDe?: TEth.Address;
-    owner?: TEth.Address
+    owner?: TEth.Address;
+    AavePool?: TEth.Address;
 }>;

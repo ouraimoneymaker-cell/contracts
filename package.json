@@ -10,7 +10,7 @@
     "watch": "hardhat compile --watch",
     "compile": "hardhat compile",
     "deploy-local": "atma act tasks/deploy.act.ts -q \"deploy and configure\" --chain hardhat",
-    "fork-eth": "hardhat node --fork https://eth.drpc.org"
+    "fork-eth": "hardhat node --verbose --show-stack-traces --fork https://eth.drpc.org"
   },
   "repository": {
     "type": "git",
@@ -42,7 +42,7 @@
     "atma-loader-ts": "latest",
     "atma-utest": "^0.21.34",
     "class-json": "latest",
-    "dequanto": "^0.1.74",
+    "dequanto": "^0.1.78",
     "dotenv": "^16.4.7",
     "hardhat": "latest",
     "memd": "latest",

@@ -30,6 +30,7 @@ import { InMemoryServiceTransport } from 'dequanto/safe/transport/InMemoryServic
 import { l } from 'dequanto/utils/$logger';
 import { Addresses } from '@s/constants';
 import { MockERC4626 } from '@0xc/hardhat/MockERC4626/MockERC4626';
+import { AaveAprPairProvider } from '@0xc/hardhat/AaveAprPairProvider/AaveAprPairProvider';
 
 
 export class TranchesDeployments {
@@ -45,14 +46,18 @@ export class TranchesDeployments {
         client: Web3Client
         deployer: TEth.EoAccount
         owner?: TEth.IAccount
+        deployments?: 'throw' | 'redeploy'
     }) {
         this.deployer = params.deployer;
-        this.ds = new Deployments(params.client, params.deployer, {
-            directory: './deployments/',
-        });
-        this.platform = Platforms[params.client.platform];
         this.owner = params.owner ?? params.deployer;
         this.client = params.client;
+        this.platform = Platforms[params.client.network];
+
+        this.ds = new Deployments(params.client, params.deployer, {
+            directory: './deployments/',
+            whenBytecodeChanged: params.deployments ?? (this.isTestnet() ? null : 'throw'),
+            fork: params.client.forked?.platform
+        });
 
         let info = JSON.parse(JSON.stringify(Tranches.ethena)) as typeof Tranches.ethena;
 
@@ -65,8 +70,8 @@ export class TranchesDeployments {
 
     @memd.deco.memoize()
     async ensureEthena () {
-        let platform = this.ds.client.platform;;
-        if (platform === 'hardhat') {
+        let network = this.ds.client.network;
+        if (network === 'hardhat') {
             let USDe = await this.ds.ensureContract(MockUSDe);
             let sUSDe = await this.ds.ensureContract(MockStakedUSDe, {
                 arguments: [
@@ -88,7 +93,7 @@ export class TranchesDeployments {
 
             return { USDe, sUSDe, sUSDS, pUSDe, };
         }
-        if (platform === 'hoodi') {
+        if (network === 'hoodi') {
             let USDeAddress = $require.Address(this.platform.Tokens['USDe'].address);
             let sUSDeAddress = $require.Address(this.platform.Tokens['sUSDe'].address);
             let pUSDeAddress = $require.Address(this.platform.Tokens['pUSDe'].address);
@@ -124,24 +129,26 @@ export class TranchesDeployments {
             arguments: [ owner.address ]
         });
 
-        let ownerIsAdmin = await acm.hasRole('0x', owner.address);
-        let deployer = this.deployer;
-        await this.ds.configure(acm, {
-            title: `Grant Owner the AccessControlManager Admin Role`,
-            shouldUpdate: ownerIsAdmin === false,
-            async updater () {
-                await acm.$receipt().grantRole(deployer, '0x', owner.address);
-                await acm.$receipt().revokeRole(owner, '0x', deployer.address);
-            }
-        });
-        let deployerIsAdmin = await acm.hasRole('0x', deployer.address);
-        await this.ds.configure(acm, {
-            title: `Revoke Deployer the AccessControlManager Admin Role`,
-            shouldUpdate: deployerIsAdmin && $address.eq(deployer.address, owner.address) === false,
-            async updater () {
-                await acm.$receipt().revokeRole(owner, '0x', deployer.address);
-            }
-        });
+        if (this.isTestnet() === false) {
+            let ownerIsAdmin = await acm.hasRole('0x', owner.address);
+            let deployer = this.deployer;
+            await this.ds.configure(acm, {
+                title: `Grant Owner the AccessControlManager Admin Role`,
+                shouldUpdate: ownerIsAdmin === false,
+                async updater () {
+                    await acm.$receipt().grantRole(deployer, '0x', owner.address);
+                    await acm.$receipt().revokeRole(owner, '0x', deployer.address);
+                }
+            });
+            let deployerIsAdmin = await acm.hasRole('0x', deployer.address);
+            await this.ds.configure(acm, {
+                title: `Revoke Deployer the AccessControlManager Admin Role`,
+                shouldUpdate: deployerIsAdmin && $address.eq(deployer.address, owner.address) === false,
+                async updater () {
+                    await acm.$receipt().revokeRole(owner, '0x', deployer.address);
+                }
+            });
+        }
         return acm;
     }
 
@@ -253,6 +260,26 @@ export class TranchesDeployments {
                 sUSDe.address,
             ]
         });
+        let CURRENT_PROVIDER = sUSDeAprPairProvider.address;
+        let aaveAprPairProvider: AaveAprPairProvider;
+
+        const network = this.client.network;
+        const aavePool = Addresses[network]?.AavePool;
+        if (aavePool) {
+            const { contract } = await this.ds.ensure(AaveAprPairProvider, {
+                arguments: [
+                    $require.Address(Addresses[network].AavePool),
+                    [
+                        $require.Address(Addresses[network].USDC),
+                        $require.Address(Addresses[network].USDT),
+                    ],
+                    sUSDe.address
+                ]
+            });
+            aaveAprPairProvider = contract;
+            CURRENT_PROVIDER = aaveAprPairProvider.address;
+        }
+
         const stalePeriodAfter =  $date.parseTimespan(this.platform.Feed.stalePeriodAfter, { get: 's' });
         const { contract: feed } = await this.ds.ensureWithProxy(AprPairFeed, {
             id: 'sUSDeAprFeeds',
@@ -264,9 +291,22 @@ export class TranchesDeployments {
                 "Ethena CDO APR Pair"
             ]
         });
+
+        await this.ds.configure(feed, {
+            title: 'Update AprPair Feed Provider',
+            shouldUpdate: async () => {
+                let providerAddress = await feed.provider();
+                return !$address.eq(providerAddress, CURRENT_PROVIDER);
+            },
+            updater: async () => {
+                await feed.$receipt().setProvider(this.owner, CURRENT_PROVIDER)
+            }
+        });
+
         return {
             feed,
             sUSDeAprPairProvider,
+            aaveAprPairProvider,
         };
     }
 
@@ -459,7 +499,7 @@ export class TranchesDeployments {
         const AMOUNT = 20n * 10n**18n;
         let balance = await USDe.balanceOf(this.owner.address);
         if (balance < AMOUNT) {
-            if (this.client.platform === 'hardhat' || this.client.platform === 'hoodi') {
+            if (this.client.network === 'hardhat' || this.client.network === 'hoodi') {
                 await USDe.$receipt().mint(this.owner, this.owner.address, AMOUNT * 100n);
             } else {
                 throw new Error(`Not enough balance for initial deposit.`);
@@ -546,4 +586,7 @@ export class TranchesDeployments {
         return depositor;
     }
 
+    public isTestnet () {
+        return this.client.platform !== 'eth';
+    }
 }

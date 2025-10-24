@@ -414,21 +414,32 @@
     "tx": "0x857c511cb166160e9b9acdb8ef47d9306ad5bcef1a311e845b4a2d4b90ea1f6b",
     "gas": "803041",
     "deployer": "0x296400D87BE5cFB63C5025904cD006EBB23d15d5",
-    "timestamp": 1759435777
+    "timestamp": 1759435777,
+    "verified": "2025-10-22T18:32:57.561Z"
   },
   {
     "id": "TrancheDepositor",
     "name": "TrancheDepositor",
     "main": "./0xc/hardhat/TrancheDepositor/TrancheDepositor.ts",
-    "bytecodeHash": "0x380144b9186a93e15203bf509bfa423c581defe3594e218e4be6fd377cc32296",
+    "bytecodeHash": "0xaf283d3cf99d591f9f7bd8b356c867571624b67c824592c9bdc8f12e876da272",
     "address": "0x7a6AD3753b51cB0161405e93645B5E1f95b6e50F",
-    "block": 23533593,
-    "tx": "0x86517c059d5b4bf5bc616638af3aa91bd79b06b084245e1825aecc64fcbfc5d7",
-    "gas": "1624878",
+    "block": 23548108,
+    "tx": "0x2c7bbb1096b5fd7d85d3955e97718e60488c032056770f14f4e9b3764842c7b2",
+    "gas": "1740768",
     "deployer": "0x296400D87BE5cFB63C5025904cD006EBB23d15d5",
-    "timestamp": 1759933321,
-    "implementation": "0xb8F2daC561b2a5EA2e075C8EB5fCaC669c3A3Abf",
-    "verified": "2025-10-08T14:22:17.808Z"
+    "timestamp": 1760108703,
+    "implementation": "0x932a1d70A5E1c64a13dAa5a60564aCF5A2Ac0D11",
+    "verified": "2025-10-10T15:05:19.418Z",
+    "history": [
+      {
+        "main": "./0xc/hardhat/TrancheDepositor/TrancheDepositor.ts",
+        "address": "0xb8F2daC561b2a5EA2e075C8EB5fCaC669c3A3Abf",
+        "block": 23533593,
+        "tx": "0x86517c059d5b4bf5bc616638af3aa91bd79b06b084245e1825aecc64fcbfc5d7",
+        "gas": "1624878",
+        "verified": "2025-10-08T14:22:17.808Z"
+      }
+    ]
   },
   {
     "id": "TrancheDepositorProxy",
@@ -442,7 +453,7 @@
     "deployer": "0x296400D87BE5cFB63C5025904cD006EBB23d15d5",
     "timestamp": 1759933359,
     "verified": "2025-10-08T14:22:54.873Z",
-    "proxyFor": "0xb8F2daC561b2a5EA2e075C8EB5fCaC669c3A3Abf"
+    "proxyFor": "0x932a1d70A5E1c64a13dAa5a60564aCF5A2Ac0D11"
   },
   {
     "id": "TrancheDepositorProxyAdmin",
@@ -454,5 +465,18 @@
     "gas": "656458",
     "deployer": "0x296400D87BE5cFB63C5025904cD006EBB23d15d5",
     "timestamp": 1759933374
+  },
+  {
+    "id": "AaveAprPairProvider",
+    "name": "AaveAprPairProvider",
+    "main": "./0xc/hardhat/AaveAprPairProvider/AaveAprPairProvider.ts",
+    "bytecodeHash": "0xe1a5f842c0e43c6d08c53c7fa02658dac8406ec6c8645df9e1ea7e2318ff44c0",
+    "address": "0x1c137776e04803F807616c382AbBA12d9BF0AF73",
+    "block": 23635519,
+    "tx": "0x3c10297de8b38ade48071f6c56e2253ddebffbf7657b0872501d5f04b61b1da6",
+    "gas": "570199",
+    "deployer": "0x296400D87BE5cFB63C5025904cD006EBB23d15d5",
+    "timestamp": 1761165828,
+    "verified": "2025-10-22T20:44:04.293Z"
   }
 ]

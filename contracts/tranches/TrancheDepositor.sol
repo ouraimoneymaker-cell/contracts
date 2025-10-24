@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.28;
 
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import {IERC4626} from "@openzeppelin/contracts/interfaces/IERC4626.sol";
 import {IERC20Permit} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Permit.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
@@ -246,21 +247,24 @@ contract TrancheDepositor is AccessControlled {
         // Approve e.g. Uniswap router to spend Token
         SafeERC20.forceApprove(tokenIn, swapInfo.router, amount);
 
-        uint256 amountOutMin = depositParams.swapAmountOutMinimum;
-        if (amountOutMin == 0) {
-            // Calculate minimum amount out with 0.1% slippage, assuming 1:1 price
-            amountOutMin = (amount * swapInfo.minimumReturnPercentage) / 1000;
-        }
         uint256 deadline = depositParams.swapDeadline;
         if (deadline == 0) {
-            // Use future to effectively skip deadline checks
-            deadline = block.timestamp + 15;
+            deadline = block.timestamp;
         }
-
         address tokenOut = depositParams.swapTokenOut;
         if (tokenOut == address(0)) {
             tokenOut = vault.asset();
         }
+
+        uint256 amountOutMin = depositParams.swapAmountOutMinimum;
+        if (amountOutMin == 0) {
+            // Calculate the amountOutMin based on the preconfigured expected return percentage
+            // however prefer to specify the "swapAmountOutMinimum" in the tx
+            amountOutMin = amount * swapInfo.minimumReturnPercentage * (10 ** IERC20Metadata(tokenOut).decimals())
+                / 10 ** IERC20Metadata(address(tokenIn)).decimals()
+                / 1000;
+        }
+
 
         bool isTokenOutSupported = tranches[address(vault)][tokenOut] == true;
         if (isTokenOutSupported == false) {

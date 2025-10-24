@@ -8,26 +8,34 @@ import { TxWriter } from 'dequanto/txs/TxWriter';
 import { $require } from 'dequanto/utils/$require';
 
 export namespace PlatformFactory {
-    export async function init () {
+    export async function init(params?: {
+        deployments: 'throw' | 'redeploy'
+    }) {
         const hh = new HardhatProvider();
         const config = await Config.fetch({
             configGlobal: './config/dequanto.yml',
         });
         const platform = config.$get('chain') ?? 'hardhat';
         const client = await Web3ClientFactory.getAsync(platform);
-
-
-
         const deployer = client.network === 'hardhat'
             ? hh.deployer(0)
             : config.accounts?.find(x => x.name === `${client.network}/deployer`);
 
-        const owner = config.accounts?.find(x => x.name === `safe/${client.network}/owner`) ?? deployer;
+        let owner = config.accounts?.find(x => x.name === `safe/${client.network}/owner`) ?? deployer;
         if (client.network === 'eth') {
             $require.match(/safe/, owner.name, 'Owner must be a Safe account');
         }
 
-            if (/safe/.test(owner.name)) {
+        if (client.platform === 'hardhat' && client.forked?.platform) {
+            owner = {
+                name: 'impersonated',
+                type: 'eoa',
+                address: owner.address,
+            };
+            await client.debug.impersonateAccount(owner.address);
+        }
+
+        if (/safe/.test(owner.name)) {
             TxWriter.defaultOptions({
                 safeTransport: new InMemoryServiceTransport(client, deployer as EoAccount)
             });
@@ -37,6 +45,7 @@ export namespace PlatformFactory {
             client,
             deployer,
             owner,
+            deployments: params?.deployments,
         });
         return {
             tranches: depl,

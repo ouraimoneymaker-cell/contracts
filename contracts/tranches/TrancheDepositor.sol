@@ -18,10 +18,6 @@ contract TrancheDepositor is AccessControlled {
 
     bytes32 public constant DEPOSITOR_CONFIG_ROLE = keccak256("DEPOSITOR_CONFIG_ROLE");
 
-    IERC20 public USDe;
-    IERC4626 public sUSDe;
-    IERC4626 public pUSDe;
-
     event SwapInfoChanged(address indexed token);
     event AutoWithdrawalsChanged();
     event CdoAdded(address cdo);
@@ -68,14 +64,14 @@ contract TrancheDepositor is AccessControlled {
      * @param token The ERC20 token address for which to update swap info
      * @param swapInfo The new swap information to set, including router and fee
      */
-    function addSwapInfo (IERC20 token, TAutoSwap calldata swapInfo) external onlyRole(DEPOSITOR_CONFIG_ROLE) {
-        require(address(token) != address(0), "ZeroAddress");
+    function addSwapInfo (address token, TAutoSwap calldata swapInfo) external onlyRole(DEPOSITOR_CONFIG_ROLE) {
+        require(token != address(0), "ZeroAddress");
         require(swapInfo.router != address(0), "ZeroAddress");
         require(100 <= swapInfo.fee && swapInfo.fee <= 10000, "InvalidFeeTier");
         require(900 <= swapInfo.minimumReturnPercentage && swapInfo.minimumReturnPercentage <= 1000, "InvalidReturnPercentage");
 
-        autoSwaps[address(token)] = swapInfo;
-        emit SwapInfoChanged(address(token));
+        autoSwaps[token] = swapInfo;
+        emit SwapInfoChanged(token);
     }
 
     function addAutoWithdrawals (address[] calldata tokens, bool[] calldata statuses) external onlyRole(DEPOSITOR_CONFIG_ROLE) {
@@ -173,19 +169,19 @@ contract TrancheDepositor is AccessControlled {
     function _deposit(
         IMetaVault vault,
         IERC20 asset,
-        address owner,
+        address from,
         uint256 amount,
         address receiver,
         TDepositParams memory params
     ) internal returns (uint256) {
         if (tranches[address(vault)][address(asset)] == true) {
-            return _deposit_asMetaToken(vault, asset, owner, amount, receiver, params.minShares);
+            return _deposit_asMetaToken(vault, asset, from, amount, receiver, params.minShares);
         }
         if (autoWithdrawals[address(asset)] == true) {
-            return _deposit_viaWithdraw(vault, IERC4626(address(asset)), owner, amount, receiver, params);
+            return _deposit_viaWithdraw(vault, IERC4626(address(asset)), from, amount, receiver, params);
         }
         if (autoSwaps[address(asset)].router != address(0)) {
-            return _deposit_viaSwap(vault, asset, owner, amount, receiver, params);
+            return _deposit_viaSwap(vault, asset, from, amount, receiver, params);
         }
         revert InvalidAsset(address(vault), address(asset));
     }

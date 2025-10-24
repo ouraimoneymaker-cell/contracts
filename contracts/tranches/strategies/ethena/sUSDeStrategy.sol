@@ -5,16 +5,12 @@ import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import { IERC4626 } from "@openzeppelin/contracts/interfaces/IERC4626.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-
-
 import { IErrors } from "../../interfaces/IErrors.sol";
-import { IStrategy } from "../../interfaces/IStrategy.sol";
 import { IStrataCDO } from "../../interfaces/IStrataCDO.sol";
 import { IERC20Cooldown, IUnstakeCooldown } from "../../interfaces/cooldown/ICooldown.sol";
-
 import { Strategy } from "../../Strategy.sol";
 
-contract sUSDeStrategy is IStrategy, Strategy {
+contract sUSDeStrategy is Strategy {
 
     IERC4626 public immutable sUSDe;
     IERC20 public immutable USDe;

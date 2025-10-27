@@ -197,6 +197,16 @@ contract Accounting is IAccounting, CDOComponent {
         }
     }
 
+    /// @notice Called by the CDO to account for a fee by moving NAV from a tranche to the reserve.
+    function accrueFee (bool isJrt, uint256 amount) external onlyCDO {
+        reserveNav += amount;
+        if (isJrt) {
+            jrtNav -= amount;
+        } else {
+            srtNav -= amount;
+        }
+    }
+
     /// @notice Calculates the updated Net Asset Values (NAVs) for Junior, Senior tranches, and Reserve
     /// @dev This function performs the following operations:
     /// 1. Calculates and distributes gains or losses across tranches

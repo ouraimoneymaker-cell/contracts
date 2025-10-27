@@ -135,14 +135,18 @@ UAction.create({
         await sUSDe.$receipt().approve(alice, unstakeCooldown.address, 50n);
 
         await $hh.test.client.debug.setAutomine(false);
+        await $promise.wait(200);
         let tx1 = await unstakeCooldown.transfer(alice, sUSDe.address, alice.address, bob.address, 23n);
         let tx2 = await unstakeCooldown.transfer(alice, sUSDe.address, alice.address, bob.address, 27n);
+        await $promise.wait(200);
         await $hh.test.client.debug.setAutomine(true);
         await $hh.test.client.debug.mine(1);
 
-        await Promise.all([ tx1.wait(), tx2.wait() ]);
+        let [r1, r2] = await Promise.all([ tx1.wait(), tx2.wait() ]);
 
         l`1 request only, as 2 requests were made in the same block`;
+        $require.eq(r1.blockNumber, r2.blockNumber, 'different blocks');
+
         let length = await unstakeCooldown.storage.$get(['activeRequests', sUSDe.address, bob.address, 'length']);
         $require.eq(length, 1);
 

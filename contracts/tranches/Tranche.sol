@@ -68,17 +68,30 @@ contract Tranche is CDOComponent, ERC4626Upgradeable, ERC20PermitUpgradeable {
     }
 
     /** @dev Extends {IERC4626-maxWithdraw} to handle the paused state and the TVL ratio */
-    function maxWithdraw(address owner) public view override returns (uint256) {
-        return Math.min(super.maxWithdraw(owner), cdo.maxWithdraw(address(this)));
+    function maxWithdraw(address owner) public view override returns (uint256 assetsNet) {
+        uint256 sharesGross = balanceOf(owner);
+        assetsNet = Math.min(previewRedeem(sharesGross), cdo.maxWithdraw(address(this)));
     }
 
     /** @dev Extends {IERC4626-maxRedeem} to handle the paused state and the TVL ratio */
-    function maxRedeem(address owner) public view override returns (uint256) {
-        uint256 assetsMax = cdo.maxWithdraw(address(this));
-        uint256 sharesMax = convertToShares(assetsMax);
-        return Math.min(super.maxRedeem(owner), sharesMax);
+    function maxRedeem(address owner) public view override returns (uint256 sharesGross) {
+        uint256 assetsProtocolMax = cdo.maxWithdraw(address(this));
+        uint256 sharesProtocolMax = convertToShares(assetsProtocolMax);
+        sharesGross = Math.min(super.maxRedeem(owner), sharesProtocolMax);
     }
 
+    /** @dev Extends {IERC4626-previewRedeem} to handle fee calculation */
+    function previewRedeem(uint256 sharesGross) public view override returns (uint256 assetsNet) {
+        uint256 fee = cdo.calculateExitFee(address(this), sharesGross, true);
+        assetsNet = super.previewRedeem(sharesGross - fee);
+    }
+
+    /** @dev Extends {IERC4626-previewWithdraw} to handle fee calculation */
+    function previewWithdraw(uint256 assetsNet) public view override returns (uint256 sharesGross) {
+        uint256 sharesNet = super.previewWithdraw(assetsNet);
+        uint256 fee = cdo.calculateExitFee(address(this), sharesNet, false);
+        sharesGross = sharesNet + fee;
+    }
 
     /**
      * ============================================
@@ -199,21 +212,28 @@ contract Tranche is CDOComponent, ERC4626Upgradeable, ERC20PermitUpgradeable {
 
     /**
      * @dev Withdraw/redeem common workflow for base token
+     * assets ~ net
+     * shares ~ gross
      */
     function _withdraw(
         address caller,
         address receiver,
         address owner,
-        uint256 assets,
-        uint256 shares
+        uint256 assetsNet,
+        uint256 sharesGross
     ) internal override {
         if (caller != owner) {
-            _spendAllowance(owner, caller, shares);
+            _spendAllowance(owner, caller, sharesGross);
         }
-        _burn(owner, shares);
-        cdo.withdraw(address(this), asset(), assets, assets, owner, receiver);
+        uint256 assetsGross = convertToAssets(sharesGross);
+        uint256 fee = Math.saturatingSub(assetsGross, assetsNet);
+
+        _burn(owner, sharesGross);
+        cdo.accrueFee(address(this), fee);
+        cdo.withdraw(address(this), asset(), assetsNet, assetsNet, owner, receiver);
+
         _onAfterWithdrawalChecks();
-        emit Withdraw(caller, receiver, owner, assets, shares);
+        emit Withdraw(caller, receiver, owner, assetsNet, sharesGross);
     }
 
     /**
@@ -226,17 +246,20 @@ contract Tranche is CDOComponent, ERC4626Upgradeable, ERC20PermitUpgradeable {
         address owner,
         uint256 baseAssets,
         uint256 tokenAssets,
-        uint256 shares
+        uint256 sharesGross
     ) internal virtual {
         if (caller != owner) {
-            _spendAllowance(owner, caller, shares);
+            _spendAllowance(owner, caller, sharesGross);
         }
+        uint256 baseAssetsGross = convertToAssets(sharesGross);
+        uint256 fee = Math.saturatingSub(baseAssetsGross, baseAssets);
 
-        _burn(owner, shares);
+        _burn(owner, sharesGross);
+        cdo.accrueFee(address(this), fee);
         cdo.withdraw(address(this), token, tokenAssets, baseAssets, owner, receiver);
         _onAfterWithdrawalChecks();
-        emit Withdraw(caller, receiver, owner, baseAssets, shares);
-        emit OnMetaWithdraw(receiver, token, tokenAssets, shares);
+        emit Withdraw(caller, receiver, owner, baseAssets, sharesGross);
+        emit OnMetaWithdraw(receiver, token, tokenAssets, sharesGross);
     }
 
     /**

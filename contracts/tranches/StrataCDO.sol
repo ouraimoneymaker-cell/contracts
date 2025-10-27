@@ -53,12 +53,19 @@ contract StrataCDO is IErrors, IStrataCDO, AccessControlled {
     /// @dev Configurable minimum JRT price per share, below which the protocol automatically pauses deposits
     uint256 public jrtShortfallPausePrice;
 
+    /// @dev Withdrawal fees for the Junior Tranche
+    uint256 public exitFeeJrt;
+
+    /// @dev Withdrawal fees for the Senior Tranche
+    uint256 public exitFeeSrt;
+
     event DepositsStateChanged(address indexed tranche, bool enabled);
     event WithdrawalsStateChanged(address indexed tranche, bool enabled);
     event ReserveReduced(address token, uint256 amount);
     event TreasurySet(address treasury);
     event ShortfallPaused();
     event JrtShortfallPausePriceSet(uint256 pricePerShare);
+    event ExitFeesSet(uint256 jrt, uint256 srt);
 
 
     /// @notice Restricts function access to only the junior (JRT) or senior (SRT) tranche contracts
@@ -124,6 +131,28 @@ contract StrataCDO is IErrors, IStrataCDO, AccessControlled {
             return 0;
         }
         return accounting.maxWithdraw(isJrt_);
+    }
+
+    /// @notice Calculates the exit fee for a withdrawal from a specific tranche.
+    /// @dev The calculation can be based on either the gross withdrawal amount (before fees)
+    ///      or the net amount a user wishes to receive (after fees).
+    /// @param tranche The address of the tranche (junior or senior).
+    /// @param amount The amount to calculate the fee on.
+    /// @param isGross If true, `amount` is the gross withdrawal amount.
+    ///                If false, `amount` is the net amount to be received.
+    /// @return The calculated exit fee amount.
+    function calculateExitFee (address tranche, uint256 amount, bool isGross) external view returns (uint256) {
+        uint256 fee = isJrt(tranche) ? exitFeeJrt : exitFeeSrt;
+        return isGross
+            ? Math.mulDiv(amount, fee, 1e18, Math.Rounding.Floor)
+            : Math.mulDiv(amount, fee, 1e18 - fee, Math.Rounding.Floor);
+    }
+
+    /// @notice On behalf of a tranche, moves accrued fees from the tranche's TVL to the reserve.
+    /// @param tranche The address of the tranche (JRT or SRT).
+    /// @param assets The amount of fees to accrue.
+    function accrueFee (address tranche, uint256 assets) external onlyTranche {
+        accounting.accrueFee(isJrt(tranche), assets);
     }
 
     function updateAccounting () external onlyTranche {
@@ -251,6 +280,16 @@ contract StrataCDO is IErrors, IStrataCDO, AccessControlled {
             state.isWithdrawEnabled = isWithdrawEnabled;
             emit WithdrawalsStateChanged(tranche, isWithdrawEnabled);
         }
+    }
+
+    /// @notice Sets action states for the tranche; zero address affects both tranches
+    function setExitFees (uint256 feeJrt, uint256 feeSrt) external onlyOwner {
+        require(feeJrt <= 0.01e18, "InvalidJrtFee");
+        require(feeSrt <= 0.01e18, "InvalidSrtFee");
+        exitFeeJrt = feeJrt;
+        exitFeeSrt = feeSrt;
+
+        emit ExitFeesSet(feeJrt, feeSrt);
     }
 
     /// @notice Sets the JRT shortfall price to automatically pause the deposits, when the price falls below this price

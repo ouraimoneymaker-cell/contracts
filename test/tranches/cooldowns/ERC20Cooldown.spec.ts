@@ -94,14 +94,17 @@ UAction.create({
 
         await USDe.$receipt().approve(alice, erc20Cooldown.address, 50n);
         await $hh.test.client.debug.setAutomine(false);
+        await $promise.wait(200);
         let tx1 = await erc20Cooldown.transfer(alice, USDe.address, alice.address, bob.address, 23n, _7DAYS);
         let tx2 = await erc20Cooldown.transfer(alice, USDe.address, alice.address, bob.address, 27n, _7DAYS);
+        await $promise.wait(200);
         await $hh.test.client.debug.setAutomine(true);
         await $hh.test.client.debug.mine(1);
 
-        await Promise.all([tx1.wait(), tx2.wait()]);
+        let [ r1, r2 ] = await Promise.all([tx1.wait(), tx2.wait()]);
 
         l`1 request only, as 2 requests were made in the same block`;
+        $require.eq(r1.blockNumber, r2.blockNumber, 'different blocks');
 
         await $testCooldown.eqBalanceOf(erc20Cooldown, USDe, bob, {
             pending: 50n,

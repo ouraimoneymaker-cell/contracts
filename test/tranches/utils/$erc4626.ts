@@ -26,8 +26,21 @@ export namespace $erc4626 {
     }
 
     export async function redeem (erc4626: IERC4626, sender: TEth.IAccount,  amount: bigint | number | `${number}%`) {
+        let erc20 = await Tools.getAsset(erc4626);
+        let before = await erc20.balanceOf(sender.address);
         let shares = await $erc20.toAmount(erc4626, amount, sender);
         await erc4626.$receipt().redeem(sender, shares, sender.address, sender.address);
+        let after = await erc20.balanceOf(sender.address);
+        return after - before;
+    }
+
+    export async function withdraw (erc4626: IERC4626, sender: TEth.IAccount,  amount: bigint | number) {
+        let erc20 = await Tools.getAsset(erc4626);
+        let before = await erc20.balanceOf(sender.address);
+        let assets = await $erc20.toAmount(erc4626, amount, sender);
+        await erc4626.$receipt().withdraw(sender, assets, sender.address, sender.address);
+        let after = await erc20.balanceOf(sender.address);
+        return after - before;
     }
 
     export async function depositMeta (tranche: Tranche & IERC4626, token: $acc.Address, sender: TEth.IAccount,  amount: bigint | number | `${number}%`) {

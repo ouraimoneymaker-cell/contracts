@@ -23,4 +23,7 @@ interface IStrataCDO {
 
     function jrtVault() external view returns (ITranche);
     function srtVault() external view returns (ITranche);
+
+    function calculateExitFee(address tranche, uint256 amount, bool isGross) external view returns (uint256);
+    function accrueFee(address tranche, uint256 assetsFee) external;
 }

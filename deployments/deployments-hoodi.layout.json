@@ -587,5 +587,45 @@
         "type": "mapping(address => mapping(address => bool))"
       }
     ]
+  },
+  {
+    "id": "TrancheDepositorV2Proxy",
+    "slots": [
+      {
+        "slot": 0,
+        "position": 0,
+        "name": "acm",
+        "size": 160,
+        "type": "address"
+      },
+      {
+        "slot": 1,
+        "position": 0,
+        "name": "__gap",
+        "size": 12544,
+        "type": "uint256[49]"
+      },
+      {
+        "slot": 50,
+        "position": 0,
+        "name": "autoSwaps",
+        "size": null,
+        "type": "mapping(address => (address router, uint24 fee, uint24 minimumReturnPercentage))"
+      },
+      {
+        "slot": 51,
+        "position": 0,
+        "name": "autoWithdrawals",
+        "size": null,
+        "type": "mapping(address => bool)"
+      },
+      {
+        "slot": 52,
+        "position": 0,
+        "name": "tranches",
+        "size": null,
+        "type": "mapping(address => mapping(address => bool))"
+      }
+    ]
   }
 ]

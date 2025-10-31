@@ -564,6 +564,7 @@ export class TranchesDeployments {
         let { pUSDe } = await this.ensureEthena();
         let { cdo, jrtVault, USDe } = await this.ensureEthenaCDO();
         let { contract: depositor } = await this.ds.ensureWithProxy(TrancheDepositor, {
+            id: 'TrancheDepositorV2',
             initialize: [
                 this.owner.address,
                 acm.address

@@ -15,9 +15,9 @@ export namespace $hh {
         return hh.client('hardhat');
     }
 
-    export async function forked () {
+    export async function forked (opts?: { block?: number }) {
         const hh = new HardhatProvider();
-        const client = await hh.forked({ platform: 'eth' });
+        const client = await hh.forked({ platform: 'eth', block: opts?.block ?? void 0 });
         //const client = await hh.client('localhost');
         client.configureFork('eth');
         const deployer = await hh.deployer(0);

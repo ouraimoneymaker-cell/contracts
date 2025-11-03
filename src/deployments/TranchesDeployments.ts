@@ -31,6 +31,7 @@ import { l } from 'dequanto/utils/$logger';
 import { Addresses } from '@s/constants';
 import { MockERC4626 } from '@0xc/hardhat/MockERC4626/MockERC4626';
 import { AaveAprPairProvider } from '@0xc/hardhat/AaveAprPairProvider/AaveAprPairProvider';
+import { CDOLens } from '@0xc/hardhat/CDOLens/CDOLens';
 
 
 export class TranchesDeployments {
@@ -589,5 +590,13 @@ export class TranchesDeployments {
 
     public isTestnet () {
         return this.client.platform !== 'eth';
+    }
+
+    async ensureLenses () {
+        let { contract: cdoLens } = await this.ds.ensureWithProxy(CDOLens, {
+            initialize: [
+                this.owner.address
+            ]
+        });
     }
 }

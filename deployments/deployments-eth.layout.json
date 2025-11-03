@@ -594,5 +594,17 @@
         "type": "mapping(address => mapping(address => bool))"
       }
     ]
+  },
+  {
+    "id": "CDOLensProxy",
+    "slots": [
+      {
+        "slot": 0,
+        "position": 0,
+        "name": "cdos",
+        "size": null,
+        "type": "address[]"
+      }
+    ]
   }
 ]

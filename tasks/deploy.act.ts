@@ -7,5 +7,9 @@ UAction.create({
 
         await tranches.ensureEthenaCDO();
         await tranches.ensureDepositor();
+    },
+    async 'ensure Lenses' () {
+        const { tranches } = await PlatformFactory.init();
+        await tranches.ensureLenses();
     }
 })

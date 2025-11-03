@@ -546,5 +546,44 @@
     "deployer": "0x296400D87BE5cFB63C5025904cD006EBB23d15d5",
     "timestamp": 1761921744,
     "verified": "2025-10-31T14:42:36.708Z"
+  },
+  {
+    "id": "CDOLens",
+    "name": "CDOLens",
+    "main": "./0xc/hardhat/CDOLens/CDOLens.ts",
+    "bytecodeHash": "0x108d285e30ea87bf7c16f926d58b9c69ed9600c771e1947a8e9cf22acdeb61a6",
+    "address": "0xeA62e3a2D5FE8D5b66dc8E1bd2405AD23C851f4e",
+    "block": 23719414,
+    "tx": "0xacaea67e84e80eca4212ead8e770075b4e36376dacd513a8314fe391a1b8f20b",
+    "gas": "1378710",
+    "deployer": "0x296400D87BE5cFB63C5025904cD006EBB23d15d5",
+    "timestamp": 1762180280,
+    "implementation": "0x02D622C6F8b1814FDCAEBEd36457F8da90Ab5B62",
+    "verified": "2025-11-03T14:31:32.809Z"
+  },
+  {
+    "id": "CDOLensProxy",
+    "name": "TransparentUpgradeableProxy",
+    "main": "artifacts/@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol/TransparentUpgradeableProxy.json",
+    "bytecodeHash": "0xf28eb2a2c5463ee40d33f9140010a6efee14f7e18a27beac9a06acbeb00f60b2",
+    "address": "0xeA62e3a2D5FE8D5b66dc8E1bd2405AD23C851f4e",
+    "block": 23719416,
+    "tx": "0xf0d85c00764dc9308924d2bdccf24ed87bd3c21a0b89a7c6ee1a7003d32e7952",
+    "gas": "607650",
+    "deployer": "0x296400D87BE5cFB63C5025904cD006EBB23d15d5",
+    "timestamp": 1762180302,
+    "verified": "2025-11-03T14:31:54.691Z",
+    "proxyFor": "0x02D622C6F8b1814FDCAEBEd36457F8da90Ab5B62"
+  },
+  {
+    "id": "CDOLensProxyAdmin",
+    "name": "ProxyAdmin",
+    "main": "artifacts/@openzeppelin/contracts/proxy/transparent/ProxyAdmin.sol/ProxyAdmin.json",
+    "address": "0x00272869a7454bBc820c665FceE23D56552e3bdB",
+    "block": 23719416,
+    "tx": "0xf0d85c00764dc9308924d2bdccf24ed87bd3c21a0b89a7c6ee1a7003d32e7952",
+    "gas": "607650",
+    "deployer": "0x296400D87BE5cFB63C5025904cD006EBB23d15d5",
+    "timestamp": 1762180314
   }
 ]

@@ -67,6 +67,12 @@ contract Accounting is IAccounting, CDOComponent {
     ///      Jrt withdrawals remain possible until the hard minimum is reached.
     uint256 public minimumJrtSrtRatioBuffer;
 
+    /// @notice The portion of Junior fees that is returned to its TVL. The remainder goes to the reserve.
+    uint256 public feeJrtRetentionBps;
+
+    /// @notice The portion of Senior fees that is returned to the Senior tranche TVL.
+    uint256 public feeSrtRetentionBps;
+
     error InvalidNavSplit(uint256 navT1, uint256 jrtAssets, uint256 srtAssets, uint256 reserveAssets);
     error ReserveTooLow(uint256 reserveNav, uint256 requestedNav);
 
@@ -76,6 +82,8 @@ contract Accounting is IAccounting, CDOComponent {
     event RiskParametersChanged(UD60x18 x, UD60x18 y, UD60x18 k);
     event MinimumJrtSrtRatioChanged(uint256 ratio);
     event MinimumJrtSrtRatioBufferChanged(uint256 ratio);
+    event FeeAccrued(bool isJrt, uint256 amountToReserve, uint256 amountToTranche);
+    event FeeRetentionChanged(uint256 feeJrtRetention, uint256 feeSrtRetention);
 
     function initialize(
         address owner_,
@@ -199,12 +207,15 @@ contract Accounting is IAccounting, CDOComponent {
 
     /// @notice Called by the CDO to account for a fee by moving NAV from a tranche to the reserve.
     function accrueFee (bool isJrt, uint256 amount) external onlyCDO {
-        reserveNav += amount;
+        uint256 retentionBps = isJrt ? feeJrtRetentionBps : feeSrtRetentionBps;
+        uint256 amountToReserve = amount * (1e18 - retentionBps) / 1e18;
+        reserveNav += amountToReserve;
         if (isJrt) {
-            jrtNav -= amount;
+            jrtNav -= amountToReserve;
         } else {
-            srtNav -= amount;
+            srtNav -= amountToReserve;
         }
+        emit FeeAccrued(isJrt, amountToReserve, amount - amountToReserve);
     }
 
     /// @notice Calculates the updated Net Asset Values (NAVs) for Junior, Senior tranches, and Reserve
@@ -447,6 +458,17 @@ contract Accounting is IAccounting, CDOComponent {
         updateAccountingInner(cdo.totalStrategyAssets());
         reserveBps = bps;
         emit ReservePercentageChanged(reserveBps);
+    }
+
+    /// @notice Sets the portion of fees from each tranche that is returned to its TVL. The remainder goes to the reserve.
+    /// @param jrtRetentionBps The percentage of junior fees that is retained by the junior tranche TVL.
+    /// @param srtRetentionBps The percentage of junior fees that is retained by the senior tranche TVL.
+    function setFeeRetentionBps (uint256 jrtRetentionBps, uint256 srtRetentionBps) external onlyOwner {
+        require(jrtRetentionBps <= PERCENTAGE_100, "InvalidJrtRetention");
+        require(srtRetentionBps <= PERCENTAGE_100, "InvalidSrtRetention");
+        feeJrtRetentionBps = jrtRetentionBps;
+        feeSrtRetentionBps = srtRetentionBps;
+        emit FeeRetentionChanged(feeJrtRetentionBps, feeSrtRetentionBps);
     }
 
     /// @notice Sets the hard minimum Jrt/Srt ratio below which Jrt withdrawals are blocked.

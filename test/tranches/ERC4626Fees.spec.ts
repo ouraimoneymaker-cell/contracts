@@ -20,6 +20,10 @@ UAction.create({
 
         // min shares
         await $erc4626.deposit(jrtVault, deployer, 10);
+        await $hh.test.snapshot('test');
+    },
+    async $teardown () {
+        await $hh.test.reset('test');
     },
     async $after () {
         await $hh.test.reset();
@@ -37,7 +41,7 @@ UAction.create({
         l`No fee, max withdraw 1000$`;
         $require.eq(await jrtVault.maxWithdraw(alice.address), $bigint.toWei(1000));
         $require.eq(await jrtVault.maxRedeem(alice.address), aliceTotalShares);
-        await cdo.$receipt().setExitFees(deployer, BigInt(1e16), BigInt(1e16));
+        await cdo.$receipt().setExitFees(deployer, BigInt(0.01e18), BigInt(0.01e18));
 
         l`::previewRedeem (1%: deposited 1000, redeem 990)`;
         let shares = await jrtVault.balanceOf(alice.address);
@@ -108,6 +112,47 @@ UAction.create({
                 $require.eq(balance, $bigint.toWei(990 * .7));
                 $require.eq(await jrtVault.balanceOf(alice.address), 0n);
                 $require.eq(await USDe.balanceOf(alice.address), 990n * 10n**18n);
+            }
+        });
+    },
+    async '!ERC4626::withdrawal fee with retention' () {
+        let { jrtVault, srtVault, cdo, USDe, sUSDe, acm, accounting } = $hh.test.tranches;
+
+        // Deposit initial
+        let alice = await $hh.test.createAccount('alice');
+
+        await $erc4626.deposit(jrtVault, alice, 1000);
+        await cdo.$receipt().setExitFees(deployer, BigInt(0.01e18), BigInt(0.01e18));
+
+        await $hh.test.snapshot('fees-retention-alice');
+        return UTest.create({
+            async $teardown () {
+                await $hh.test.reset('fees-retention-alice');
+            },
+            async '100% back to TVL' () {
+                await accounting.$receipt().setFeeRetentionBps(deployer, BigInt(1e18), 0n);
+
+                let priceBefore = $bigint.toEther(await cdo.pricePerShare(jrtVault.address));
+                let jrtNav = await accounting.jrtNav();
+                let balance = await $erc4626.redeem(jrtVault, alice, '100%');
+                $require.eq(await accounting.reserveNav(), $bigint.toWei(0), `Reserve should be empty`);
+                $require.eq(await accounting.jrtNav(), jrtNav - 990n * 10n**18n, `10$ should be returned to Juniors`);
+                $require.eq(balance, 990n * 10n**18n);
+
+                let priceAfter = $bigint.toEther(await cdo.pricePerShare(jrtVault.address));
+
+                let priceIncrease = priceAfter / priceBefore;
+                $require.eq(priceIncrease, 2, `Before Alice: 10$; after fee 10$ goes to Juniors: 100% increase`)
+            },
+            async '25% back to TVL' () {
+                await accounting.$receipt().setFeeRetentionBps(deployer, BigInt(0.25e18), 0n);
+
+
+                let jrtNav = await accounting.jrtNav();
+                let balance = await $erc4626.redeem(jrtVault, alice, '100%');
+                $require.eq(await accounting.reserveNav(), BigInt(7.5e18), `Reserve should collect 75% of 10$ fee`);
+                $require.eq(await accounting.jrtNav(), jrtNav - BigInt(1000e18) + BigInt(2.5e18), `2.5$ should be returned to Juniors`);
+                $require.eq(balance, 990n * 10n**18n);
             }
         });
     },

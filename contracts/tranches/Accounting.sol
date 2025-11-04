@@ -142,13 +142,20 @@ contract Accounting is IAccounting, CDOComponent {
     /// @dev This function is called by the CDO contract to reduce the reserve
     /// @dev The CDO contract is responsible for withdrawing the appropriate amount to the treasury
     /// @param amount The amount by which to reduce the reserve NAV
-    function reduceReserve (uint256 amount) external onlyCDO {
+    /// @param jrtAmountIn The amount to be credited to the Junior Tranche
+    /// @param srtAmountIn The amount to be credited to the Senior Tranche
+    function reduceReserve (uint256 amount, uint256 jrtAmountIn, uint256 srtAmountIn) external onlyCDO {
         updateAccountingInner(cdo.totalStrategyAssets());
         if (amount > reserveNav) {
             revert ReserveTooLow(reserveNav, amount);
         }
+        if (amount < (jrtAmountIn + srtAmountIn)) {
+            revert ReserveTooLow(amount, jrtAmountIn + srtAmountIn);
+        }
         reserveNav = reserveNav - amount;
-        nav = nav - amount;
+        nav = nav + jrtAmountIn + srtAmountIn - amount;
+        jrtNav += jrtAmountIn;
+        srtNav += srtAmountIn;
 
         // Fetch APRs and force recalculate aprSrt, as JRT and SRT TVLs may have changed.
         (bool modified, UD60x18 aprTarget_, UD60x18 aprBase_) = fetchAprs();

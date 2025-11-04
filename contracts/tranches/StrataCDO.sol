@@ -62,6 +62,7 @@ contract StrataCDO is IErrors, IStrataCDO, AccessControlled {
     event DepositsStateChanged(address indexed tranche, bool enabled);
     event WithdrawalsStateChanged(address indexed tranche, bool enabled);
     event ReserveReduced(address token, uint256 amount);
+    event ReserveDistributed(uint256 jrtAmount, uint256 srtAmount);
     event TreasurySet(address treasury);
     event ShortfallPaused();
     event JrtShortfallPausePriceSet(uint256 pricePerShare);
@@ -247,10 +248,18 @@ contract StrataCDO is IErrors, IStrataCDO, AccessControlled {
         // Reverts if the token is not supported
         uint256 baseAssets = strategy.convertToAssets(token, tokenAmount, Math.Rounding.Floor);
         // Reverts if not enough reserve
-        accounting.reduceReserve(baseAssets);
+        accounting.reduceReserve(baseAssets, 0, 0);
         // Transfers tokens out instantly if possible, or through the cooldown process
         strategy.reduceReserve(token, tokenAmount, treasury);
         emit ReserveReduced(token, tokenAmount);
+    }
+
+    /// @notice Reduces the reserve by distributing assets to the tranches
+    /// @dev Only callable by RESERVE_MANAGER_ROLE
+    function distributeReserve (uint256 jrtAmountIn, uint256 srtAmountIn) external onlyRole(RESERVE_MANAGER_ROLE) {
+        // The accounting contract reverts if reserves are insufficient.
+        accounting.reduceReserve(jrtAmountIn + srtAmountIn, jrtAmountIn, srtAmountIn);
+        emit ReserveDistributed(jrtAmountIn, srtAmountIn);
     }
 
     /// @notice Sets the address of the reserve treasury

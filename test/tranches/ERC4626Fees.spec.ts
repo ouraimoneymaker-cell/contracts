@@ -115,7 +115,7 @@ UAction.create({
             }
         });
     },
-    async '!ERC4626::withdrawal fee with retention' () {
+    async 'ERC4626::withdrawal fee with retention' () {
         let { jrtVault, srtVault, cdo, USDe, sUSDe, acm, accounting } = $hh.test.tranches;
 
         // Deposit initial
@@ -153,6 +153,37 @@ UAction.create({
                 $require.eq(await accounting.reserveNav(), BigInt(7.5e18), `Reserve should collect 75% of 10$ fee`);
                 $require.eq(await accounting.jrtNav(), jrtNav - BigInt(1000e18) + BigInt(2.5e18), `2.5$ should be returned to Juniors`);
                 $require.eq(balance, 990n * 10n**18n);
+            }
+        });
+    },
+    async 'ERC4626:: reserve distribution' () {
+        let { jrtVault, srtVault, cdo, USDe, sUSDe, acm, accounting } = $hh.test.tranches;
+
+        // Deposit initial
+        let alice = await $hh.test.createAccount('alice');
+
+        await $erc4626.deposit(jrtVault, alice, 1000);
+        await cdo.$receipt().setExitFees(deployer, BigInt(0.01e18), BigInt(0.01e18));
+
+        await $hh.test.snapshot('fees-distribution-alice');
+        return UTest.create({
+            async $teardown () {
+                await $hh.test.reset('fees-distribution-alice');
+            },
+            async 'distribute' () {
+
+                await $erc4626.redeem(jrtVault, alice, '100%');
+
+                let [jrtNav, srtNav] = await Promise.all([ accounting.jrtNav(), accounting.srtNav() ]);
+                $require.eq(await accounting.reserveNav(), $bigint.toWei(10), `Reserve should be 10$`);
+
+                await cdo.$receipt().distributeReserve(deployer, BigInt(8e18), BigInt(2e18));
+                $require.eq(await accounting.reserveNav(), 0n, `Reserve should be empty`);
+
+                let [jrtNavT1, srtNavT1] = await Promise.all([ accounting.jrtNav(), accounting.srtNav() ]);
+
+                $require.eq(jrtNavT1 - jrtNav, BigInt(8e18), `Juniors should receive 8$`);
+                $require.eq(srtNavT1 - srtNav, BigInt(2e18), `Seniors should receive 2$`);
             }
         });
     },

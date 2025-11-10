@@ -48,7 +48,7 @@ contract Tranche is CDOComponent, ERC4626Upgradeable, ERC20PermitUpgradeable {
 
     /**
      * ============================================
-     *              ERC4626 max* methods
+     *              ERC4626 max*|preview* methods
      * ============================================
      */
 
@@ -91,6 +91,54 @@ contract Tranche is CDOComponent, ERC4626Upgradeable, ERC20PermitUpgradeable {
         uint256 sharesNet = super.previewWithdraw(assetsNet);
         uint256 fee = cdo.calculateExitFee(address(this), sharesNet, false);
         sharesGross = sharesNet + fee;
+    }
+
+    /**
+     * ============================================
+     *              MetaVault max*|preview* methods
+     * ============================================
+     */
+
+    /** @dev Overloads {IERC4626-maxWithdraw} to return the withdrawable amount denominated in the specified Meta Token. */
+    function maxWithdraw(address token, address owner) public view returns (uint256) {
+        uint256 baseAssets = maxWithdraw(owner);
+        uint256 tokenAssets = cdo.strategy().convertToTokens(token, baseAssets, Math.Rounding.Ceil);
+        return tokenAssets;
+    }
+
+    /** @dev Overloads {IERC4626-maxDeposit} to return the maximum deposit amount denominated in the specified Meta Token. */
+    function maxDeposit(address token, address owner) public view returns (uint256) {
+        uint256 baseAssets = maxDeposit(owner);
+        uint256 tokenAssets = cdo.strategy().convertToTokens(token, baseAssets, Math.Rounding.Floor);
+        return tokenAssets;
+    }
+
+    /** @dev Overloads {IERC4626-previewDeposit} to calculate the shares for a given Meta Token deposit amount. */
+    function previewDeposit(address token, uint256 tokenAmount) public view returns (uint256) {
+        uint256 baseAssets = cdo.strategy().convertToAssets(token, tokenAmount, Math.Rounding.Floor);
+        uint256 shares = previewDeposit(baseAssets);
+        return shares;
+    }
+
+    /** @dev Overloads {IERC4626-previewMint} to return the required Meta Token amount for minting the given number of shares. */
+    function previewMint(address token, uint256 shares) public view returns (uint256) {
+        uint256 baseAssets = previewMint(shares);
+        uint256 tokenAssets = cdo.strategy().convertToTokens(token, baseAssets, Math.Rounding.Ceil);
+        return tokenAssets;
+    }
+
+    /** @dev Overloads {IERC4626-previewRedeem} to return the redeemable Meta Token amount for the given number of shares. */
+    function previewRedeem(address token, uint256 shares) public view returns (uint256) {
+        uint256 baseAssets = previewRedeem(shares);
+        uint256 tokenAssets = cdo.strategy().convertToTokens(token, baseAssets, Math.Rounding.Ceil);
+        return tokenAssets;
+    }
+
+    /** @dev Overloads {IERC4626-previewWithdraw} to calculate the shares required to withdraw the given Meta Token amount. */
+    function previewWithdraw(address token, uint256 tokenAmount) public view returns (uint256) {
+        uint256 baseAssets = cdo.strategy().convertToAssets(token, tokenAmount, Math.Rounding.Floor);
+        uint256 shares = previewWithdraw(baseAssets);
+        return shares;
     }
 
     /**

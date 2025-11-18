@@ -7,7 +7,7 @@ import { Web3Client } from 'dequanto/clients/Web3Client'
 import { Deployments } from 'dequanto/contracts/deploy/Deployments'
 import { TEth } from 'dequanto/models/TEth'
 import { Platforms } from '../platforms/Platforms'
-import { IPlatform } from '../platforms/IPlatform'
+import { IPlatform, IPlatformAccounts } from '../platforms/IPlatform'
 import { $require } from 'dequanto/utils/$require'
 import { SUSDeStrategy } from '@0xc/hardhat/sUSDeStrategy/sUSDeStrategy'
 import { StrataCDO } from '@0xc/hardhat/StrataCDO/StrataCDO'
@@ -32,6 +32,7 @@ import { Addresses } from '@s/constants';
 import { MockERC4626 } from '@0xc/hardhat/MockERC4626/MockERC4626';
 import { AaveAprPairProvider } from '@0xc/hardhat/AaveAprPairProvider/AaveAprPairProvider';
 import { CDOLens } from '@0xc/hardhat/CDOLens/CDOLens';
+import { TwoStepConfigManager } from '@0xc/hardhat/TwoStepConfigManager/TwoStepConfigManager';
 
 
 export class TranchesDeployments {
@@ -43,16 +44,20 @@ export class TranchesDeployments {
     client: Web3Client
     ethenaInfo: typeof Tranches.ethena;
 
-    constructor (params: {
+    accounts: IPlatformAccounts
+
+    constructor(params: {
         client: Web3Client
         deployer: TEth.EoAccount
         owner?: TEth.IAccount
+        accounts?: IPlatformAccounts
         deployments?: 'throw' | 'redeploy'
     }) {
         this.deployer = params.deployer;
         this.owner = params.owner ?? params.deployer;
         this.client = params.client;
         this.platform = Platforms[params.client.network];
+        this.accounts = params.accounts;
 
         this.ds = new Deployments(params.client, params.deployer, {
             directory: './deployments/',
@@ -63,14 +68,14 @@ export class TranchesDeployments {
         let info = JSON.parse(JSON.stringify(Tranches.ethena)) as typeof Tranches.ethena;
 
         if (this.platform.Tranches?.ethena) {
-            info.jrt = { ...info.jrt, ...(this.platform.Tranches.ethena.jrt ?? {})} as any;
-            info.srt = { ...info.srt, ...(this.platform.Tranches.ethena.srt ?? {})} as any;
+            info.jrt = { ...info.jrt, ...(this.platform.Tranches.ethena.jrt ?? {}) } as any;
+            info.srt = { ...info.srt, ...(this.platform.Tranches.ethena.srt ?? {}) } as any;
         }
         this.ethenaInfo = info;
     }
 
     @memd.deco.memoize()
-    async ensureEthena () {
+    async ensureEthena() {
         let network = this.ds.client.network;
         if (network === 'hardhat') {
             let USDe = await this.ds.ensureContract(MockUSDe);
@@ -88,7 +93,7 @@ export class TranchesDeployments {
             });
             let pUSDe = await this.ds.ensureContract(MockERC4626, {
                 id: 'pUSDeMock',
-                arguments: [ USDe.address ]
+                arguments: [USDe.address]
             });
             await sUSDe.$receipt().setCooldownDuration(this.owner, $date.parseTimespan('1week', { get: 's' }));
 
@@ -104,7 +109,7 @@ export class TranchesDeployments {
                 ]
             });
             return {
-                USDe: new MockUSDe (USDeAddress, this.ds.client),
+                USDe: new MockUSDe(USDeAddress, this.ds.client),
                 sUSDe: new MockStakedUSDe(sUSDeAddress, this.ds.client),
                 sUSDS: sUSDS,
                 pUSDe: new MockERC4626(pUSDeAddress, this.ds.client)
@@ -116,7 +121,7 @@ export class TranchesDeployments {
         let sUSDSAddress = $require.Address(this.platform.Tokens['sUSDS'].address);
         let pUSDeAddress = $require.Address(this.platform.Tokens['pUSDe'].address);
         return {
-            USDe: new MockUSDe (USDeAddress, this.ds.client),
+            USDe: new MockUSDe(USDeAddress, this.ds.client),
             sUSDe: new MockStakedUSDe(sUSDeAddress, this.ds.client),
             sUSDS: new MockStakedUSDS(sUSDSAddress, this.ds.client),
             pUSDe: new MockERC4626(pUSDeAddress, this.ds.client)
@@ -124,10 +129,10 @@ export class TranchesDeployments {
     }
 
     @memd.deco.memoize()
-    async ensureACM () {
+    async ensureACM() {
         const owner = this.owner!;
         const acm = await this.ds.ensureContract(AccessControlManager, {
-            arguments: [ owner.address ]
+            arguments: [owner.address]
         });
 
         if (this.isTestnet() === false) {
@@ -136,7 +141,7 @@ export class TranchesDeployments {
             await this.ds.configure(acm, {
                 title: `Grant Owner the AccessControlManager Admin Role`,
                 shouldUpdate: ownerIsAdmin === false,
-                async updater () {
+                async updater() {
                     await acm.$receipt().grantRole(deployer, '0x', owner.address);
                     await acm.$receipt().revokeRole(owner, '0x', deployer.address);
                 }
@@ -145,7 +150,7 @@ export class TranchesDeployments {
             await this.ds.configure(acm, {
                 title: `Revoke Deployer the AccessControlManager Admin Role`,
                 shouldUpdate: deployerIsAdmin && $address.eq(deployer.address, owner.address) === false,
-                async updater () {
+                async updater() {
                     await acm.$receipt().revokeRole(owner, '0x', deployer.address);
                 }
             });
@@ -153,15 +158,39 @@ export class TranchesDeployments {
         return acm;
     }
 
-    async ensureRole (role: TEth.Hex, account: TEth.Address) {
+    async ensureRole(role: TEth.Hex, account: TEth.Address) {
         let acm = await this.ensureACM();
         let has = await acm.hasRole(role, account);
         if (has === false) {
             await acm.$receipt().grantRole(this.owner, role, account);
         }
     }
+    async ensureRoles(roles: Record<string, Record<TEth.Address, boolean>>) {
+        const acm = await this.ensureACM();
+        const admin = this.owner;
+        for (let role in roles) {
+            for (let address in roles[role]) {
+                await ensure(role, address as TEth.Address, roles[role][address]);
+            }
+        }
 
-    async addRoles () {
+        async function ensure(role: string, address: TEth.Address, has: boolean) {
+            let roleHash = role.startsWith('0x')
+                ? role as TEth.Hex
+                : $contract.keccak256(role);
+            let hasCurrent = await acm.hasRole(roleHash, address);
+            if (hasCurrent !== has) {
+                l`gray<EnsureRole>: cyan<${role}> ${has ? '🟢' : '🔴'} cyan<${address}> ⌛`;
+                if (has) {
+                    await acm.$receipt().grantRole(admin, roleHash, address)
+                } else {
+                    await acm.$receipt().revokeRole(admin, roleHash, address)
+                }
+            }
+        }
+    }
+
+    async addRoles() {
         let roles = {
             [this.owner.address]: [
                 $contract.keccak256('PAUSER_ROLE'),
@@ -177,7 +206,7 @@ export class TranchesDeployments {
         }
     }
 
-    async ensureEthenaTranches (cdo: StrataCDO) {
+    async ensureEthenaTranches(cdo: StrataCDO) {
         const { USDe, sUSDe } = await this.ensureEthena();
 
         const acm = await this.ensureACM();
@@ -211,8 +240,39 @@ export class TranchesDeployments {
         };
     }
 
+    async ensureConfigManager() {
+        let { cdo, acm } = await this.ensureEthenaCDO();
+        let owner = this.accounts.timelock.admin;
+        let { contract: configManager } = await this.ds.ensureWithProxy(TwoStepConfigManager, {
+            id: 'USDeConfigManager',
+            arguments: [cdo.address],
+            initialize: []
+        });
+
+        await this.ds.configure(cdo, {
+            title: `Set Two-Step Config Manager`,
+            async shouldUpdate() {
+                return $address.eq(await cdo.twoStepConfigManager(), configManager.address) === false
+            },
+            async updater() {
+                await cdo.$receipt().setTwoStepConfigManager(owner, configManager.address);
+            }
+        });
+
+        await this.ensureRoles({
+            'PROPOSER_CONFIG_ROLE': {
+                [this.accounts.safe.admin.address]: true
+            },
+            'UPDATER_STRAT_CONFIG_ROLE': {
+                [this.accounts.timelock.config.address]: true
+            }
+        });
+
+        return { configManager };
+    }
+
     @memd.deco.memoize()
-    async ensureCooldowns () {
+    async ensureCooldowns() {
         const acm = await this.ensureACM();
         const { contract: erc20Cooldown } = await this.ds.ensureWithProxy(ERC20Cooldown, {
             initialize: [
@@ -229,10 +289,10 @@ export class TranchesDeployments {
 
         let { sUSDe } = await this.ensureEthena();
         const { contractBeaconProxy: sUSDeCooldownRequestImpl } = await this.ds.ensureWithBeacon(SUSDeCooldownRequestImpl, {
-        //const { contract: sUSDeCooldownRequestImpl } = await this.ds.ensureWithProxy(SUSDeCooldownRequestImpl, {
+            //const { contract: sUSDeCooldownRequestImpl } = await this.ds.ensureWithProxy(SUSDeCooldownRequestImpl, {
             id: 'SUSDeCooldownRequestBeacon',
-            arguments: [ sUSDe.address ],
-            initialize: [ $address.ZERO, $address.ZERO ]
+            arguments: [sUSDe.address],
+            initialize: [$address.ZERO, $address.ZERO]
         });
 
         await this.ds.configure(unstakeCooldown, {
@@ -252,8 +312,8 @@ export class TranchesDeployments {
         };
     }
 
-    async ensureFeeds () {
-        const acm  = await this.ensureACM();
+    async ensureFeeds() {
+        const acm = await this.ensureACM();
         const { sUSDe, USDe, sUSDS } = await this.ensureEthena();
         const { contract: sUSDeAprPairProvider } = await this.ds.ensure(SUSDeAprPairProvider, {
             arguments: [
@@ -281,7 +341,7 @@ export class TranchesDeployments {
             CURRENT_PROVIDER = aaveAprPairProvider.address;
         }
 
-        const stalePeriodAfter =  $date.parseTimespan(this.platform.Feed.stalePeriodAfter, { get: 's' });
+        const stalePeriodAfter = $date.parseTimespan(this.platform.Feed.stalePeriodAfter, { get: 's' });
         const { contract: feed } = await this.ds.ensureWithProxy(AprPairFeed, {
             id: 'sUSDeAprFeeds',
             initialize: [
@@ -312,7 +372,7 @@ export class TranchesDeployments {
     }
 
     @memd.deco.memoize()
-    async ensureEthenaCDO () {
+    async ensureEthenaCDO() {
         const { USDe, sUSDe, pUSDe, } = await this.ensureEthena();
 
         const acm = await this.ensureACM();
@@ -320,7 +380,7 @@ export class TranchesDeployments {
 
         const { contract: cdo } = await this.ds.ensureWithProxy(StrataCDO, {
             id: 'USDeCDO',
-            arguments: [ ],
+            arguments: [],
             initialize: [
                 this.owner.address,
                 acm.address,
@@ -387,7 +447,7 @@ export class TranchesDeployments {
         return output;
     }
 
-    async ensureAccounting (cdo: TEth.Address) {
+    async ensureAccounting(cdo: TEth.Address) {
         const acm = await this.ensureACM();
         const { feed } = await this.ensureFeeds();
         const { contract: accounting } = await this.ds.ensureWithProxy(Accounting, {
@@ -402,7 +462,7 @@ export class TranchesDeployments {
         return accounting;
     }
 
-    async configure (info: typeof Tranches['ethena'], contracts: {
+    async configure(info: typeof Tranches['ethena'], contracts: {
         acm: AccessControlManager,
         jrtVault: Tranche,
         srtVault: Tranche,
@@ -442,7 +502,7 @@ export class TranchesDeployments {
         await this.setTrancheActions(cdo, srtVault, info, 'srt');
     }
 
-    async setTrancheActions (cdo: StrataCDO, tranche: Tranche, info: typeof Tranches['ethena'], type: 'srt' | 'jrt') {
+    async setTrancheActions(cdo: StrataCDO, tranche: Tranche, info: typeof Tranches['ethena'], type: 'srt' | 'jrt') {
         let actions = type === 'jrt'
             ? await cdo.actionsJrt()
             : await cdo.actionsSrt();
@@ -461,8 +521,8 @@ export class TranchesDeployments {
         }
     }
 
-    async setCooldown (strategy: SUSDeStrategy, info: typeof Tranches['ethena']) {
-        let cooldowns = [ info.jrt.sUSDeCooldown, info.srt.sUSDeCooldown]
+    async setCooldown(strategy: SUSDeStrategy, info: typeof Tranches['ethena']) {
+        let cooldowns = [info.jrt.sUSDeCooldown, info.srt.sUSDeCooldown]
             .map(mix => {
                 if (typeof mix === 'string') {
                     return $date.parseTimespan(mix, { get: 's' });
@@ -490,14 +550,14 @@ export class TranchesDeployments {
         });
     }
 
-    private async initialDeposit (tranches: { jrtVault: Tranche, srtVault: Tranche, cdo: StrataCDO }) {
+    private async initialDeposit(tranches: { jrtVault: Tranche, srtVault: Tranche, cdo: StrataCDO }) {
         let { USDe } = await this.ensureEthena();
         let { jrtVault, srtVault, cdo } = tranches;
 
         if (this.owner.type === 'safe') {
             throw new Error(`Mainnet deployment not ready`);
         }
-        const AMOUNT = 20n * 10n**18n;
+        const AMOUNT = 20n * 10n ** 18n;
         let balance = await USDe.balanceOf(this.owner.address);
         if (balance < AMOUNT) {
             if (this.client.network === 'hardhat' || this.client.network === 'hoodi') {
@@ -522,12 +582,12 @@ export class TranchesDeployments {
             false,
         );
     }
-    private async initialDepositAtomic (tranches: { jrtVault: Tranche, srtVault: Tranche, cdo: StrataCDO }) {
+    private async initialDepositAtomic(tranches: { jrtVault: Tranche, srtVault: Tranche, cdo: StrataCDO }) {
         let { USDe } = await this.ensureEthena();
         let { jrtVault, srtVault, cdo } = tranches;
 
 
-        const AMOUNT = 40n * 10n**18n;
+        const AMOUNT = 40n * 10n ** 18n;
         let balance = await USDe.balanceOf(this.owner.address);
         if (balance < AMOUNT) {
             throw new Error(`Not enough balance for initial deposit.`);
@@ -560,7 +620,7 @@ export class TranchesDeployments {
         await tx.wait();
     }
 
-    async ensureDepositor () {
+    async ensureDepositor() {
         let acm = await this.ensureACM();
         let { pUSDe } = await this.ensureEthena();
         let { cdo, jrtVault, USDe } = await this.ensureEthenaCDO();
@@ -576,7 +636,7 @@ export class TranchesDeployments {
 
         let status = await depositor.tranches(jrtVault.address, USDe.address);
         if (status == false) {
-            await depositor.$receipt().addCdo(this.owner,cdo.address);
+            await depositor.$receipt().addCdo(this.owner, cdo.address);
         }
 
         if (pUSDe) {
@@ -588,11 +648,11 @@ export class TranchesDeployments {
         return depositor;
     }
 
-    public isTestnet () {
+    public isTestnet() {
         return this.client.platform !== 'eth';
     }
 
-    async ensureLenses () {
+    async ensureLenses() {
         let { contract: cdoLens } = await this.ds.ensureWithProxy(CDOLens, {
             initialize: [
                 this.owner.address

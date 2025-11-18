@@ -6,6 +6,7 @@ import { Web3Client } from 'dequanto/clients/Web3Client';
 import { TEth } from 'dequanto/models/TEth';
 import { $sig } from 'dequanto/utils/$sig';
 import { HardhatWeb3Client } from 'dequanto/hardhat/HardhatWeb3Client';
+import { TwoStepConfigManager } from '@0xc/hardhat/TwoStepConfigManager/TwoStepConfigManager';
 
 
 
@@ -47,6 +48,7 @@ export namespace $hh {
         ethena: Awaited<ReturnType<TranchesDeployments['ensureEthena']>>;
         deployer: TEth.IAccount
         depositor: Awaited<ReturnType<TranchesDeployments['ensureDepositor']>>
+        configManager: TwoStepConfigManager;
 
         @memd.deco.memoize()
         async init () {
@@ -55,7 +57,12 @@ export namespace $hh {
             const deployer = await hh.deployer(0);
             const depl = new TranchesDeployments({
                 client,
-                deployer
+                deployer,
+                accounts: {
+                    deployer: deployer,
+                    safe: { admin: deployer, operator: deployer },
+                    timelock: { admin: deployer, config: deployer },
+                }
             });
 
             this.client = client;
@@ -76,6 +83,9 @@ export namespace $hh {
             this.ethena = await this.factory.ensureEthena();
             this.tranches = await this.factory.ensureEthenaCDO();
             this.depositor = await this.factory.ensureDepositor();
+            let { configManager } = await this.factory.ensureConfigManager();
+            this.configManager = configManager;
+
             await this.snapshot();
             return {
                 ...this.tranches,

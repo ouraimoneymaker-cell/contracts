@@ -14,13 +14,13 @@ import { AccessControlled } from "../governance/AccessControlled.sol";
 import { IErrors } from "./interfaces/IErrors.sol";
 import { ITranche } from "./interfaces/ITranche.sol";
 import { IStrategy } from "./interfaces/IStrategy.sol";
-import { IStrataCDO } from "./interfaces/IStrataCDO.sol";
+import { IStrataCDO, IStrataCDOSetters } from "./interfaces/IStrataCDO.sol";
 import { TActionState } from "./structs/TActionState.sol";
 import { IAccounting } from "./interfaces/IAccounting.sol";
 
 /// @notice Core CDO contract that orchestrates Tranches, Accounting, and Strategy
 /// @dev Manages deposits, withdrawals, and asset distribution between tranches
-contract StrataCDO is IErrors, IStrataCDO, AccessControlled {
+contract StrataCDO is IErrors, IStrataCDO, IStrataCDOSetters, AccessControlled {
 
     /// @dev Accounting contract for managing asset flows and TVL redistribution
     /// @notice This contract handles the calculation of asset distribution between tranches based on target APRs
@@ -291,13 +291,13 @@ contract StrataCDO is IErrors, IStrataCDO, AccessControlled {
         }
     }
 
-    /// @notice Sets action states for the tranche; zero address affects both tranches
-    function setExitFees (uint256 feeJrt, uint256 feeSrt) external onlyOwner {
+    /// @notice Sets the exit fees for the junior and senior tranches.
+    /// @dev This method is only callable by the TwoStepConfigManager. Please see {twoStepConfigManager} for more details.
+    function setExitFees (uint256 feeJrt, uint256 feeSrt) external onlyTwoStepConfigManager {
         require(feeJrt <= 0.01e18, "InvalidJrtFee");
         require(feeSrt <= 0.01e18, "InvalidSrtFee");
         exitFeeJrt = feeJrt;
         exitFeeSrt = feeSrt;
-
         emit ExitFeesSet(feeJrt, feeSrt);
     }
 

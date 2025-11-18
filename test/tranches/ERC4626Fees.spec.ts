@@ -5,14 +5,19 @@ import { $require } from 'dequanto/utils/$require';
 import { $bigint } from 'dequanto/utils/$bigint';
 import { $promise } from 'dequanto/utils/$promise';
 import { l } from 'dequanto/utils/$logger';
+import { $date } from 'dequanto/utils/$date';
+import { IPlatformAccounts } from '@s/platforms/IPlatform';
+import { TwoStepConfigManager } from '@0xc/hardhat/TwoStepConfigManager/TwoStepConfigManager';
+import { StrataCDO } from '@0xc/hardhat/StrataCDO/StrataCDO';
 
 await $hh.test.deploy();
 
 let { deployer } = $hh.test;
+let { accounts } = $hh.test.factory;
 
 UAction.create({
     async $before () {
-        let { sUSDe, USDe, strategy, jrtVault } = $hh.test.tranches;
+        let { sUSDe, strategy, jrtVault } = $hh.test.tranches;
 
         // Disable default cooldowns
         await sUSDe.$receipt().setCooldownDuration(deployer, 0);
@@ -29,7 +34,8 @@ UAction.create({
         await $hh.test.reset();
     },
     async 'ERC4626::withdrawal fee' () {
-        let { jrtVault, srtVault, cdo, USDe, sUSDe, acm, accounting } = $hh.test.tranches;
+        let { jrtVault, cdo, USDe, accounting } = $hh.test.tranches;
+        let { configManager } = $hh.test;
 
         // Deposit initial
         let alice = await $hh.test.createAccount('alice');
@@ -41,7 +47,8 @@ UAction.create({
         l`No fee, max withdraw 1000$`;
         $require.eq(await jrtVault.maxWithdraw(alice.address), $bigint.toWei(1000));
         $require.eq(await jrtVault.maxRedeem(alice.address), aliceTotalShares);
-        await cdo.$receipt().setExitFees(deployer, BigInt(0.01e18), BigInt(0.01e18));
+
+        await ConfigManagerTest.setExitFees(accounts, configManager, cdo, BigInt(0.01e18), BigInt(0.01e18));
 
         l`::previewRedeem (1%: deposited 1000, redeem 990)`;
         let shares = await jrtVault.balanceOf(alice.address);
@@ -116,13 +123,15 @@ UAction.create({
         });
     },
     async 'ERC4626::withdrawal fee with retention' () {
-        let { jrtVault, srtVault, cdo, USDe, sUSDe, acm, accounting } = $hh.test.tranches;
+
+        let { jrtVault, cdo, accounting } = $hh.test.tranches;
+        let { configManager } = $hh.test;
 
         // Deposit initial
         let alice = await $hh.test.createAccount('alice');
 
         await $erc4626.deposit(jrtVault, alice, 1000);
-        await cdo.$receipt().setExitFees(deployer, BigInt(0.01e18), BigInt(0.01e18));
+        await ConfigManagerTest.setExitFees(accounts, configManager, cdo, BigInt(0.01e18), BigInt(0.01e18));
 
         await $hh.test.snapshot('fees-retention-alice');
         return UTest.create({
@@ -157,13 +166,13 @@ UAction.create({
         });
     },
     async 'ERC4626:: reserve distribution' () {
-        let { jrtVault, srtVault, cdo, USDe, sUSDe, acm, accounting } = $hh.test.tranches;
-
+        let { jrtVault, cdo, accounting } = $hh.test.tranches;
+        let { configManager } = $hh.test;
         // Deposit initial
         let alice = await $hh.test.createAccount('alice');
 
         await $erc4626.deposit(jrtVault, alice, 1000);
-        await cdo.$receipt().setExitFees(deployer, BigInt(0.01e18), BigInt(0.01e18));
+        await ConfigManagerTest.setExitFees(accounts, configManager, cdo, BigInt(0.01e18), BigInt(0.01e18));
 
         await $hh.test.snapshot('fees-distribution-alice');
         return UTest.create({
@@ -187,6 +196,67 @@ UAction.create({
             }
         });
     },
+    async 'should cancel fee' () {
+        let { cdo } = $hh.test.tranches;
+        let { configManager } = $hh.test;
+        await ConfigManagerTest.scheduleExitFees(accounts, configManager, cdo, BigInt(0.005e18), BigInt(0.04e5));
+        await ConfigManagerTest.cancelExitFees(accounts, configManager);
+    }
 })
 
 
+namespace ConfigManagerTest {
+
+    export async function scheduleExitFees (
+        accounts: IPlatformAccounts
+        , configManager: TwoStepConfigManager
+        , cdo: StrataCDO
+        , feeJrt: bigint
+        , feeSrt: bigint) {
+        const { deployer } = accounts;
+        const delay = $date.parseTimespan('1day', { get: 's' });
+        const txSchedule = await configManager.$receipt().scheduleExitFeeChange(deployer, feeJrt, feeSrt, BigInt(delay));
+        const pendingChange = await configManager.pendingExitFeeChange();
+        const scheduleLogs = configManager.extractLogsExitFeeChangeScheduled(txSchedule.receipt);
+        $require.eq(scheduleLogs.length, 1);
+        $require.eq(scheduleLogs[0].params.feeJrt, feeJrt);
+        $require.eq(scheduleLogs[0].params.feeSrt, feeSrt);
+        $require.eq(pendingChange.feeJrt, feeJrt);
+        $require.eq(pendingChange.feeSrt, feeSrt);
+    }
+
+    export async function cancelExitFees (
+        accounts: IPlatformAccounts
+        , configManager: TwoStepConfigManager) {
+        const { deployer } = accounts;
+        const txCancel = await configManager.$receipt().cancelExitFeeChange(deployer);
+        const cancelLogs = configManager.extractLogsExitFeeChangeCancelled(txCancel.receipt);
+        $require.eq(cancelLogs.length, 1);
+
+        const pendingChange = await configManager.pendingExitFeeChange();
+        $require.eq(pendingChange.feeJrt, 0n);
+        $require.eq(pendingChange.feeSrt, 0n);
+        $require.eq(pendingChange.executeAfter, 0);
+    }
+
+
+    export async function setExitFees (
+        accounts: IPlatformAccounts
+        , configManager: TwoStepConfigManager
+        , cdo: StrataCDO
+        , feeJrt: bigint
+        , feeSrt: bigint) {
+        const { deployer } = accounts;
+
+        await scheduleExitFees(accounts, configManager, cdo, feeJrt, feeSrt);
+
+        await configManager.client.debug.mine('2days');
+        const txExec = await configManager.$receipt().executeExitFeeChange(deployer);
+        const execLogs = configManager.extractLogsExitFeeChangeExecuted(txExec.receipt);
+        $require.eq(execLogs.length, 1);
+        $require.eq(execLogs[0].params.feeJrt, feeJrt);
+        $require.eq(execLogs[0].params.feeSrt, feeSrt);
+        $require.eq(await cdo.exitFeeJrt(), feeJrt, `Exit fee JRT not updated`);
+        $require.eq(await cdo.exitFeeSrt(), feeSrt, `Exit fee SRT not updated`);
+    }
+}

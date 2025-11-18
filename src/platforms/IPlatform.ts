@@ -21,3 +21,15 @@ export interface IPlatform {
         }
     }>
 }
+
+export interface IPlatformAccounts {
+    deployer: TEth.IAccount
+    safe: {
+        admin: TEth.IAccount
+        operator: TEth.IAccount
+    }
+    timelock: {
+        admin: TEth.IAccount
+        config: TEth.IAccount
+    }
+}

@@ -12,9 +12,16 @@
       {
         "slot": 1,
         "position": 0,
+        "name": "twoStepConfigManager",
+        "size": 160,
+        "type": "address"
+      },
+      {
+        "slot": 2,
+        "position": 0,
         "name": "__gap",
-        "size": 12544,
-        "type": "uint256[49]"
+        "size": 12288,
+        "type": "uint256[48]"
       },
       {
         "slot": 50,
@@ -71,6 +78,20 @@
         "name": "jrtShortfallPausePrice",
         "size": 256,
         "type": "uint256"
+      },
+      {
+        "slot": 58,
+        "position": 0,
+        "name": "exitFeeJrt",
+        "size": 256,
+        "type": "uint256"
+      },
+      {
+        "slot": 59,
+        "position": 0,
+        "name": "exitFeeSrt",
+        "size": 256,
+        "type": "uint256"
       }
     ]
   },
@@ -87,9 +108,16 @@
       {
         "slot": 1,
         "position": 0,
+        "name": "twoStepConfigManager",
+        "size": 160,
+        "type": "address"
+      },
+      {
+        "slot": 2,
+        "position": 0,
         "name": "__gap",
-        "size": 12544,
-        "type": "uint256[49]"
+        "size": 12288,
+        "type": "uint256[48]"
       },
       {
         "slot": 50,
@@ -120,9 +148,16 @@
       {
         "slot": 1,
         "position": 0,
+        "name": "twoStepConfigManager",
+        "size": 160,
+        "type": "address"
+      },
+      {
+        "slot": 2,
+        "position": 0,
         "name": "__gap",
-        "size": 12544,
-        "type": "uint256[49]"
+        "size": 12288,
+        "type": "uint256[48]"
       },
       {
         "slot": 50,
@@ -200,9 +235,16 @@
       {
         "slot": 1,
         "position": 0,
+        "name": "twoStepConfigManager",
+        "size": 160,
+        "type": "address"
+      },
+      {
+        "slot": 2,
+        "position": 0,
         "name": "__gap$",
-        "size": 12544,
-        "type": "uint256[49]"
+        "size": 12288,
+        "type": "uint256[48]"
       },
       {
         "slot": 50,
@@ -261,9 +303,16 @@
       {
         "slot": 1,
         "position": 0,
+        "name": "twoStepConfigManager",
+        "size": 160,
+        "type": "address"
+      },
+      {
+        "slot": 2,
+        "position": 0,
         "name": "__gap",
-        "size": 12544,
-        "type": "uint256[49]"
+        "size": 12288,
+        "type": "uint256[48]"
       },
       {
         "slot": 50,
@@ -329,9 +378,16 @@
       {
         "slot": 1,
         "position": 0,
+        "name": "twoStepConfigManager",
+        "size": 160,
+        "type": "address"
+      },
+      {
+        "slot": 2,
+        "position": 0,
         "name": "__gap$",
-        "size": 12544,
-        "type": "uint256[49]"
+        "size": 12288,
+        "type": "uint256[48]"
       },
       {
         "slot": 50,
@@ -458,6 +514,20 @@
         "name": "minimumJrtSrtRatioBuffer",
         "size": 256,
         "type": "uint256"
+      },
+      {
+        "slot": 116,
+        "position": 0,
+        "name": "feeJrtRetentionBps",
+        "size": 256,
+        "type": "uint256"
+      },
+      {
+        "slot": 117,
+        "position": 0,
+        "name": "feeSrtRetentionBps",
+        "size": 256,
+        "type": "uint256"
       }
     ]
   },
@@ -474,9 +544,16 @@
       {
         "slot": 1,
         "position": 0,
+        "name": "twoStepConfigManager",
+        "size": 160,
+        "type": "address"
+      },
+      {
+        "slot": 2,
+        "position": 0,
         "name": "__gap$",
-        "size": 12544,
-        "type": "uint256[49]"
+        "size": 12288,
+        "type": "uint256[48]"
       },
       {
         "slot": 50,
@@ -507,9 +584,16 @@
       {
         "slot": 1,
         "position": 0,
+        "name": "twoStepConfigManager",
+        "size": 160,
+        "type": "address"
+      },
+      {
+        "slot": 2,
+        "position": 0,
         "name": "__gap$",
-        "size": 12544,
-        "type": "uint256[49]"
+        "size": 12288,
+        "type": "uint256[48]"
       },
       {
         "slot": 50,
@@ -601,9 +685,16 @@
       {
         "slot": 1,
         "position": 0,
+        "name": "twoStepConfigManager",
+        "size": 160,
+        "type": "address"
+      },
+      {
+        "slot": 2,
+        "position": 0,
         "name": "__gap",
-        "size": 12544,
-        "type": "uint256[49]"
+        "size": 12288,
+        "type": "uint256[48]"
       },
       {
         "slot": 50,
@@ -625,6 +716,39 @@
         "name": "tranches",
         "size": null,
         "type": "mapping(address => mapping(address => bool))"
+      }
+    ]
+  },
+  {
+    "id": "USDeConfigManagerProxy",
+    "slots": [
+      {
+        "slot": 0,
+        "position": 0,
+        "name": "acm",
+        "size": 160,
+        "type": "address"
+      },
+      {
+        "slot": 1,
+        "position": 0,
+        "name": "twoStepConfigManager",
+        "size": 160,
+        "type": "address"
+      },
+      {
+        "slot": 2,
+        "position": 0,
+        "name": "__gap",
+        "size": 12288,
+        "type": "uint256[48]"
+      },
+      {
+        "slot": 50,
+        "position": 0,
+        "name": "pendingExitFeeChange",
+        "size": 576,
+        "type": "(uint256 feeJrt, uint256 feeSrt, uint64 executeAfter)"
       }
     ]
   }

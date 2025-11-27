@@ -252,7 +252,7 @@ export class TranchesDeployments {
         await this.ds.configure(cdo, {
             title: `Set Two-Step Config Manager`,
             async shouldUpdate() {
-                return $address.eq(await cdo.twoStepConfigManager(), configManager.address) === false
+                    return $address.eq(await cdo.twoStepConfigManager(), configManager.address) === false
             },
             async updater() {
                 await cdo.$receipt().setTwoStepConfigManager(owner, configManager.address);
@@ -482,9 +482,8 @@ export class TranchesDeployments {
             feed,
         } = contracts;
 
-        //$require.eq(this.ds.client.platform, 'hardhat', 'Mainnet configuration must be set atomic via multisig');
-
-        await this.addRoles();
+        // @TODO extract all roles
+        // await this.addRoles();
 
         await this.ensureRole($contract.keccak256('UPDATER_CDO_APR_ROLE'), feed.address);
         await this.setCooldown(strategy, info);
@@ -632,7 +631,8 @@ export class TranchesDeployments {
             ]
         });
 
-        await this.ensureRole($contract.keccak256('DEPOSITOR_CONFIG_ROLE'), this.owner.address);
+        // @TODO extract all roles
+        // await this.ensureRole($contract.keccak256('DEPOSITOR_CONFIG_ROLE'), this.owner.address);
 
         let status = await depositor.tranches(jrtVault.address, USDe.address);
         if (status == false) {

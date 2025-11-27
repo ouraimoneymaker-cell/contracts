@@ -29,15 +29,25 @@
     "id": "USDeCDO",
     "name": "StrataCDO",
     "main": "./0xc/hardhat/StrataCDO/StrataCDO.ts",
-    "bytecodeHash": "0x778601a72ee9972d5a18f58d3e9c38fac27b686678c4b2513806804fb0983ec9",
+    "bytecodeHash": "0xb838054c567b030f191fed9589a5aaf42142859e012d736d65d3e66d0d661398",
     "address": "0x43f4852c0533FfD3f3Ea3b6d9789536714e178Be",
-    "block": 1321765,
-    "tx": "0x06125bf264a6be8e979ca38f51577afa5535e5e3016d5e5d5b0b2da61c46f2ae",
-    "gas": "1951976",
+    "block": 1699299,
+    "tx": "0xc6add88a6e4201224b697adb248766e538c822507c85957ea6832a1b10661837",
+    "gas": "2231098",
     "deployer": "0xB878F43161E20AD229896c830ff478Db95a2dBb5",
-    "timestamp": 1759259677,
-    "implementation": "0x034cE70942934e91DC318349b6fFDbe90175dB51",
-    "verified": "2025-09-30T19:18:59.120Z"
+    "timestamp": 1764149079,
+    "implementation": "0x876a2D1224aBD98f3119030d5a16Cf7743b2D7DF",
+    "verified": "2025-11-26T09:24:55.105Z",
+    "history": [
+      {
+        "main": "./0xc/hardhat/StrataCDO/StrataCDO.ts",
+        "address": "0x034cE70942934e91DC318349b6fFDbe90175dB51",
+        "block": 1321765,
+        "tx": "0x06125bf264a6be8e979ca38f51577afa5535e5e3016d5e5d5b0b2da61c46f2ae",
+        "gas": "1951976",
+        "verified": "2025-09-30T19:18:59.120Z"
+      }
+    ]
   },
   {
     "id": "USDeCDOProxy",
@@ -50,7 +60,7 @@
     "gas": "678738",
     "deployer": "0xB878F43161E20AD229896c830ff478Db95a2dBb5",
     "timestamp": 1759259689,
-    "proxyFor": "0x034cE70942934e91DC318349b6fFDbe90175dB51",
+    "proxyFor": "0x876a2D1224aBD98f3119030d5a16Cf7743b2D7DF",
     "verified": "2025-09-30T19:57:18.305Z"
   },
   {
@@ -68,15 +78,15 @@
     "id": "ERC20Cooldown",
     "name": "ERC20Cooldown",
     "main": "./0xc/hardhat/ERC20Cooldown/ERC20Cooldown.ts",
-    "bytecodeHash": "0x90064f3bc4c89291927e9c401a3ac5a4813644ba16c9a36508683c8d30e46445",
+    "bytecodeHash": "0x1f497ee55cc6299bd5ea4b32879268e6d426b66d611870519df7c4be1db8c39d",
     "address": "0xB1675F63d3e549B18277E9bbc561Af63e0c85d62",
-    "block": 1358875,
-    "tx": "0x5885c68a6dc7c5e9e9cfa07f72c92a5f1389d58e07931e80dfe212f0a6d07903",
-    "gas": "1208192",
+    "block": 1700939,
+    "tx": "0x4ccb2cd34d2fd922469ee372908729d57f1bce97cb63c914af1f48ba47cf7b5c",
+    "gas": "1259132",
     "deployer": "0xB878F43161E20AD229896c830ff478Db95a2dBb5",
-    "timestamp": 1759747488,
-    "implementation": "0xc3542d749957207b3677fD78ec85d9A911d4e912",
-    "verified": "2025-10-06T10:46:47.402Z",
+    "timestamp": 1764170210,
+    "implementation": "0xaecAF7CFAACf55cf0108b616a8Bde0403fE17e7c",
+    "verified": "2025-11-26T15:18:44.239Z",
     "history": [
       {
         "main": "./0xc/hardhat/ERC20Cooldown/ERC20Cooldown.ts",
@@ -85,6 +95,14 @@
         "tx": "0xae713227e5c7263e51f7d016522415cc2cf43a0557040c4a6f3994a040723608",
         "gas": "1202759",
         "verified": "2025-09-30T19:19:11.140Z"
+      },
+      {
+        "main": "./0xc/hardhat/ERC20Cooldown/ERC20Cooldown.ts",
+        "address": "0xc3542d749957207b3677fD78ec85d9A911d4e912",
+        "block": 1358875,
+        "tx": "0x5885c68a6dc7c5e9e9cfa07f72c92a5f1389d58e07931e80dfe212f0a6d07903",
+        "gas": "1208192",
+        "verified": "2025-10-06T10:46:47.402Z"
       }
     ]
   },
@@ -99,7 +117,7 @@
     "gas": "656817",
     "deployer": "0xB878F43161E20AD229896c830ff478Db95a2dBb5",
     "timestamp": 1759259725,
-    "proxyFor": "0xc3542d749957207b3677fD78ec85d9A911d4e912",
+    "proxyFor": "0xaecAF7CFAACf55cf0108b616a8Bde0403fE17e7c",
     "verified": "2025-09-30T19:58:18.583Z"
   },
   {
@@ -117,15 +135,15 @@
     "id": "UnstakeCooldown",
     "name": "UnstakeCooldown",
     "main": "./0xc/hardhat/UnstakeCooldown/UnstakeCooldown.ts",
-    "bytecodeHash": "0x557f53000da6795c3cd4faf9399d735a707dd3aeeaf4b6338b22e9a5d1c31b4a",
+    "bytecodeHash": "0x3567170b9fb9c5676d9ceaa4a13e468388d666923596bb370b906ee1a08ed41a",
     "address": "0xfebAA176ab20DC3DC7EC4fAe8e45C44a5a821c06",
-    "block": 1358877,
-    "tx": "0xd248a833cf9e081aaf46ac012275a6b73de25d1133dd1113ba3d4303666844f5",
-    "gas": "1579060",
+    "block": 1700942,
+    "tx": "0xb21d532c75c7f787ec2ce15fa8e8011ee90acefb575f86ac8ce4e9f5c229c608",
+    "gas": "1634127",
     "deployer": "0xB878F43161E20AD229896c830ff478Db95a2dBb5",
-    "timestamp": 1759747525,
-    "implementation": "0x6F23FBA7C646908c4FE0549f1Fbd1aC21a325c01",
-    "verified": "2025-10-06T10:46:58.394Z",
+    "timestamp": 1764170246,
+    "implementation": "0x1457E1b775A8EBdBB0aA2611C8691A92F3b4e272",
+    "verified": "2025-11-26T15:18:55.753Z",
     "history": [
       {
         "main": "./0xc/hardhat/UnstakeCooldown/UnstakeCooldown.ts",
@@ -134,6 +152,14 @@
         "tx": "0x364f0008b5201cab7cb095bf40d5d1b14c828b1238539942ba2899597b0ca281",
         "gas": "1579036",
         "verified": "2025-09-30T19:19:22.440Z"
+      },
+      {
+        "main": "./0xc/hardhat/UnstakeCooldown/UnstakeCooldown.ts",
+        "address": "0x6F23FBA7C646908c4FE0549f1Fbd1aC21a325c01",
+        "block": 1358877,
+        "tx": "0xd248a833cf9e081aaf46ac012275a6b73de25d1133dd1113ba3d4303666844f5",
+        "gas": "1579060",
+        "verified": "2025-10-06T10:46:58.394Z"
       }
     ]
   },
@@ -148,7 +174,7 @@
     "gas": "656927",
     "deployer": "0xB878F43161E20AD229896c830ff478Db95a2dBb5",
     "timestamp": 1759259761,
-    "proxyFor": "0x6F23FBA7C646908c4FE0549f1Fbd1aC21a325c01",
+    "proxyFor": "0x1457E1b775A8EBdBB0aA2611C8691A92F3b4e272",
     "verified": "2025-09-30T19:58:34.921Z"
   },
   {
@@ -205,15 +231,15 @@
     "id": "SUSDeStrategy",
     "name": "SUSDeStrategy",
     "main": "./0xc/hardhat/sUSDeStrategy/sUSDeStrategy.ts",
-    "bytecodeHash": "0x2da7728c99405c27e25578dcdf964f367dfae963bd6583d89ebc231bfadfba87",
+    "bytecodeHash": "0xfa53d804296591b3e2c892c234663bdbe6104023eec759373525d48be5273943",
     "address": "0xD071b910Ed7647741658D5f5Ee5861D33E8527C0",
-    "block": 1525479,
-    "tx": "0xfe3b70d3af8711ebce7890f462892a8bf7ccf7c9dabb58a28756a06c45ef0903",
-    "gas": "1575864",
+    "block": 1700944,
+    "tx": "0x936cfb2cf50e9a9d81b3bf2773025c42d71e7e1e39f2c37668eca15e68bb04c6",
+    "gas": "1629371",
     "deployer": "0xB878F43161E20AD229896c830ff478Db95a2dBb5",
-    "timestamp": 1761910847,
-    "implementation": "0x4Ce02d682d134efD2C98E61f854afCFa94186B51",
-    "verified": "2025-10-31T12:38:27.317Z",
+    "timestamp": 1764170269,
+    "implementation": "0xd98dCCDfbDdC5f4C4809aca2D4E406F9deD83cDc",
+    "verified": "2025-11-26T15:19:07.690Z",
     "history": [
       {
         "main": "./0xc/hardhat/sUSDeStrategy/sUSDeStrategy.ts",
@@ -230,6 +256,14 @@
         "tx": "0x80d6d7d39d6cb5a880699dfabe3ad53d2853a127f0f9426fa6622ff88e069c0b",
         "gas": "1571326",
         "verified": "2025-10-07T21:51:23.080Z"
+      },
+      {
+        "main": "./0xc/hardhat/sUSDeStrategy/sUSDeStrategy.ts",
+        "address": "0x4Ce02d682d134efD2C98E61f854afCFa94186B51",
+        "block": 1525479,
+        "tx": "0xfe3b70d3af8711ebce7890f462892a8bf7ccf7c9dabb58a28756a06c45ef0903",
+        "gas": "1575864",
+        "verified": "2025-10-31T12:38:27.317Z"
       }
     ]
   },
@@ -244,7 +278,7 @@
     "gas": "778792",
     "deployer": "0xB878F43161E20AD229896c830ff478Db95a2dBb5",
     "timestamp": 1759260000,
-    "proxyFor": "0x4Ce02d682d134efD2C98E61f854afCFa94186B51",
+    "proxyFor": "0xd98dCCDfbDdC5f4C4809aca2D4E406F9deD83cDc",
     "verified": "2025-09-30T19:58:51.294Z"
   },
   {
@@ -275,15 +309,15 @@
     "id": "sUSDeAprFeeds",
     "name": "AprPairFeed",
     "main": "./0xc/hardhat/AprPairFeed/AprPairFeed.ts",
-    "bytecodeHash": "0x2540e2f95679419d05cea3fc94464538a3f1425ed73b1eb57ad8b893f94239eb",
+    "bytecodeHash": "0x9895b9f7d6cb79bb3288c579396d4d2ec65c2bfb1c2f8b80a88a120d05b68cb5",
     "address": "0x048d649912c0a3ACC177e02313AD81C4b5602c7E",
-    "block": 1332446,
-    "tx": "0xd0c9047f86e7572a46a437d98e78f830db66f62cd796ae8711a859dfd48294d2",
-    "gas": "1394763",
+    "block": 1702868,
+    "tx": "0xaf9e04d73c43eaeedfa6f9d2297fb7526a63b849780abede672ee1300babeb82",
+    "gas": "1447912",
     "deployer": "0xB878F43161E20AD229896c830ff478Db95a2dBb5",
-    "timestamp": 1759397989,
-    "implementation": "0x937F27c27906cEaf305802A0F34861Ef25809fEe",
-    "verified": "2025-10-02T09:40:00.654Z",
+    "timestamp": 1764195085,
+    "implementation": "0xFB00829A2e7d4A3b48c27BE4BBe56D59a97Bc350",
+    "verified": "2025-11-26T22:12:25.604Z",
     "history": [
       {
         "main": "./0xc/hardhat/AprPairFeed/AprPairFeed.ts",
@@ -292,6 +326,14 @@
         "tx": "0x4efa1c2e1006155a6a484a08553e8a7e5ee068abf6226148de8c6278807da43a",
         "gas": "1380703",
         "verified": "2025-09-30T19:21:42.257Z"
+      },
+      {
+        "main": "./0xc/hardhat/AprPairFeed/AprPairFeed.ts",
+        "address": "0x937F27c27906cEaf305802A0F34861Ef25809fEe",
+        "block": 1332446,
+        "tx": "0xd0c9047f86e7572a46a437d98e78f830db66f62cd796ae8711a859dfd48294d2",
+        "gas": "1394763",
+        "verified": "2025-10-02T09:40:00.654Z"
       }
     ]
   },
@@ -306,7 +348,7 @@
     "gas": "725588",
     "deployer": "0xB878F43161E20AD229896c830ff478Db95a2dBb5",
     "timestamp": 1759260049,
-    "proxyFor": "0x937F27c27906cEaf305802A0F34861Ef25809fEe",
+    "proxyFor": "0xFB00829A2e7d4A3b48c27BE4BBe56D59a97Bc350",
     "verified": "2025-09-30T19:59:08.629Z"
   },
   {
@@ -324,15 +366,15 @@
     "id": "USDeAccounting",
     "name": "Accounting",
     "main": "./0xc/hardhat/Accounting/Accounting.ts",
-    "bytecodeHash": "0x9eb5e75a33fb56260c3e8d60a0c7fcc90f40a10be74054202693a29595015147",
+    "bytecodeHash": "0x68cfa988385e13b10f6b0f1a8a6df6b186eceb062e0c196637f838255f18eadf",
     "address": "0xA757CE8f55C592008B908A996470Bbfd8875A65d",
-    "block": 1525481,
-    "tx": "0xaf8b31809916c3aa0f3138f4925979177567958fae6da4066365ed42ba6a8b20",
-    "gas": "2305181",
+    "block": 1702870,
+    "tx": "0x5fc1bca68e2e8f580a87525d9be800c65c498fa88d4c3380acc0ac186608c68b",
+    "gas": "2507575",
     "deployer": "0xB878F43161E20AD229896c830ff478Db95a2dBb5",
-    "timestamp": 1761910871,
-    "implementation": "0x1d1224cc81F0221319E5E5e2CfEEd54Ddb50Bc80",
-    "verified": "2025-10-31T11:41:24.803Z",
+    "timestamp": 1764195117,
+    "implementation": "0x981DD1ef018228DD225249D603db85E504B5878D",
+    "verified": "2025-11-26T22:12:10.731Z",
     "history": [
       {
         "main": "./0xc/hardhat/Accounting/Accounting.ts",
@@ -349,6 +391,14 @@
         "tx": "0x19766b466339c31a62a4dbbbe5a0e29cd41d18d2a6aa6aa1941be98d86e7bf6b",
         "gas": "2315328",
         "verified": "2025-10-06T10:47:11.149Z"
+      },
+      {
+        "main": "./0xc/hardhat/Accounting/Accounting.ts",
+        "address": "0x1d1224cc81F0221319E5E5e2CfEEd54Ddb50Bc80",
+        "block": 1525481,
+        "tx": "0xaf8b31809916c3aa0f3138f4925979177567958fae6da4066365ed42ba6a8b20",
+        "gas": "2305181",
+        "verified": "2025-10-31T11:41:24.803Z"
       }
     ]
   },
@@ -363,7 +413,7 @@
     "gas": "857408",
     "deployer": "0xB878F43161E20AD229896c830ff478Db95a2dBb5",
     "timestamp": 1759260085,
-    "proxyFor": "0x1d1224cc81F0221319E5E5e2CfEEd54Ddb50Bc80",
+    "proxyFor": "0x981DD1ef018228DD225249D603db85E504B5878D",
     "verified": "2025-09-30T19:59:21.064Z"
   },
   {
@@ -381,15 +431,33 @@
     "id": "USDeJrt",
     "name": "Tranche",
     "main": "./0xc/hardhat/Tranche/Tranche.ts",
-    "bytecodeHash": "0xf45510f566a93d43d9b3a1a9d16f721b601495ba7b5eeed5419cc66a24bb4a04",
+    "bytecodeHash": "0x96db2e5506aa5f478477266be69fff1a85ff8051a6220176d36f3d71f8e0c5cf",
     "address": "0xDe367A336cC88b0B2216546595356205e118fD2E",
-    "block": 1321798,
-    "tx": "0xf95a82382c7a832da031f13b4e07203c549631771c2ed07de9a1ad926e847dcf",
-    "gas": "3310212",
+    "block": 1703182,
+    "tx": "0x6b2f59cedeb260088949b59beb132748e2844eabb434e6256f4b2ca9e8c0a842",
+    "gas": "3728385",
     "deployer": "0xB878F43161E20AD229896c830ff478Db95a2dBb5",
-    "timestamp": 1759260110,
-    "implementation": "0xAc57aA1029BC358973AcF6e3F787015266f52442",
-    "verified": "2025-09-30T19:24:01.771Z"
+    "timestamp": 1764199034,
+    "implementation": "0x95D27986eEa13254E26C2AF6A2d9f750dE62D2D1",
+    "history": [
+      {
+        "main": "./0xc/hardhat/Tranche/Tranche.ts",
+        "address": "0xAc57aA1029BC358973AcF6e3F787015266f52442",
+        "block": 1321798,
+        "tx": "0xf95a82382c7a832da031f13b4e07203c549631771c2ed07de9a1ad926e847dcf",
+        "gas": "3310212",
+        "verified": "2025-09-30T19:24:01.771Z"
+      },
+      {
+        "main": "./0xc/hardhat/Tranche/Tranche.ts",
+        "address": "0x22b851663893a29cdb5aD7Aa679e762f1e81fb9A",
+        "block": 1702873,
+        "tx": "0xd77563ce084aabd575a597b34e28c5ab30baf76c376e0272c92f1dde15ed1ed0",
+        "gas": "3777236",
+        "verified": "Fail - Unable to verify. Compiled contract deployment bytecode does NOT match the transaction deployment bytecode."
+      }
+    ],
+    "verified": "2025-11-26T23:18:37.871Z"
   },
   {
     "id": "USDeJrtProxy",
@@ -402,7 +470,7 @@
     "gas": "803218",
     "deployer": "0xB878F43161E20AD229896c830ff478Db95a2dBb5",
     "timestamp": 1759260121,
-    "proxyFor": "0xAc57aA1029BC358973AcF6e3F787015266f52442",
+    "proxyFor": "0x95D27986eEa13254E26C2AF6A2d9f750dE62D2D1",
     "verified": "2025-09-30T19:59:38.433Z"
   },
   {
@@ -420,15 +488,33 @@
     "id": "USDeSrt",
     "name": "Tranche",
     "main": "./0xc/hardhat/Tranche/Tranche.ts",
-    "bytecodeHash": "0xf45510f566a93d43d9b3a1a9d16f721b601495ba7b5eeed5419cc66a24bb4a04",
+    "bytecodeHash": "0x96db2e5506aa5f478477266be69fff1a85ff8051a6220176d36f3d71f8e0c5cf",
     "address": "0xACF9309A6b92C66Ce17Efd31e16828EA2AD9C386",
-    "block": 1321800,
-    "tx": "0x751c2acab343aae0df3d9b19e6150eca94bd107261408a54a3353f6558041d78",
-    "gas": "3310212",
+    "block": 1703184,
+    "tx": "0xca7f2a0f500ae98cef60b2253bed492b26767e97364941bfa02f000dcf407b12",
+    "gas": "3728385",
     "deployer": "0xB878F43161E20AD229896c830ff478Db95a2dBb5",
-    "timestamp": 1759260133,
-    "implementation": "0x7406e82642c12e3FBa9962Ac629fc75E40D871F1",
-    "verified": "2025-09-30T19:24:13.195Z"
+    "timestamp": 1764199058,
+    "implementation": "0x0bA3681aaB8B1c88461880e2C68bf6B19B2F959c",
+    "verified": "2025-11-26T23:18:49.136Z",
+    "history": [
+      {
+        "main": "./0xc/hardhat/Tranche/Tranche.ts",
+        "address": "0x7406e82642c12e3FBa9962Ac629fc75E40D871F1",
+        "block": 1321800,
+        "tx": "0x751c2acab343aae0df3d9b19e6150eca94bd107261408a54a3353f6558041d78",
+        "gas": "3310212",
+        "verified": "2025-09-30T19:24:13.195Z"
+      },
+      {
+        "main": "./0xc/hardhat/Tranche/Tranche.ts",
+        "address": "0xb3454605060C59cB4BfFccA00600a3173b461C79",
+        "block": 1702876,
+        "tx": "0x7ccdf59fbd252af907180b3881a9d270e9d4c6e32a4566924cfe15c10ac7dd6c",
+        "gas": "3777236",
+        "verified": "Fail - Unable to verify. Compiled contract deployment bytecode does NOT match the transaction deployment bytecode."
+      }
+    ]
   },
   {
     "id": "USDeSrtProxy",
@@ -441,7 +527,7 @@
     "gas": "803218",
     "deployer": "0xB878F43161E20AD229896c830ff478Db95a2dBb5",
     "timestamp": 1759260145,
-    "proxyFor": "0x7406e82642c12e3FBa9962Ac629fc75E40D871F1",
+    "proxyFor": "0x0bA3681aaB8B1c88461880e2C68bf6B19B2F959c",
     "verified": "2025-09-30T19:59:56.282Z"
   },
   {
@@ -516,15 +602,25 @@
     "id": "TrancheDepositorV2",
     "name": "TrancheDepositor",
     "main": "./0xc/hardhat/TrancheDepositor/TrancheDepositor.ts",
-    "bytecodeHash": "0xa72f9e17c70ed33f923e9e7cdc4525b91a1b5e71fb9c9a51dc6d873e58cc5255",
+    "bytecodeHash": "0x552adc9b4fb72965a9e70a5b30013baea3ffbcde84f0b476a7b4f76ecc476a3a",
     "address": "0x7624fEa2142CF5A06bBF3fB9EB7256a01EBE0c18",
-    "block": 1525752,
-    "tx": "0x5f0c63bd537435cb9bcfd2131c587a81309f7691b36c1a2ef856029e4e9394d2",
-    "gas": "1793477",
+    "block": 1702878,
+    "tx": "0x5f66e76ccd6f78fc2e06a933d6651f49a0d6d2ebef2df0b04a76d410e19c5f8c",
+    "gas": "1848161",
     "deployer": "0xB878F43161E20AD229896c830ff478Db95a2dBb5",
-    "timestamp": 1761914316,
-    "implementation": "0x5b75c7F40Ff8B4D0449709D9c2F3ee996eF57391",
-    "verified": "2025-10-31T12:39:48.487Z"
+    "timestamp": 1764195218,
+    "implementation": "0x81eCa9d0e13949E546B7edD761a79DE68414827d",
+    "verified": "2025-11-26T22:15:43.454Z",
+    "history": [
+      {
+        "main": "./0xc/hardhat/TrancheDepositor/TrancheDepositor.ts",
+        "address": "0x5b75c7F40Ff8B4D0449709D9c2F3ee996eF57391",
+        "block": 1525752,
+        "tx": "0x5f0c63bd537435cb9bcfd2131c587a81309f7691b36c1a2ef856029e4e9394d2",
+        "gas": "1793477",
+        "verified": "2025-10-31T12:39:48.487Z"
+      }
+    ]
   },
   {
     "id": "TrancheDepositorV2Proxy",
@@ -538,7 +634,7 @@
     "deployer": "0xB878F43161E20AD229896c830ff478Db95a2dBb5",
     "timestamp": 1761914327,
     "verified": "2025-10-31T12:40:04.073Z",
-    "proxyFor": "0x5b75c7F40Ff8B4D0449709D9c2F3ee996eF57391"
+    "proxyFor": "0x81eCa9d0e13949E546B7edD761a79DE68414827d"
   },
   {
     "id": "TrancheDepositorV2ProxyAdmin",
@@ -550,5 +646,44 @@
     "gas": "656544",
     "deployer": "0xB878F43161E20AD229896c830ff478Db95a2dBb5",
     "timestamp": 1761914333
+  },
+  {
+    "id": "USDeConfigManager",
+    "name": "TwoStepConfigManager",
+    "main": "./0xc/hardhat/TwoStepConfigManager/TwoStepConfigManager.ts",
+    "bytecodeHash": "0xd50fae93b236e7ac97b8cf622fe090a5a9bf6354cb98cfe08df5880c2b7217f1",
+    "address": "0xfeea5a3Cf1337dB9589f4989fbF9B8061cC2B595",
+    "block": 1702881,
+    "tx": "0x57721aa6db623704cb2e9271e8fefd0209f2ce89c2cffe0ba219d4241699c6ba",
+    "gas": "1076708",
+    "deployer": "0xB878F43161E20AD229896c830ff478Db95a2dBb5",
+    "timestamp": 1764195253,
+    "implementation": "0xD1de3f902CC7a41F733e33f862EEd81B8Cb9FA66",
+    "verified": "2025-11-26T22:15:55.638Z"
+  },
+  {
+    "id": "USDeConfigManagerProxy",
+    "name": "TransparentUpgradeableProxy",
+    "main": "artifacts/@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol/TransparentUpgradeableProxy.json",
+    "bytecodeHash": "0xf28eb2a2c5463ee40d33f9140010a6efee14f7e18a27beac9a06acbeb00f60b2",
+    "address": "0xfeea5a3Cf1337dB9589f4989fbF9B8061cC2B595",
+    "block": 1702882,
+    "tx": "0x2f8d5acdb03c068dcc967e9c2677c35799f56e2851832b2ef5f77a2a795f6312",
+    "gas": "670025",
+    "deployer": "0xB878F43161E20AD229896c830ff478Db95a2dBb5",
+    "timestamp": 1764195265,
+    "verified": "2025-11-26T22:16:14.585Z",
+    "proxyFor": "0xD1de3f902CC7a41F733e33f862EEd81B8Cb9FA66"
+  },
+  {
+    "id": "USDeConfigManagerProxyAdmin",
+    "name": "ProxyAdmin",
+    "main": "artifacts/@openzeppelin/contracts/proxy/transparent/ProxyAdmin.sol/ProxyAdmin.json",
+    "address": "0x7A6a951821B489DE5AddcE2b662c1075a676E2a0",
+    "block": 1702882,
+    "tx": "0x2f8d5acdb03c068dcc967e9c2677c35799f56e2851832b2ef5f77a2a795f6312",
+    "gas": "670025",
+    "deployer": "0xB878F43161E20AD229896c830ff478Db95a2dBb5",
+    "timestamp": 1764195272
   }
 ]

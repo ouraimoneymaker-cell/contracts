@@ -13,17 +13,17 @@ import { $require } from 'dequanto/utils/$require';
 
 export namespace PlatformFactory {
     export async function init(params?: {
-        deployments: 'throw' | 'redeploy'
+        platform?: TEth.Platform
+        deployments?: 'throw' | 'redeploy'
     }) {
         const hh = new HardhatProvider();
         const config = await Config.fetch({
             configGlobal: './config/dequanto.yml',
         });
-        const platform = config.$get('chain') ?? 'hardhat';
+        const platform = params.platform ?? config.$get('chain') ?? 'hardhat';
         const client = await Web3ClientFactory.getAsync(platform);
 
-
-const accounts = await getAccounts(client);
+        const accounts = await getAccounts(client);
 
         if (accounts.safe?.admin.type === 'safe') {
             TxWriter.defaultOptions({
@@ -46,7 +46,7 @@ const accounts = await getAccounts(client);
         }
     }
 
-    async function getAccounts (client: Web3Client) {
+    async function getAccounts(client: Web3Client) {
         const { platform, network } = client;
         const hh = new HardhatProvider();
 
@@ -71,7 +71,7 @@ const accounts = await getAccounts(client);
             timelockConfig ??= safeOperator;
         }
 
-         if (platform === 'hardhat' && client.forked?.platform) {
+        if (platform === 'hardhat' && client.forked?.platform) {
             // Impersonate safe and timelock accounts in forked networks
             safeAdmin = {
                 name: 'impersonated',

@@ -482,8 +482,7 @@ export class TranchesDeployments {
             feed,
         } = contracts;
 
-        // @TODO extract all roles
-        // await this.addRoles();
+        await this.addRoles();
 
         await this.ensureRole($contract.keccak256('UPDATER_CDO_APR_ROLE'), feed.address);
         await this.setCooldown(strategy, info);
@@ -631,8 +630,8 @@ export class TranchesDeployments {
             ]
         });
 
-        // @TODO extract all roles
-        // await this.ensureRole($contract.keccak256('DEPOSITOR_CONFIG_ROLE'), this.owner.address);
+
+        await this.ensureRole($contract.keccak256('DEPOSITOR_CONFIG_ROLE'), this.owner.address);
 
         let status = await depositor.tranches(jrtVault.address, USDe.address);
         if (status == false) {

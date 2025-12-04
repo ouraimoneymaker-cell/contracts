@@ -8,6 +8,7 @@ import { $bigint } from 'dequanto/utils/$bigint';
 import { $date } from 'dequanto/utils/$date';
 import { $number } from 'dequanto/utils/$number';
 import { $require } from 'dequanto/utils/$require';
+import { $apr } from './$apr';
 
 export namespace $ethena {
     const SECONDS_PER_YEAR = BigInt(31_536_000);
@@ -47,6 +48,15 @@ export namespace $ethena {
         p0_: { blockNr?: number, timestamp?: number },
         p1_: { blockNr?: number, timestamp?: number }
     ) {
+        let result = await getAPRDataFromDeltaTExt(erc4626Address, p0_, p1_);
+        return result.apr;
+    }
+
+    export async function getAPRDataFromDeltaTExt (
+        erc4626Address: TAddress,
+        p0_: { blockNr?: number, timestamp?: number },
+        p1_: { blockNr?: number, timestamp?: number }
+    ) {
         let client = await Web3ClientFactory.getAsync('eth');
 
         let p0 = await getTPoint(client, p0_);
@@ -65,7 +75,13 @@ export namespace $ethena {
         let growthFactor = exchangeRate_T1 / exchangeRate_T0 - 1;
 
         let APR = growthFactor / deltaT * Number(SECONDS_PER_YEAR);
-        return $number.round(APR * 100, 5);
+        let APY = $apr.toApy(APR);
+        return {
+            apr: $number.round(APR * 100, 5),
+            apy: APY,
+            priceT0: exchangeRate_T0,
+            priceT1: exchangeRate_T1,
+        };
     }
 
     async function getTPoint (client: Web3Client, p: { blockNr?: number, timestamp?: number }) {

@@ -55,5 +55,8 @@ UTest.create({
 
         const usdtData = await provider.getAaveAsset(1n);
         l`USDT APY cyan<${$apr.toApy(usdtData.apr)}>`;
-    },
+
+        const pair = await provider.getAprPair();
+        $require.eq(pair.aprTarget, apr, `APR target does not match`);
+    }
 })

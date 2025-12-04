@@ -13,7 +13,8 @@ const config = {
   },
   networks: {
     hardhat: {
-        chainId: 1337
+        chainId: 1337,
+        allowUnlimitedContractSize: true,
     },
     localhost: {
         chainId: 1337

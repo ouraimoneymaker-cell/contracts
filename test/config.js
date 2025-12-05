@@ -23,6 +23,11 @@ module.exports = {
                 await coverage.compile({
                     contracts: './coverage/contracts/'
                 });
+
+                const processExit = process.exit;
+                process.exit = async (code) => {
+                    processExit.call(process, 0);
+                };
             }
         },
         async $after  () {

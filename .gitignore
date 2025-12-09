@@ -32,8 +32,11 @@ echidna*/
 medusa*/
 
 0xc/
+0x/
 0xweb.json
 contracts/backlog/
-config/
+config/*
+!config/web3.yml
+
 
 deployments/deployments-hardhat*

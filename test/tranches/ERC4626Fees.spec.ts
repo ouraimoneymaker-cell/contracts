@@ -119,6 +119,18 @@ UAction.create({
                 $require.eq(balance, $bigint.toWei(990 * .7));
                 $require.eq(await jrtVault.balanceOf(alice.address), 0n);
                 $require.eq(await USDe.balanceOf(alice.address), 990n * 10n**18n);
+            },
+            async 'lower the fees in one go' () {
+                let jrtFee = await cdo.exitFeeJrt();
+                let srtFee = await cdo.exitFeeSrt();
+                $require.gt(jrtFee, 0n);
+                $require.gt(srtFee, 0n);
+                await configManager.$receipt().scheduleExitFeeChange(deployer, 0n, 0n, 0n);
+
+                let jrtFeeAfter = await cdo.exitFeeJrt();
+                let srtFeeAfter = await cdo.exitFeeSrt();
+                $require.eq(jrtFeeAfter, 0n);
+                $require.eq(srtFeeAfter, 0n);
             }
         });
     },

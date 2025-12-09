@@ -1,4 +1,12 @@
-# High-Level Overview of the Protocol
+# Strata
+
+[![Test](https://github.com/Strata-Money/contracts-tranches/actions/workflows/test.yml/badge.svg)](https://github.com/Strata-Money/contracts-tranches/actions/workflows/test.yml)
+
+[![Coverage](https://codecov.io/github/Strata-Money/contracts-tranches/graph/badge.svg?token=EA81W2M8QN)](https://codecov.io/github/Strata-Money/contracts-tranches)
+
+----
+
+## High-Level Overview of the Protocol
 
 The protocol is composed of two **ERC-4626 Vaults** (tranches): **Junior (Jrt)** and **Senior (Srt)**.
 Both vaults are implemented as *Meta Vaults*:
@@ -116,7 +124,7 @@ Withdrawals follow the same process:
 
 The APR Feed contract provides dynamic parameters:
 
-* **APR SSR** (base rate)
+* **APR Target** (base rate)
 * **APR Base**
 
 Whenever these values change, the Feed updates the **Accounting contract**, which recalculates the **Senior Target Index** accordingly.

@@ -10,8 +10,9 @@
     "watch": "hardhat compile --watch",
     "compile": "hardhat compile",
     "coverage": "hardhat clean && atma --max-old-space-size=12000 test --coverage",
+    "coverage-nocompile": "atma --max-old-space-size=12000 test --coverage --no-compile",
     "deploy-local": "atma act tasks/deploy.act.ts -q \"deploy and configure\" --chain hardhat",
-    "fork-eth": "hardhat node --verbose --show-stack-traces --fork https://eth.drpc.org"
+    "fork-eth": "hardhat node --verbose --show-stack-traces --fork %MAINNET_RPC_URL%"
   },
   "repository": {
     "type": "git",
@@ -38,12 +39,12 @@
     "0xweb": "^0.11.1",
     "a-di": "latest",
     "alot": "latest",
-    "appcfg": "latest",
+    "appcfg": "^0.5.11",
     "atma-io": "latest",
     "atma-loader-ts": "latest",
     "atma-utest": "^0.21.36",
     "class-json": "latest",
-    "dequanto": "^0.1.92",
+    "dequanto": "^0.1.97",
     "dotenv": "^16.4.7",
     "hardhat": "latest",
     "memd": "latest",

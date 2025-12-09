@@ -1,4 +1,4 @@
-1. Generic APR calculation for period T0..T1 (SSR and Base)
+1. Generic APR calculation for period T0..T1 (Target and Base)
 
 ```
 Grows_Factor = ExchangeRate_T1 / ExchangeRate_T0 - 1
@@ -11,7 +11,7 @@ APR = Grows_Factor / (T1-T0) * 1Year
 TVL_ratio_sr = TVL_sr / (TVL_sr + TVL_jr)
 Risk_Premium = x + y * TVL_ratio_sr ^ k
 
-APR_sr_v1 = APRssr
+APR_sr_v1 = APRtarget
 APR_sr_v2 = APRbase * (1 - Risk_Premium)
 
 APR_sr = MAX(APR_sr_v1, APR_sr_v2)

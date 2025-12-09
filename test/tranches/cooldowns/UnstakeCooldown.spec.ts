@@ -161,7 +161,7 @@ UAction.create({
     },
     async 'max active requests' () {
         await sUSDe.$receipt().approve(alice, unstakeCooldown.address, 80n);
-        const MAX = 71;
+        const MAX = $hh.isCoverage() ? 2 : 71;
         for (let i = 0; i < MAX; i++) {
             await unstakeCooldown.$receipt().transfer(alice, sUSDe.address, bob.address, bob.address, 1n);
         }
@@ -178,7 +178,7 @@ UAction.create({
     },
     async 'max external requests' () {
         await sUSDe.$receipt().approve(alice, unstakeCooldown.address, 80n);
-        const MAX = 40;
+        const MAX = $hh.isCoverage() ? 2 :40;
         for (let i = 0; i < MAX; i++) {
             await unstakeCooldown.$receipt().transfer(alice, sUSDe.address, alice.address, bob.address, 1n);
         }

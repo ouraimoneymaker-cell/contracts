@@ -1,0 +1,72 @@
+defaults:
+  RPC_ETH: https://1rpc.io/eth
+  ETHERSCAN_KEY:
+
+
+blockchainExplorer:
+  'hoodi':
+      key: ${{ ETHERSCAN_KEY }}
+      api: 'https://api.etherscan.io/v2/api?chainid=560048'
+      www: 'https://etherscan.io'
+
+  'eth':
+      key: ${{ ETHERSCAN_KEY }}
+      api: 'https://api.etherscan.io/v2/api?chainid=1'
+      www: 'https://etherscan.io'
+
+
+web3:
+  'hoodi':
+    chainId: 560048
+    chainToken: 'ETH'
+    endpoints:
+      - url: 'https://0xrpc.io/hoodi'
+
+  'eth':
+    chainId: 1
+    chainToken: 'ETH'
+    endpoints:
+      - url: ${{ RPC_ETH }}
+        blockRangeLimit: 100000
+
+
+accounts:
+  - name: safe/eth/owner
+    address: '0x4be3749a0F6557b8fd98F3967e859DbD7C694eF4'
+    platform: 'eth'
+    operator: 'eth/deployer'
+    owners:
+      - 'eth/deployer'
+      - 'eth/strata1'
+
+  - name: safe/eth/strata
+    address: '0xA27cA9292268ee0f0258B749f1D5740c9Bb68B50'
+    platform: 'eth'
+    operator: 'eth/deployer'
+    owners:
+      - 'eth/deployer'
+      - 'eth/strata2'
+
+  - name: timelock/eth/strata
+    address: '0xB2A3CF69C97AFD4dE7882E5fEE120e4efC77B706'
+    platform: 'eth'
+    operator:
+      - 'safe/eth/strata'
+
+  - name: timelock/eth/config
+    address: '0x4f2682b78F37910704fB1AFF29358A1da07E022d'
+    platform: 'eth'
+    operator:
+      - 'safe/eth/strata'
+
+  - name: eth/deployer
+    address: '0x296400D87BE5cFB63C5025904cD006EBB23d15d5'
+
+  - name: eth/strata1
+    address: '0xacE53036af66B74f4cEaf80443F0A7979056989C'
+
+  - name: eth/strata2
+    address: '0xd796E125aF489CFfb4A766Df4deD9272E458249C'
+
+  - name: hoodi/deployer
+    address: '0xB878F43161E20AD229896c830ff478Db95a2dBb5'

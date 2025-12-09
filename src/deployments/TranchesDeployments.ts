@@ -33,6 +33,8 @@ import { MockERC4626 } from '@0xc/hardhat/MockERC4626/MockERC4626';
 import { AaveAprPairProvider } from '@0xc/hardhat/AaveAprPairProvider/AaveAprPairProvider';
 import { CDOLens } from '@0xc/hardhat/CDOLens/CDOLens';
 import { TwoStepConfigManager } from '@0xc/hardhat/TwoStepConfigManager/TwoStepConfigManager';
+import { ContractBase } from 'dequanto/contracts/ContractBase';
+import { Constructor } from 'dequanto/utils/types';
 
 
 export class TranchesDeployments {
@@ -72,6 +74,34 @@ export class TranchesDeployments {
             info.srt = { ...info.srt, ...(this.platform.Tranches.ethena.srt ?? {}) } as any;
         }
         this.ethenaInfo = info;
+    }
+
+    async get<T extends ContractBase>(Ctor: Constructor<T>, params?: { id?: 'jrUSDe' | 'srUSDe', cdo?: 'USDe' }) {
+        if (params?.id === 'jrUSDe') {
+            return await this.ds.get(Ctor, { id: 'USDeJrt' })
+        }
+        if (params?.id === 'srUSDe') {
+            return await this.ds.get(Ctor, { id: 'USDeSrt' })
+        }
+        let all = await this.ds.store.getDeployments();
+        let byName = all.filter(d => d.name === Ctor.name);
+        $require.gt(byName.length, 0, `${Ctor.name} not found in deployments`);
+
+        if (byName.length === 1) {
+            return await this.ds.get(Ctor, { id: byName[0].id });
+        }
+        let cdo = params?.cdo ?? 'USDe';
+        let byCdo = byName.filter(x => x.id.toLowerCase().includes(cdo.toLowerCase()));
+        if (byCdo.length === 1) {
+            return await this.ds.get(Ctor, { id: byCdo[0].id });
+        }
+
+        if (byCdo.length === 0) {
+            throw new Error(`No ${Ctor.name} found for CDO ${cdo} in deployments`);
+        }
+        if (byCdo.length > 1) {
+            throw new Error(`Multiple ${Ctor.name} found for CDO ${cdo}: ${byCdo.map(x => x.id).join(', ')}`);
+        }
     }
 
     @memd.deco.memoize()

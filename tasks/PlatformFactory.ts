@@ -1,3 +1,4 @@
+import memd from 'memd';
 import { TranchesDeployments } from '@s/deployments/TranchesDeployments';
 import { IPlatformAccounts } from '@s/platforms/IPlatform';
 import { ChainAccountService } from 'dequanto/ChainAccountService';
@@ -9,19 +10,29 @@ import { EoAccount } from 'dequanto/models/TAccount';
 import { TEth } from 'dequanto/models/TEth';
 import { InMemoryServiceTransport } from 'dequanto/safe/transport/InMemoryServiceTransport';
 import { TxWriter } from 'dequanto/txs/TxWriter';
-import { $require } from 'dequanto/utils/$require';
+
 
 export namespace PlatformFactory {
+
+    export class ConfigLoader {
+        @memd.deco.memoize()
+        static async fetch () {
+            return await Config.fetch({
+                configGlobal: './config/*.yml',
+            });
+        }
+    }
+
     export async function init(params?: {
+        client?: Web3Client
         platform?: TEth.Platform
         deployments?: 'throw' | 'redeploy'
     }) {
         const hh = new HardhatProvider();
-        const config = await Config.fetch({
-            configGlobal: './config/dequanto.yml',
-        });
-        const platform = params.platform ?? config.$get('chain') ?? 'hardhat';
-        const client = await Web3ClientFactory.getAsync(platform);
+        const config = await ConfigLoader.fetch();
+
+        const platform = params.platform ?? params?.client?.platform ?? config.$get('chain') ?? 'hardhat';
+        const client = params?.client ?? await Web3ClientFactory.getAsync(platform);
 
         const accounts = await getAccounts(client);
 
@@ -73,27 +84,35 @@ export namespace PlatformFactory {
 
         if (platform === 'hardhat' && client.forked?.platform) {
             // Impersonate safe and timelock accounts in forked networks
+            deployer = {
+                name: 'impersonated',
+                type: 'impersonated',
+                address: deployer.address,
+            };
             safeAdmin = {
                 name: 'impersonated',
-                type: 'eoa',
+                type: 'impersonated',
                 address: safeAdmin.address,
             };
             safeOperator = {
                 name: 'impersonated',
-                type: 'eoa',
+                type: 'impersonated',
                 address: safeOperator.address,
             };
             timelockAdmin = {
                 name: 'impersonated',
-                type: 'eoa',
+                type: 'impersonated',
                 address: timelockAdmin.address,
             };
             timelockConfig = {
                 name: 'impersonated',
-                type: 'eoa',
+                type: 'impersonated',
                 address: timelockConfig.address,
             };
-            //await client.debug.impersonateAccount(owner.address);
+            await client.debug.setBalance(timelockAdmin.address,    BigInt(1e18));
+            await client.debug.setBalance(timelockConfig.address,   BigInt(1e18));
+            await client.debug.setBalance(safeAdmin.address,        BigInt(1e18));
+            await client.debug.setBalance(safeOperator.address,     BigInt(1e18));
         }
 
         return {

@@ -3,6 +3,9 @@ name: Codecov
 on:
   workflow_dispatch:
 
+env:
+  RPC_ETH: ${{ secrets.RPC_ETH }}
+
 jobs:
   coverage:
     runs-on: ubuntu-latest

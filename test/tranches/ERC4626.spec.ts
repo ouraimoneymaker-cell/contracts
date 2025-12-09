@@ -132,10 +132,10 @@ UAction.create({
     },
     async 'ERC4626::deposit/withdraw Juniors many' () {
 
-        let { jrtVault, USDe } = $hh.test.tranches;
+        let { jrtVault, USDe, accounting } = $hh.test.tranches;
 
         let users = await alot
-            .fromRange(0, 30)
+            .fromRange(0, $hh.isCoverage() ? 2 : 30)
             .mapAsync(async i => {
                 let user = await $hh.test.createAccount(`user_${i}`);
 
@@ -176,6 +176,7 @@ UAction.create({
             await $erc20.eqBalance(USDe, withdrawer.user, withdrawer.amount);
         }
 
+        $require.eq(await accounting.reserveNav(), 0n, `Fees are not enabled, nothing goes to reserve`);
     },
     async 'ERC4626::permit' () {
         let { USDe } = $hh.test.ethena;

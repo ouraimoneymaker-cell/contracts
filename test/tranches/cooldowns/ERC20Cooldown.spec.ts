@@ -118,22 +118,22 @@ UAction.create({
     },
     async 'max active requests'() {
         await USDe.$receipt().approve(alice, erc20Cooldown.address, 80n);
-        const MAX = 71;
+        const MAX = $hh.isCoverage() ? 2 : 71;
         for (let i = 0; i < MAX; i++) {
             await erc20Cooldown.$receipt().transfer(alice, USDe.address, bob.address, bob.address, 1n, _7DAYS);
         }
         await $testCooldown.eqBalanceOf(erc20Cooldown, USDe, bob, {
-            pending: 71n,
+            pending: BigInt(MAX),
             nextUnlockAmount: 1n,
-            totalRequests: 70n
+            totalRequests: BigInt(Math.min(MAX, 70))
         });
         await $hh.test.mine(`8days`);
         await $testCooldown.finalize(erc20Cooldown, USDe, bob.address);
-        await $erc20.eqBalance(USDe, bob, 71n);
+        await $erc20.eqBalance(USDe, bob, BigInt(MAX));
     },
     async 'max external requests'() {
         await USDe.$receipt().approve(alice, erc20Cooldown.address, 80n);
-        const MAX = 40;
+        const MAX =  $hh.isCoverage() ? 2 : 40;
         for (let i = 0; i < MAX; i++) {
             await erc20Cooldown.$receipt().transfer(alice, USDe.address, alice.address, bob.address, 1n, _7DAYS);
         }

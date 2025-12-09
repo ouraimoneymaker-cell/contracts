@@ -5,9 +5,31 @@ import { $ethena } from './$ethena';
 import { $require } from 'dequanto/utils/$require';
 import { l } from 'dequanto/utils/$logger';
 import { $test } from './$test';
+import { TranchesDeployments } from '@s/deployments/TranchesDeployments';
+import { $date } from 'dequanto/utils/$date';
+import { AprPairFeed } from '@0xc/hardhat/AprPairFeed/AprPairFeed';
+import { Accounting } from '@0xc/hardhat/Accounting/Accounting';
 
 export namespace $strata {
     export const SECONDS_PER_YEAR = 365 * 24 * 60 * 60;
+
+    export async function disableAPRs (tranches: TranchesDeployments) {
+        l`Disable APRs`;
+        const { client, accounts } = tranches;
+        const ROUND_STALE = $date.parseTimespan('1year', { get: 's' });
+        const [
+            block,
+            feed,
+            accounting
+        ] = await Promise.all([
+            client.getBlock('latest'),
+            tranches.get(AprPairFeed),
+            tranches.get(Accounting)
+        ]);
+        await feed.$receipt().setRoundStaleAfter(accounts.timelock.admin, BigInt(ROUND_STALE));
+        await feed.$receipt().updateRoundData(accounts.safe.operator, 0, 0, block.timestamp);
+        await accounting.$receipt().onAprChanged(accounts.safe.operator);
+    }
 
     export async function setAprsViaDistribution (aprTarget: number, aprBase: number) {
         let { sUSDe, USDe, sUSDs } = $hh.test.ethena;

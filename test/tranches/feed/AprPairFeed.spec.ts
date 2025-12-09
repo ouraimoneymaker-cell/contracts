@@ -58,6 +58,10 @@ UTest.create({
         $require.eq(data.aprTarget, 10**12);
         $require.eq(data.aprBase, 10**11);
 
+        let dataById = await feed.getRoundData(data.answeredInRound);
+        $require.eq(dataById.aprTarget, data.aprTarget);
+        $require.eq(dataById.aprBase, data.aprBase);
+
         await $hh.test.mine('40mins');
         data = await feed.latestRoundData();
         $require.eq(data.aprTarget, 10**12);
@@ -69,6 +73,11 @@ UTest.create({
         data = await feed.latestRoundData();
         $require.eq(data.aprTarget, 500);
         $require.eq(data.aprBase, 800);
+
+        // fetch from test provider
+        await feed.$receipt().updateRoundData(deployer);
+        await client.debug.mine('5s');
+
 
 
         let unauth = hh.deployer(1);
@@ -90,6 +99,13 @@ UTest.create({
 
         result = await updateFeed(feed, deployer, .1, .1);
         $require.Null(result.error, `Errored`);
+
+
+        // Reset the provider
+        let tx = await feed.$receipt().setProvider(deployer, provider.address);
+        let [ event ] = await feed.extractLogsProviderSet(tx.receipt);
+        $require.notNull(event, `Event not found`);
+        $require.eq(event.params.newProvider.toLowerCase(), provider.address.toLowerCase());
     },
 })
 

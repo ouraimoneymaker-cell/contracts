@@ -7,26 +7,30 @@ import { TEth } from 'dequanto/models/TEth';
 import { $sig } from 'dequanto/utils/$sig';
 import { HardhatWeb3Client } from 'dequanto/hardhat/HardhatWeb3Client';
 import { TwoStepConfigManager } from '@0xc/hardhat/TwoStepConfigManager/TwoStepConfigManager';
-
+import { PlatformFactory } from '../../../tasks/PlatformFactory';
+import { $cli } from 'dequanto/utils/$cli';
 
 
 export namespace $hh {
+
+    export function isCoverage () {
+        const coverage = Boolean($cli.getParamValue('coverage'));
+        return coverage as boolean;
+    }
+
     export function getClient () {
         const hh = new HardhatProvider();
         return hh.client('hardhat');
     }
 
     export async function forked (opts?: { block?: number }) {
+        const config = await PlatformFactory.ConfigLoader.fetch();
         const hh = new HardhatProvider();
         const client = await hh.forked({ platform: 'eth', block: opts?.block ?? void 0 });
-        //const client = await hh.client('localhost');
         client.configureFork('eth');
-        const deployer = await hh.deployer(0);
-        const depl = new TranchesDeployments({
-            client,
-            deployer
-        });
-        return depl;
+
+        const { tranches } = await PlatformFactory.init({ client });
+        return tranches;
     }
 
     export async function reset (client: Web3Client) {
@@ -70,9 +74,9 @@ export namespace $hh {
             this.deployer = deployer;
         }
 
-        async createAccount (name: string) {
+        async createAccount (name: string, client?: Web3Client) {
             let account = $sig.$account.generate({ name });
-            await this.client.debug.setBalance(account.address, 10n**20n);
+            await (client ?? this.client).debug.setBalance(account.address, 10n**20n);
             return account;
         }
 

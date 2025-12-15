@@ -9,12 +9,15 @@ import { Accounting } from '@0xc/hardhat/Accounting/Accounting';
 import { $address } from 'dequanto/utils/$address';
 import { StrataMasterChef } from '@0xc/hardhat/StrataMasterChef/StrataMasterChef';
 import { $date } from 'dequanto/utils/$date';
+import { $contract } from 'dequanto/utils/$contract';
+import { TEth } from 'dequanto/models/TEth';
 
 
 
 const hh = new HardhatProvider();
 const client = await hh.client();
 const deployer = await hh.deployer();
+await $hh.test.init();
 
 UAction.create({
 
@@ -66,5 +69,23 @@ UAction.create({
 
         $require.eq(await timelock.getMinDelay(), BigInt($date.parseTimespan('24hours', { get: 's' })));
     },
+    async 'should check call permission' () {
+        let acm = await $hh.test.factory.ensureACM();
+        let { contract } = await hh.deploySol('test/fixtures/acm/CallAccess.sol', {
+            client,
+            arguments: [
+                acm.address
+            ]
+        });
 
+        let { error } = await $promise.caught(contract.$receipt().setValue(deployer, 5n));
+        $require.notNull(error, `Should revert`);
+        $require.eq(await contract.value(), 0n);
+
+        const sig = $contract.keccak256('setValue(uint256)', 'hex').substring(0, 10) as TEth.Hex;
+        await acm.$receipt().grantCall(deployer, contract.address, sig, deployer.address);
+
+        await contract.$receipt().setValue(deployer, 8n);
+        $require.eq(await contract.value(), 8n);
+    }
 })

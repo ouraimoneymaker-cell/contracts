@@ -140,8 +140,11 @@ npm run watch
 
 npm run test
 
-#OR single file
-npm run spec -- ./test/tranches/ERC4626.spec.ts
+# OR single file
+npx atma test ./test/tranches/ERC4626.spec.ts
+
+# OR single file in watch mode
+npx atma test ./test/tranches/ERC4626.spec.ts --watch
 ```
 
 # Deploy

@@ -35,6 +35,7 @@ import { CDOLens } from '@0xc/hardhat/CDOLens/CDOLens';
 import { TwoStepConfigManager } from '@0xc/hardhat/TwoStepConfigManager/TwoStepConfigManager';
 import { ContractBase } from 'dequanto/contracts/ContractBase';
 import { Constructor } from 'dequanto/utils/types';
+import { SharesCooldown } from '@0xc/hardhat/SharesCooldown/SharesCooldown';
 
 
 export class TranchesDeployments {
@@ -220,8 +221,8 @@ export class TranchesDeployments {
         }
     }
 
-    async addRoles() {
-        let roles = {
+    async addRoles(roles?: Record<TEth.Address, string[]>) {
+        roles ??= {
             [this.owner.address]: [
                 $contract.keccak256('PAUSER_ROLE'),
                 $contract.keccak256('UPDATER_STRAT_CONFIG_ROLE'),
@@ -271,7 +272,7 @@ export class TranchesDeployments {
     }
 
     async ensureConfigManager() {
-        let { cdo, acm } = await this.ensureEthenaCDO();
+        let { cdo, acm, sharesCooldown } = await this.ensureEthenaCDO();
         let owner = this.accounts.timelock.admin;
         let { contract: configManager } = await this.ds.ensureWithProxy(TwoStepConfigManager, {
             id: 'USDeConfigManager',
@@ -280,12 +281,22 @@ export class TranchesDeployments {
         });
 
         await this.ds.configure(cdo, {
-            title: `Set Two-Step Config Manager`,
+            title: `Set CDO Two-Step Config Manager`,
             async shouldUpdate() {
-                    return $address.eq(await cdo.twoStepConfigManager(), configManager.address) === false
+                return $address.eq(await cdo.twoStepConfigManager(), configManager.address) === false
             },
             async updater() {
                 await cdo.$receipt().setTwoStepConfigManager(owner, configManager.address);
+            }
+        });
+
+        await this.ds.configure(sharesCooldown, {
+            title: `Set SharesCooldown Two-Step Config Manager`,
+            async shouldUpdate() {
+                return $address.eq(await sharesCooldown.twoStepConfigManager(), configManager.address) === false
+            },
+            async updater() {
+                await sharesCooldown.$receipt().setTwoStepConfigManager(owner, configManager.address);
             }
         });
 
@@ -302,7 +313,7 @@ export class TranchesDeployments {
     }
 
     @memd.deco.memoize()
-    async ensureCooldowns() {
+    async ensureCooldowns(cdo?: StrataCDO) {
         const acm = await this.ensureACM();
         const { contract: erc20Cooldown } = await this.ds.ensureWithProxy(ERC20Cooldown, {
             initialize: [
@@ -311,6 +322,12 @@ export class TranchesDeployments {
             ]
         });
         const { contract: unstakeCooldown } = await this.ds.ensureWithProxy(UnstakeCooldown, {
+            initialize: [
+                this.owner.address,
+                acm.address
+            ]
+        });
+        const { contract: sharesCooldown } = await this.ds.ensureWithProxy(SharesCooldown, {
             initialize: [
                 this.owner.address,
                 acm.address
@@ -335,9 +352,19 @@ export class TranchesDeployments {
             }
         });
 
+        if (cdo != null) {
+            await this.ds.configure(cdo, {
+                shouldUpdate: $address.eq(await cdo.sharesCooldown(), sharesCooldown.address) === false,
+                updater: async () => {
+                    await cdo.$receipt().setSharesCooldown(this.owner, sharesCooldown.address);
+                }
+            });
+        }
+
         return {
             erc20Cooldown,
             unstakeCooldown,
+            sharesCooldown,
             acm,
         };
     }
@@ -418,7 +445,7 @@ export class TranchesDeployments {
         });
 
         // Strategy
-        const { erc20Cooldown, unstakeCooldown } = await this.ensureCooldowns();
+        const { erc20Cooldown, unstakeCooldown, sharesCooldown } = await this.ensureCooldowns(cdo);
 
         const { contract: strategy } = await this.ds.ensureWithProxy(SUSDeStrategy, {
             arguments: [
@@ -466,6 +493,7 @@ export class TranchesDeployments {
             accounting,
             erc20Cooldown,
             unstakeCooldown,
+            sharesCooldown,
             feed,
             USDe,
             sUSDe,

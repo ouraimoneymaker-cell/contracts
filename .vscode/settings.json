@@ -72,5 +72,6 @@
     "security.olympix.detectors.possibleDivisionByZero": true,
     "security.olympix.detectors.zeroAsParameter": true,
     "security.olympix.detectors.oracleManipulation": true,
-    "security.olympix.project.useAiToPruneFindings": true
+    "security.olympix.project.useAiToPruneFindings": true,
+    "security.olympix.detectors.missingEventsAssertion": false
 }

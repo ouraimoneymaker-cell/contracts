@@ -2,7 +2,7 @@
 SIP: 01
 Title: Share Lock-Up Redemption Mechanism for Tranche Vaults
 Author: Strata Protocol Contributors
-Status: Draft
+Status: Final
 Type: Protocol
 Created: 2025-12-15
 ---
@@ -30,7 +30,7 @@ This design preserves ERC-4626 compatibility while enabling delayed liquidity an
 * **User**: An externally owned account (EOA) or contract initiating a redemption.
 * **Receiver**: An account that receives the assets upon redemption. Per the ERC-4626 specification, the receiver MAY be different from the User.
 * **Tranche Vault**: An ERC-4626-compatible vault managing Junior or Senior tranche shares.
-* **Silo Contract**: A custody contract responsible for holding locked shares and executing final redemption on behalf of users.
+* **Silo Contract**: - A contract responsible for holding locked shares and executing final redemption on behalf of users.
 * **Strategy**: The underlying asset manager (may require unstaking prior to asset withdrawal, e.g., USDe).
 
 ---
@@ -57,6 +57,7 @@ The current (non lock-up) redemption flow is as follows:
 2. Instead of burning shares:
 
    * The Tranche Vault transfers the specified shares to the Silo Contract
+
 3. The Silo Contract records:
 
    * User address
@@ -67,10 +68,9 @@ The current (non lock-up) redemption flow is as follows:
 At this stage:
 
 * No assets are transferred
-* No shares are burned
-* The user cannot finalize the redemption before the lock-up period expires
+* Only fee shares are burned to accrue fees in accounting
+* The user may finalize the redemption before the lock-up period expires only if an ExitFee is specified for the Vault by the Protocol
 * The user may cancel the lock-up; in this case, the request is dismissed and the shares are transferred back to the user.
-* [PROPOSAL] Early-Exit: The user may pay additional finalization fee to unlock and withdraw the shares before lock-up period ends.
 
 ---
 
@@ -106,10 +106,59 @@ After the lock-up period has elapsed:
 
 ---
 
-## 6. Fees
+## 6. Lock-Up Duration and Fees
 
-* No additional withdrawal or redemption fees are charged specifically due to the lock-up mechanism
+The protocol MAY apply a **coverage-dependent lock-up period** and associated fees to share redemptions when the Share Lock-Up mechanism is enabled.
 
+All parameters described in this section are **evaluated at redemption request time** and remain immutable for the lifetime of the corresponding lock-up entry.
+
+### 6.1 Lock-Up Duration
+
+The protocol MAY define up to **two coverage thresholds** (`C₀`, `C₁`) that partition the coverage space into **three mutually exclusive ranges**, each associated with a predefined lock-up duration.
+
+Let `Coverage` be the current coverage ratio at redemption request time.
+
+| Coverage Range       | Applicable Lock-Up Duration |
+| -------------------- | --------------------------- |
+| `Coverage ≤ C₀`      | `lockupSeconds[0]`          |
+| `C₀ < Coverage ≤ C₁` | `lockupSeconds[1]`          |
+| `Coverage > C₁`      | `lockupSeconds[2]`          |
+
+Properties:
+
+* Coverage thresholds MUST be strictly increasing (`C₀ < C₁`) or equal (`C₀ == C₁`) - this effectively disables the `C₁` range
+* Each range maps to exactly one lock-up duration
+* A lock-up duration of `0` seconds represents **immediate finalization eligibility**
+* The selected lock-up duration is recorded in the Silo Contract at request time and MUST NOT change afterwards
+
+---
+
+### 6.2 Redemption Fee (Request-Time Fee)
+
+The protocol MAY apply a **redemption fee at request time**, expressed as a percentage of shares being redeemed.
+
+Characteristics:
+
+* The applicable fee tier is determined using the **same coverage range selection** as defined in Section 6.1
+* The fee is accrued **immediately at redemption request**
+* Fee collection is implemented via burning and assets distribution according to the accounting rules
+* The fee is independent of whether the redemption is later finalized, cancelled, or early-exited
+
+---
+
+### 6.3 Early-Exit Fee
+
+If enabled by the protocol, a user MAY finalize a redemption **before the lock-up period has elapsed** by paying an **early-exit fee**.
+
+Early-exit fee rules:
+
+* The fee is calculated based on the **remaining lock-up time** at the moment of finalization
+* The fee rate is defined as a **per-day penalty**
+* Early-exit fees are applied **in addition to** any redemption fee already accrued at request time
+
+If early-exit is disabled:
+
+* Finalization attempts prior to lock-up expiry MUST revert
 
 ---
 

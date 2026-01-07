@@ -21,6 +21,15 @@ contract Tranche is ITranche, CDOComponent, ERC4626Upgradeable, ERC20PermitUpgra
 
     event OnMetaDeposit(address indexed owner, address indexed token, uint256 tokenAssets, uint256 shares);
     event OnMetaWithdraw(address indexed owner, address indexed token, uint256 tokenAssets, uint256 shares);
+    event OnExit(
+        address indexed owner,
+        address indexed token,
+        uint256 tokenAssets,
+        uint256 shares,
+        IStrataCDO.TExitMode exitMode,
+        uint256 exitFee,
+        uint32 cooldownSeconds
+    );
 
     function initialize(
         address owner_,
@@ -55,12 +64,12 @@ contract Tranche is ITranche, CDOComponent, ERC4626Upgradeable, ERC20PermitUpgra
      */
 
     /** @dev Extends {IERC4626-maxDeposit} to handle the paused state and the TVL ratio */
-    function maxDeposit(address owner) public view override(ERC4626Upgradeable, IERC4626) returns (uint256) {
+    function maxDeposit(address) public view override(ERC4626Upgradeable, IERC4626) returns (uint256) {
         return cdo.maxDeposit(address(this));
     }
 
     /** @dev Extends {IERC4626-maxMint} to handle the paused state and the TVL ratio */
-    function maxMint(address owner) public view override(ERC4626Upgradeable, IERC4626) returns (uint256) {
+    function maxMint(address) public view override(ERC4626Upgradeable, IERC4626) returns (uint256) {
         uint256 assets = cdo.maxDeposit(address(this));
         if (assets == type(uint256).max) {
             // No mint-cap
@@ -84,7 +93,7 @@ contract Tranche is ITranche, CDOComponent, ERC4626Upgradeable, ERC20PermitUpgra
 
     /** @dev Extends {IERC4626-previewRedeem} to handle fee calculation */
     function previewRedeem(uint256 sharesGross) public view override(ERC4626Upgradeable, IERC4626) returns (uint256 assetsNet) {
-        (IStrataCDO.TExitMode mode, uint256 fee, ) = cdo.calculateExitMode(address(this), address(0));
+        (, uint256 fee, ) = cdo.calculateExitMode(address(this), address(0));
         assetsNet = quoteRedeem(sharesGross, fee);
     }
     function quoteRedeem(uint256 sharesGross, uint256 fee) public view returns (uint256 assetsNet) {
@@ -94,7 +103,7 @@ contract Tranche is ITranche, CDOComponent, ERC4626Upgradeable, ERC20PermitUpgra
 
     /** @dev Extends {IERC4626-previewWithdraw} to handle fee calculation */
     function previewWithdraw(uint256 assetsNet) public view override(ERC4626Upgradeable, IERC4626) returns (uint256 sharesGross) {
-        (IStrataCDO.TExitMode mode, uint256 exitFee, ) = cdo.calculateExitMode(address(this), address(0));
+        (, uint256 exitFee, ) = cdo.calculateExitMode(address(this), address(0));
         sharesGross = quoteWithdraw(assetsNet, exitFee);
     }
 
@@ -289,6 +298,8 @@ contract Tranche is ITranche, CDOComponent, ERC4626Upgradeable, ERC20PermitUpgra
         if (caller != owner) {
             _spendAllowance(owner, caller, sharesGross);
         }
+
+        emit OnExit(receiver, token, tokenAssets, sharesGross, exitMode, exitFee, cooldownSec);
 
         if (exitMode == IStrataCDO.TExitMode.SharesLock) {
             _transfer(owner, address(cdo.sharesCooldown()), sharesGross);

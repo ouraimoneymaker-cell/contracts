@@ -12,6 +12,7 @@
     "IgnoredPaths": [
         "contracts/test",
         "contracts/oz",
-        "contracts/lens"
+        "contracts/lens",
+        "test/PoC"
     ]
 }

@@ -391,12 +391,11 @@ contract Tranche is ITranche, CDOComponent, ERC4626Upgradeable, ERC20PermitUpgra
             return;
         }
         if (params.exitMode != exitMode || params.exitFee != exitFee || params.cooldownSeconds != cooldownSec) {
-            return;
+            revert RedemptionParamsMismatch(params, TRedemptionParams({
+                exitMode: exitMode,
+                exitFee: exitFee,
+                cooldownSeconds: cooldownSec
+            }));
         }
-        revert RedemptionParamsMismatch(params, TRedemptionParams({
-            exitMode: exitMode,
-            exitFee: exitFee,
-            cooldownSeconds: cooldownSec
-        }));
     }
 }

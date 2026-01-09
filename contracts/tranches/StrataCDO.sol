@@ -183,6 +183,8 @@ contract StrataCDO is IErrors, IStrataCDO, IStrataCDOSetters, AccessControlled {
         accounting.accrueFee(isJrt(tranche), assets);
     }
 
+    /// @notice Returns tranche NAVs excluding assets locked in the shares cooldown (silo).
+    /// @dev Reads accounting totals and subtracts locked assets to compute available TVLs and coverage.
     function totalAssetsUnlocked() public view returns (uint256 jrtNav, uint256 srtNav) {
         (jrtNav, srtNav, ) = accounting.totalAssetsT0();
 
@@ -194,15 +196,20 @@ contract StrataCDO is IErrors, IStrataCDO, IStrataCDOSetters, AccessControlled {
         return (jrtNav, srtNav);
     }
 
-    function coverage () public view returns (uint32 coverage) {
+    /// @notice Returns the coverage ratio using available TVLs (assets not locked in the silo).
+    /// @dev Uses totals from totalAssetsUnlocked() so locked assets do not affect coverage.
+    function coverage () public view returns (uint32) {
         (uint256 jrtNav, uint256 srtNav) = totalAssetsUnlocked();
         if (srtNav == 0) {
             return type(uint32).max;
         }
-        uint256 coverage = jrtNav * 1e6 / srtNav;
-        return coverage > type(uint32).max ? type(uint32).max : uint32(coverage);
+        uint256 coverage_ = jrtNav * 1e6 / srtNav;
+        return coverage_ > type(uint32).max ? type(uint32).max : uint32(coverage_);
     }
 
+
+    /// @notice Refreshes accounting state before tranche deposit or redemption flows.
+    /// @dev Called by tranche contracts to sync balances with current strategy TVL.
     function updateAccounting () external onlyTranche {
         uint256 totalAssetsOverall = strategy.totalAssets();
         accounting.updateAccounting(totalAssetsOverall);

@@ -342,6 +342,7 @@ contract Tranche is ITranche, CDOComponent, ERC4626Upgradeable, ERC20PermitUpgra
         assets = convertToAssets(shares);
         _burn(owner, shares);
         cdo.accrueFee(address(this), assets);
+        _onAfterWithdrawalChecks();
     }
 
     /**

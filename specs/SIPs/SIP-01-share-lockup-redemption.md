@@ -166,8 +166,10 @@ If early-exit is disabled:
 
 * If redemptions are fully paused at the Tranche Vault:
 
-  * Finalization requests from the Silo Contract MUST revert
-  * Locked shares remain held in the Silo Contract until redemptions are unpaused
+   * Finalization requests from the Silo Contract MUST revert.
+      - Locked shares remain held in the Silo Contract until redemptions are unpaused.
+   * Cancellation is allowed when enabled.
+      - Locked shares are forwarded to the receiver as-is (without burning).
 
 ---
 

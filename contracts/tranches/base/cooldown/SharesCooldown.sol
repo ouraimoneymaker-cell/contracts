@@ -30,7 +30,7 @@ import {CooldownBase} from "./CooldownBase.sol";
 contract SharesCooldown is ISharesCooldown, CooldownBase {
 
     modifier onlyUser (address user) {
-        require(msg.sender == user, "OnlyOwner");
+        require(msg.sender == user, "OnlySharesOwner");
         _;
     }
 
@@ -225,7 +225,7 @@ contract SharesCooldown is ISharesCooldown, CooldownBase {
     /// @param vault The tranche vault address to configure
     /// @param bounds The exit bounds configuration containing coverage thresholds (p0, p1) and corresponding exit parameters (r0, r1, r2)
     function setVaultExitBounds(address vault, TExitUpperBounds calldata bounds) external onlyTwoStepConfigManager {
-        require(bounds.p0 <= bounds.p1, 'P1>P2');
+        require(bounds.p0 <= bounds.p1, 'P1>P0');
 
         vaultExitBounds[vault] = bounds;
         emit VaultCooldownBoundsUpdated(vault, bounds);

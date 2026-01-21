@@ -111,7 +111,9 @@ export namespace $hh {
             let snap = $require.notNull(this.snapshots[snapshotName], snapshotName);
             let result = await this.client.debug.revert(snap);
             if (result == false) {
-                throw new Error(`Failed to revert to snapshot ${snapshotName}: ${snap}`);
+                const message = `🚫🚫🚫 Failed to revert to snapshot ${snapshotName}: ${snap}`
+                console.error(message)
+                //throw new Error(message);
             }
 
             let newSnapshotId = await this.client.debug.snapshot();

@@ -262,12 +262,13 @@ contract StrataCDO is IErrors, IStrataCDO, IStrataCDOSetters, AccessControlled {
     ///      The shares are held in escrow during the cooldown period before they can be redeemed for assets.
     ///      The caller MUST transfer the required shares to the shares cooldown contract before calling this function.
     /// @param tranche The address of the tranche (junior or senior).
+    /// @param token The output asset selected by the user for redemption.
     /// @param shares The amount of shares to lock for cooldown.
     /// @param sender The address initiating the cooldown (original share owner).
     /// @param receiver The address that will receive the assets after cooldown completes.
     /// @param fee The exit fee to be applied when redeeming (in 18 decimals).
     /// @param cooldownSeconds The duration of the cooldown period in seconds.
-    function cooldownShares(address tranche, uint256 shares, address sender, address receiver, uint256 fee, uint32 cooldownSeconds) external onlyTranche nonReentrant {
+    function cooldownShares(address tranche, address token, uint256 shares, address sender, address receiver, uint256 fee, uint32 cooldownSeconds) external onlyTranche nonReentrant {
         if (shares == 0) {
             revert ZeroAmount();
         }
@@ -276,7 +277,7 @@ contract StrataCDO is IErrors, IStrataCDO, IStrataCDOSetters, AccessControlled {
         if (!enabled) {
             revert WithdrawalsDisabled(tranche);
         }
-        sharesCooldown.requestRedeem(ITranche(tranche), sender, receiver, shares, fee, cooldownSeconds);
+        sharesCooldown.requestRedeem(ITranche(tranche), token, sender, receiver, shares, fee, cooldownSeconds);
     }
 
     /// @notice Determines if the given address is the Junior (BB) Tranche

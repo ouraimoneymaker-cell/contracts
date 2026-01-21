@@ -303,7 +303,7 @@ contract Tranche is ITranche, CDOComponent, ERC4626Upgradeable, ERC20PermitUpgra
 
         if (exitMode == IStrataCDO.TExitMode.SharesLock) {
             _transfer(owner, address(cdo.sharesCooldown()), sharesGross);
-            cdo.cooldownShares(address(this), sharesGross, owner, receiver, exitFee, cooldownSec);
+            cdo.cooldownShares(address(this), token, sharesGross, owner, receiver, exitFee, cooldownSec);
             return;
         }
 

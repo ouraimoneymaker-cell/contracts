@@ -45,7 +45,7 @@
     "atma-loader-ts": "latest",
     "atma-utest": "^0.21.36",
     "class-json": "latest",
-    "dequanto": "^0.1.97",
+    "dequanto": "^0.1.99",
     "dotenv": "^16.4.7",
     "hardhat": "latest",
     "memd": "latest",

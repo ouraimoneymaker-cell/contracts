@@ -44,12 +44,21 @@ contract SharesCooldown is ISharesCooldown, CooldownBase {
     ///      Lockup and fee values are determined using calculateExitParams() based on vault coverage.
     ///      Request handling follows the same pattern as ERC20Cooldown and UnstakeCooldown transfer methods.
     /// @param vault The tranche vault holding the shares
+    /// @param token The output asset to withdraw later
     /// @param initialFrom The original owner initiating the redemption
     /// @param to The recipient who will receive the redeemed assets (can differ from initialFrom)
     /// @param shares Amount of vault shares to redeem
     /// @param fee Fee in basis points (1e18 = 100%) to burn from shares before locking
     /// @param cooldownSeconds Lock duration in seconds; 0 for immediate redemption
-    function requestRedeem(ITranche vault, address initialFrom, address to, uint256 shares, uint256 fee, uint32 cooldownSeconds) external onlyRole(COOLDOWN_WORKER_ROLE) {
+    function requestRedeem(
+        ITranche vault,
+        address token,
+        address initialFrom,
+        address to,
+        uint256 shares,
+        uint256 fee,
+        uint32 cooldownSeconds
+    ) external onlyRole(COOLDOWN_WORKER_ROLE) {
         if (shares == 0) {
             return;
         }
@@ -58,7 +67,7 @@ contract SharesCooldown is ISharesCooldown, CooldownBase {
             shares = sharesUser;
         }
         if (cooldownSeconds == 0) {
-            vault.redeem(shares, to, address(this));
+            vault.redeem(token, shares, to, address(this));
             emit Finalized(IERC20(address(vault)), to, shares);
             return;
         }
@@ -83,36 +92,62 @@ contract SharesCooldown is ISharesCooldown, CooldownBase {
             ) {
                 // is requested within current block
                 TRequest storage last = requests[requestsCount - 1];
+                last.token = token;
                 last.shares += uint192(shares);
             } else {
-                requests.push(TRequest(unlockAt, uint192(shares)));
+                requests.push(TRequest(unlockAt, uint192(shares), token));
             }
         } else {
             TRequest storage last = requests[requestsCount - 1];
+            // Override with the user's latest token intent.
+            last.token = token;
             last.shares += uint192(shares);
             if (last.unlockAt < unlockAt) {
                 last.unlockAt = unlockAt;
             }
         }
 
-        emit TransferRequested(vault, initialFrom, to, shares, unlockAt);
+        emit RequestedCooldown(address(vault), token, initialFrom, to, shares, unlockAt);
     }
 
+
+    /// @notice Permissionless finalization for the user:
+    ///         finalizes all ready requests using the preconfigured token at redemption time.
+    /// @dev Implements the ICooldown interface.
+    function finalize(IERC20 vault, address user) external returns (uint256 claimed) {
+        return finalize(ITranche(address(vault)), address(0), user, block.timestamp);
+    }
+    function finalize(IERC20 vault, address user, uint256 at) external returns (uint256 claimed) {
+        return finalize(ITranche(address(vault)), address(0), user, at);
+    }
+
+    /// @notice Permissionless finalization for the user:
+    ///         finalizes specific token requests or all requests using the preconfigured token output at redemption time.
     function finalize(ITranche vault, address token, address user) external returns (uint256 claimed) {
         return finalize(vault, token, user, block.timestamp);
     }
     function finalize(ITranche vault, address token, address user, uint256 at) public returns (uint256 claimed) {
-        claimed = extractClaimableInner(address(vault), user, at);
-        vault.redeem(token, claimed, user, address(this));
+        if (token == address(0)) {
+            claimed = _finalizeAll(address(vault), user, address(0), at);
+        } else {
+            (claimed, ) = _processFinalization(address(vault), user, token, address(0), at);
+        }
+        if (claimed == 0) {
+            revert NothingToFinalize();
+        }
         emit Finalized(vault, user, claimed);
         return claimed;
     }
-    function finalize(IERC20 vault, address user) external returns (uint256 claimed) {
-        return finalize(vault, user, block.timestamp);
-    }
-    function finalize(IERC20 vault, address user, uint256 at) public returns (uint256 claimed) {
-        claimed = extractClaimableInner(address(vault), user, at);
-        IERC4626(address(vault)).redeem(claimed, user, address(this));
+
+
+    /// @notice Finalizes all claimable requests by redeeming to the override token.
+    /// @dev Only callable by the request owner to override the per-request token.
+    /// @param vault The tranche vault address.
+    /// @param token The output asset to redeem for all claimable requests.
+    /// @param user The request owner (must be msg.sender).
+    /// @return claimed The total shares redeemed.
+    function finalizeWithTokenOverride(IERC20 vault, address token, address user) external onlyUser(user) returns (uint256 claimed) {
+        claimed = _finalizeAll(address(vault), user, token, block.timestamp);
         emit Finalized(vault, user, claimed);
         return claimed;
     }
@@ -146,7 +181,7 @@ contract SharesCooldown is ISharesCooldown, CooldownBase {
 
         (uint256 sharesUser, uint256 sharesFee) = accrueFee(vault, shares, fee * daysLeft);
 
-        vault.redeem(sharesUser, user, address(this));
+        vault.redeem(req.token, sharesUser, user, address(this));
         emit ExitFeeAccrued(address(this), user, sharesFee, sharesUser);
 
         claimed = sharesUser;
@@ -262,11 +297,51 @@ contract SharesCooldown is ISharesCooldown, CooldownBase {
         vault.burnSharesAsFee(sharesFee, address(this));
     }
 
-    /// @dev Extracts and removes all claimable requests (unlocked or cooldown disabled) from user's active requests array.
-    function extractClaimableInner(address vault, address user, uint256 at) internal returns (uint256 claimable) {
+    /// @dev Finalize all requests using their output assets; when `overrideToken` is set, redeem all requests
+    ///      to that token (used only through onlyUser entrypoints).
+    function _finalizeAll(address vault, address user, address overridenToken, uint256 at) internal returns (uint256 claimed) {
+        if (overridenToken != address(0)) {
+            (claimed, ) = _processFinalization(vault, user, address(0), overridenToken, at);
+            return claimed;
+        }
+        address finalizeToken = ITranche(vault).asset();
+        while (true) {
+            (uint256 singleClaimed, address nextToken) = _processFinalization(vault, user, finalizeToken, overridenToken, at);
+            claimed += singleClaimed;
+            if (nextToken == address(0)) {
+                break;
+            }
+            finalizeToken = nextToken;
+        }
+        return claimed;
+    }
+
+
+    /// @notice Finalizes claimable requests for a specific or all tokens.
+    /// @dev Iterates the user's requests, sums claimable shares that match `token`, and redeems them.
+    ///      If `token` is zero, `overrideToken` MUST be set and all claimable requests are redeemed
+    ///      using the override token (used only through onlyUser entrypoints).
+    /// @param vault Tranche vault address.
+    /// @param user Owner of the requests being finalized.
+    /// @param token Token filter; when zero, all claimable requests are aggregated.
+    /// @param overrideToken Override token to withdraw.
+    /// @param at Timestamp used to determine claimable requests.
+    /// @return claimed Total shares redeemed in this pass.
+    /// @return nextToken Next token found among remaining requests (zero if none).
+    function _processFinalization(
+        address vault,
+        address user,
+        address token,
+        address overrideToken,
+        uint256 at
+    ) internal returns (uint256 claimed, address nextToken) {
         if (at > block.timestamp) {
             revert InvalidTime();
         }
+        if (token == address(0) && overrideToken == address(0)) {
+            revert ZeroAddress();
+        }
+
         TRequest[] storage requests = activeRequests[address(vault)][user];
         bool isCooldownActive = isCooldownActiveInner(vault);
 
@@ -280,7 +355,16 @@ contract SharesCooldown is ISharesCooldown, CooldownBase {
                 }
                 continue;
             }
-            claimable += req.shares;
+            if (token != address(0) && token != req.token) {
+                if (nextToken == address(0)) {
+                    nextToken = req.token;
+                }
+                unchecked {
+                    i++;
+                }
+                continue;
+            }
+            claimed += req.shares;
 
             if (i < len - 1) {
                 requests[i] = requests[len - 1];
@@ -290,10 +374,12 @@ contract SharesCooldown is ISharesCooldown, CooldownBase {
                 len--;
             }
         }
-        if (claimable == 0) {
-            revert NothingToFinalize();
+        if (claimed > 0) {
+            address tokenToRedeem = overrideToken != address(0) ? overrideToken : token;
+            ITranche(vault).redeem(tokenToRedeem, claimed, user, address(this));
         }
-        return claimable;
+
+        return (claimed, nextToken);
     }
 
 }

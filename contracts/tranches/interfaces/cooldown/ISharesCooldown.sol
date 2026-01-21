@@ -12,6 +12,11 @@ interface ISharesCooldown is ICooldown {
     struct TRequest {
         uint64 unlockAt;
         uint192 shares;
+        address token;
+    }
+    struct TClaimableToken {
+        address token;
+        uint256 shares;
     }
 
     struct TExitParams {
@@ -39,9 +44,9 @@ interface ISharesCooldown is ICooldown {
         TExitParams r2;
     }
 
-    event RedeemRequested(IERC4626 indexed vault, address indexed from, address indexed to, uint256 shares, uint256 unlockAt);
     event VaultCooldownUpdated(address indexed vault, uint256 cooldownSeconds);
     event RequestCanceled(address indexed vault, address user, uint256 shares);
+    event RequestedCooldown(address indexed vault, address token, address initialFrom, address to, uint256 shares, uint64 unlockAt);
     event VaultCooldownBoundsUpdated(address indexed vault,TExitUpperBounds bounds);
     event VaultEarlyExitFeeSet(address indexed vault, uint256 earlyExitFee);
     event ExitFeeAccrued(address indexed vault, address user, uint256 sharesFee, uint256 sharesUser);
@@ -50,6 +55,7 @@ interface ISharesCooldown is ICooldown {
     function finalize(ITranche vault, address token, address user, uint256 at) external returns (uint256 claimed);
     function requestRedeem(
         ITranche vault,
+        address token,
         address initialFrom,
         address to,
         uint256 shares,

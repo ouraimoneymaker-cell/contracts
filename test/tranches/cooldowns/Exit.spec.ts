@@ -11,6 +11,7 @@ import { $exitMode } from '@s/utils/$exitMode';
 import { $date } from 'dequanto/utils/$date';
 import { $ethena } from '../utils/$ethena';
 import { $promise } from 'dequanto/utils/$promise';
+import { $address } from 'dequanto/utils/$address';
 
 
 let hh = new HardhatProvider();
@@ -254,7 +255,7 @@ UTest.create({
             }
         })
     },
-    async 'should early exit the shares cooldown' () {
+    async '!should early exit the shares cooldown' () {
         await $tranche.deposit(jrtVault, alice, USDe, 100.0);
         await $tranche.deposit(srtVault, alice, USDe, 100.0);
 
@@ -263,19 +264,37 @@ UTest.create({
         ]);
         await sharesCooldown.$receipt().setVaultEarlyExitFee(deployer, jrtVault.address, BigInt(0.01e18));
 
-        let amount = BigInt(10e18);
-        let assets = await jrtVault.convertToAssets(amount);
-        let assetsFact = await $erc4626.redeem(jrtVault, alice, 10.0);
-        $require.eq(assetsFact, 0n);
+        default_token: {
+            let amount = BigInt(10e18);
+            let assets = await jrtVault.convertToAssets(amount);
+            let assetsFact = await $erc4626.redeem(jrtVault, alice, 10.0);
+            $require.eq(assetsFact, 0n);
 
 
-        let balanceBefore = await USDe.balanceOf(alice.address);
-        await sharesCooldown.$receipt().finalizeWithFee(alice, jrtVault.address, alice.address, 0n);
+            let balanceBefore = await USDe.balanceOf(alice.address);
+            await sharesCooldown.$receipt().finalizeWithFee(alice, jrtVault.address, $address.ZERO, alice.address, 0n);
 
-        assetsFact = await USDe.balanceOf(alice.address) - balanceBefore;
+            assetsFact = await USDe.balanceOf(alice.address) - balanceBefore;
 
-        let fee = $bigint.toEther(assets) * 0.01 * 8;
-        $require.eq($bigint.toEther(assetsFact) + fee, $bigint.toEther(assets));
+            let fee = $bigint.toEther(assets) * 0.01 * 8;
+            $require.eq($bigint.toEther(assetsFact) + fee, $bigint.toEther(assets));
+        }
+        overridden_token: {
+            let amount = BigInt(10e18);
+            let assets = await jrtVault.convertToAssets(amount);
+            // default withdraw function - USDe asset
+            let assetsFact = await $erc4626.redeem(jrtVault, alice, 10.0);
+            $require.eq(assetsFact, 0n);
+
+
+            let balanceBefore = await sUSDe.balanceOf(alice.address);
+            await sharesCooldown.$receipt().finalizeWithFee(alice, jrtVault.address, sUSDe.address, alice.address, 0n);
+
+            assetsFact = await sUSDe.balanceOf(alice.address) - balanceBefore;
+
+            let fee = $bigint.toEther(assets) * 0.01 * 8;
+            $require.eq($bigint.toEther(assetsFact) + fee, $bigint.toEther(assets));
+        }
     },
 
     async 'should revert on exit when coverage is below minimumJrtSrtRatio' () {

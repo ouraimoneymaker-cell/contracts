@@ -160,10 +160,11 @@ contract SharesCooldown is ISharesCooldown, CooldownBase {
     ///      Scenario: If Alice redeems shares to Bob with a 7-day lock, Bob can call this function
     ///      after 3 days to receive the shares immediately by paying a fee for the remaining 4 days.
     /// @param vault The vault/tranche token address
+    /// @param token Optional output asset to redeem; use ZeroAddress for the preselected token.
     /// @param user The recipient address of the redemption request (must be msg.sender)
     /// @param i The index of the request in the user's active requests array
     /// @return claimed The amount of shares claimed after deducting the early exit fee
-    function finalizeWithFee(ITranche vault, address user, uint256 i) external onlyUser(user) returns (uint256 claimed) {
+    function finalizeWithFee(ITranche vault, address token, address user, uint256 i) external onlyUser(user) returns (uint256 claimed) {
         TRequest[] storage requests = activeRequests[address(vault)][user];
         uint256 len = requests.length;
         require(i < len, "OutOfRange");
@@ -181,7 +182,8 @@ contract SharesCooldown is ISharesCooldown, CooldownBase {
 
         (uint256 sharesUser, uint256 sharesFee) = accrueFee(vault, shares, fee * daysLeft);
 
-        vault.redeem(req.token, sharesUser, user, address(this));
+        address tokenToRedeem = token != address(0) ? token : req.token;
+        vault.redeem(tokenToRedeem, sharesUser, user, address(this));
         emit ExitFeeAccrued(address(this), user, sharesFee, sharesUser);
 
         claimed = sharesUser;

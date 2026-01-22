@@ -8,6 +8,7 @@ import {IERC4626} from "@openzeppelin/contracts/interfaces/IERC4626.sol";
 import {ISharesCooldown} from "../../interfaces/cooldown/ISharesCooldown.sol";
 import {ICooldown} from "../../interfaces/cooldown/ICooldown.sol";
 import {ITranche} from "../../interfaces/ITranche.sol";
+import {IStrataCDO} from "../../interfaces/IStrataCDO.sol";
 import {CooldownBase} from "./CooldownBase.sol";
 
 /**
@@ -185,6 +186,10 @@ contract SharesCooldown is ISharesCooldown, CooldownBase {
         require(guard.daysLeft == 0 || guard.daysLeft == daysLeft, "UnexpectedDays");
 
         (uint256 sharesUser, uint256 sharesFee) = accrueFee(vault, shares, fee * daysLeft);
+
+        uint256 maxAssets = IStrataCDO(vault.getCDOAddress()).maxWithdraw(address(vault));
+        uint256 maxShares = vault.convertToShares(maxAssets);
+        require(maxShares >= sharesUser, "MaxRedemptionLimitReached");
 
         address tokenToRedeem = token != address(0) ? token : req.token;
         vault.redeem(tokenToRedeem, sharesUser, user, address(this));

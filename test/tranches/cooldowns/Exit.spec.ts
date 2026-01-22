@@ -309,6 +309,15 @@ UTest.create({
                     daysLeft: 5n,
                 }));
                 $require.match(/UnexpectedDays/, errorDays.message);
+            },
+            async 'should fail after minimumJrtSrtRatio is reached' () {
+                await accounting.$receipt().setMinimumJrtSrtRatioBuffer(deployer, $bigint.toWei(0.95))
+                await accounting.$receipt().setMinimumJrtSrtRatio(deployer, $bigint.toWei(0.95))
+                let { error } = await $promise.caught(sharesCooldown.$receipt().finalizeWithFee(alice, jrtVault.address, $address.ZERO, alice.address, 0n, {
+                    shares: 0n,
+                    daysLeft: 0n,
+                }));
+                $require.match(/MaxRedemptionLimitReached/, error.message)
             }
         });
 

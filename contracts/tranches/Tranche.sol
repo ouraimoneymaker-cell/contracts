@@ -78,7 +78,10 @@ contract Tranche is ITranche, CDOComponent, ERC4626Upgradeable, ERC20PermitUpgra
         return convertToShares(assets);
     }
 
-    /** @dev Extends {IERC4626-maxWithdraw} to handle the paused state and the TVL ratio */
+    /**
+     * @dev Extends {IERC4626-maxWithdraw} to handle the paused state and the TVL ratio
+     *      For public use (includes actual fee calculation).
+     */
     function maxWithdraw(address owner) public view override(ERC4626Upgradeable, IERC4626) returns (uint256 assetsNet) {
         uint256 sharesGross = balanceOf(owner);
         assetsNet = Math.min(previewRedeem(sharesGross), cdo.maxWithdraw(address(this), owner));
@@ -91,7 +94,9 @@ contract Tranche is ITranche, CDOComponent, ERC4626Upgradeable, ERC20PermitUpgra
         sharesGross = Math.min(super.maxRedeem(owner), sharesProtocolMax);
     }
 
-    /** @dev Extends {IERC4626-previewRedeem} to handle fee calculation */
+    /** @dev Extends {IERC4626-previewRedeem} to handle fee calculation. Public and owner-unaware;
+     *       For public use (includes actual fee calculation).
+     */
     function previewRedeem(uint256 sharesGross) public view override(ERC4626Upgradeable, IERC4626) returns (uint256 assetsNet) {
         (, uint256 fee, ) = cdo.calculateExitMode(address(this), address(0));
         assetsNet = quoteRedeem(sharesGross, fee);

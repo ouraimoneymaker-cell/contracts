@@ -44,6 +44,15 @@ interface ISharesCooldown is ICooldown {
         TExitParams r2;
     }
 
+    struct TFinalizeWithFeeGuard {
+        uint192 shares;
+        uint256 daysLeft;
+    }
+    struct TCancelGuard {
+        uint192 shares;
+    }
+
+
     event VaultCooldownUpdated(address indexed vault, uint256 cooldownSeconds);
     event RequestCanceled(address indexed vault, address user, uint256 shares);
     event RequestedCooldown(address indexed vault, address token, address initialFrom, address to, uint256 shares, uint64 unlockAt);
@@ -53,6 +62,9 @@ interface ISharesCooldown is ICooldown {
 
     function finalize(ITranche vault, address token, address user) external returns (uint256 claimed);
     function finalize(ITranche vault, address token, address user, uint256 at) external returns (uint256 claimed);
+    function finalizeWithFee(ITranche vault, address token, address user, uint256 i, TFinalizeWithFeeGuard calldata guard) external returns (uint256 claimed);
+    function cancel(IERC20 vault, address user, uint256 i, TCancelGuard calldata guard) external;
+
     function requestRedeem(
         ITranche vault,
         address token,

@@ -163,22 +163,26 @@ contract SharesCooldown is ISharesCooldown, CooldownBase {
     /// @param token Optional output asset to redeem; use ZeroAddress for the preselected token.
     /// @param user The recipient address of the redemption request (must be msg.sender)
     /// @param i The index of the request in the user's active requests array
+    /// @param guard Optional user-provided guard rails to enforce expected values
     /// @return claimed The amount of shares claimed after deducting the early exit fee
-    function finalizeWithFee(ITranche vault, address token, address user, uint256 i) external onlyUser(user) returns (uint256 claimed) {
+    function finalizeWithFee(ITranche vault, address token, address user, uint256 i, TFinalizeWithFeeGuard calldata guard) external onlyUser(user) returns (uint256 claimed) {
         TRequest[] storage requests = activeRequests[address(vault)][user];
         uint256 len = requests.length;
         require(i < len, "OutOfRange");
         TRequest memory req = requests[i];
+        require(req.unlockAt > block.timestamp, "RequestReady");
+        require(guard.shares == 0 || guard.shares == req.shares, "UnexpectedShares");
+
         if (i < len - 1) {
             requests[i] = requests[len - 1];
         }
         requests.pop();
 
-        require(req.unlockAt > block.timestamp, "RequestReady");
-
         uint256 shares = req.shares;
         uint256 daysLeft = (req.unlockAt - block.timestamp) / (24 * 60 * 60) + 1; // includes current day in the count
         uint256 fee = vaultEarlyExitFeePerDay[address(vault)];
+
+        require(guard.daysLeft == 0 || guard.daysLeft == daysLeft, "UnexpectedDays");
 
         (uint256 sharesUser, uint256 sharesFee) = accrueFee(vault, shares, fee * daysLeft);
 
@@ -197,7 +201,8 @@ contract SharesCooldown is ISharesCooldown, CooldownBase {
     /// @param vault The vault/tranche token address
     /// @param user The recipient address of the redemption request (must be msg.sender)
     /// @param i The index of the request in the user's active requests array
-    function cancel(IERC20 vault, address user, uint256 i) external onlyUser(user) {
+    /// @param guard Optional user-provided guard rails to enforce expected values
+    function cancel(IERC20 vault, address user, uint256 i, TCancelGuard calldata guard) external onlyUser(user) {
 
         TRequest[] storage requests = activeRequests[address(vault)][user];
         uint256 len = requests.length;
@@ -207,6 +212,7 @@ contract SharesCooldown is ISharesCooldown, CooldownBase {
             requests[i] = requests[len - 1];
         }
         requests.pop();
+        require(guard.shares == 0 || guard.shares == req.shares, "UnexpectedShares");
         vault.transfer(user, req.shares);
         emit RequestCanceled(address(vault), user, req.shares);
     }

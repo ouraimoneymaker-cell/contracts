@@ -203,12 +203,15 @@ UAction.create({
     async 'cancel request' () {
         await requestRedeem(sharesCooldown, Vault, USDe.address, alice, bob, BigInt(2e18), '60s');
 
-        let { error } = await $promise.caught(sharesCooldown.$receipt().cancel(alice, Vault.address, bob.address, 0n));
+        let { error } = await $promise.caught(sharesCooldown.$receipt().cancel(alice, Vault.address, bob.address, 0n, { shares: 0n }));
         $require.match(/OnlySharesOwner/, error.message);
 
         await $erc20.eqBalance(Vault, bob, 0);
 
-        await sharesCooldown.$receipt().cancel(bob, Vault.address, bob.address, 0n);
+        let { error: errorShares } = await $promise.caught(sharesCooldown.$receipt().cancel(bob, Vault.address, bob.address, 0n, { shares: BigInt(1e18) }));
+        $require.match(/UnexpectedShares/, errorShares.message);
+
+        await sharesCooldown.$receipt().cancel(bob, Vault.address, bob.address, 0n, { shares: BigInt(2e18) });
         await $erc20.eqBalance(Vault, bob, 2.0);
 
         await $testCooldown.eqBalanceOf(sharesCooldown, Vault, bob, {

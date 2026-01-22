@@ -318,7 +318,9 @@ contract Tranche is ITranche, CDOComponent, ERC4626Upgradeable, ERC20PermitUpgra
         uint256 fee = Math.saturatingSub(baseAssetsGross, baseAssets);
 
         _burn(owner, sharesGross);
-        cdo.accrueFee(address(this), fee);
+        if (fee > 0) {
+            cdo.accrueFee(address(this), fee);
+        }
         cdo.withdraw(address(this), token, tokenAssets, baseAssets, owner, receiver);
         _onAfterWithdrawalChecks();
         emit Withdraw(caller, receiver, owner, baseAssets, sharesGross);

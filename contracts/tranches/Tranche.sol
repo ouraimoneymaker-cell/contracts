@@ -20,7 +20,7 @@ contract Tranche is ITranche, CDOComponent, ERC4626Upgradeable, ERC20PermitUpgra
     uint256 private constant MIN_SHARES = 0.1 ether;
 
     event OnMetaDeposit(address indexed owner, address indexed token, uint256 tokenAssets, uint256 shares);
-    event OnMetaWithdraw(address indexed owner, address indexed token, uint256 tokenAssets, uint256 shares);
+    event OnMetaWithdraw(address indexed receiver, address indexed token, uint256 tokenAssets, uint256 shares);
     event OnExit(
         address indexed owner,
         address indexed token,

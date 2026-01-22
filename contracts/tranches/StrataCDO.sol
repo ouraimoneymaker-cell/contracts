@@ -257,6 +257,13 @@ contract StrataCDO is IErrors, IStrataCDO, IStrataCDOSetters, AccessControlled {
         shortfallPauser();
     }
 
+    /// @notice Lets a tranche refresh APRs after NAV-affecting events (e.g., fee accrual in burnSharesAsFee).
+    /// @dev updates use current NAVs as a zero flow delta.
+    function updateBalanceFlow() external onlyTranche {
+        accounting.updateBalanceFlow(0, 0, 0, 0);
+        shortfallPauser();
+    }
+
     /// @notice Initiates a cooldown period for share redemption by transferring shares to the cooldown contract.
     /// @dev Validates withdrawal permissions and delegates to the sharesCooldown contract to handle the lock-up.
     ///      The shares are held in escrow during the cooldown period before they can be redeemed for assets.

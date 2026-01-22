@@ -330,6 +330,7 @@ contract Tranche is ITranche, CDOComponent, ERC4626Upgradeable, ERC20PermitUpgra
     /// @param owner The owner of the shares to burn
     /// @return assets The base assets accounted as fee
     function burnSharesAsFee(uint256 shares, address owner) external returns (uint256 assets) {
+        cdo.updateAccounting();
         address caller = _msgSender();
         if (caller != owner) {
             _spendAllowance(owner, caller, shares);
@@ -342,6 +343,7 @@ contract Tranche is ITranche, CDOComponent, ERC4626Upgradeable, ERC20PermitUpgra
         assets = convertToAssets(shares);
         _burn(owner, shares);
         cdo.accrueFee(address(this), assets);
+        cdo.updateBalanceFlow();
         _onAfterWithdrawalChecks();
     }
 

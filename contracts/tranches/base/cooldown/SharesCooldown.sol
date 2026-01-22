@@ -45,7 +45,7 @@ contract SharesCooldown is ISharesCooldown, CooldownBase {
     ///      Request handling follows the same pattern as ERC20Cooldown and UnstakeCooldown transfer methods.
     /// @param vault The tranche vault holding the shares
     /// @param token The output asset to withdraw later
-    /// @param initialFrom The original owner initiating the redemption
+    /// @param initialFrom The account initiating the redemption
     /// @param to The recipient who will receive the redeemed assets (can differ from initialFrom)
     /// @param shares Amount of vault shares to redeem
     /// @param fee Fee in basis points (1e18 = 100%) to burn from shares before locking

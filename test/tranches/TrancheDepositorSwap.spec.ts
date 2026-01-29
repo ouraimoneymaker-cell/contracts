@@ -17,7 +17,9 @@ let forked: TranchesDeployments;
 UTest.create({
 
     async $before () {
-        forked = await $hh.forked();
+        forked = await $hh.forked({
+            block: 24164000
+        });
     },
 
     async $after () {

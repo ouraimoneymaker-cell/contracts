@@ -1,4 +1,4 @@
-pragma solidity 0.8.28;
+pragma solidity ^0.8.28;
 
 import {Test} from "forge-std/Test.sol";
 import "forge-std/console2.sol";
@@ -199,7 +199,7 @@ contract CDOTest is Test {
         IERC20 usdt = IERC20(address(0xdAC17F958D2ee523a2206206994597C13D831ec7));
         address usde = address(0x4c9EDD5852cd905f086C759E8383e09bff1E68B3);
 
-        trancheDepositor.addSwapInfo(usdt, TrancheDepositor.TAutoSwap(router, 100, 900));
+        trancheDepositor.addSwapInfo(address(usdt), TrancheDepositor.TAutoSwap(router, 100, 900));
 
         address someUsdtHolder = address(0x6AC38D1b2f0c0c3b9E816342b1CA14d91D5Ff60B);
         vm.startPrank(someUsdtHolder);

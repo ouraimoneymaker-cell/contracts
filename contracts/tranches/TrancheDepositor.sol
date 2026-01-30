@@ -19,12 +19,14 @@ contract TrancheDepositor is AccessControlled {
     bytes32 public constant DEPOSITOR_CONFIG_ROLE = keccak256("DEPOSITOR_CONFIG_ROLE");
 
     event SwapInfoChanged(address indexed token);
+    event CdoSwapInfoChanged(address indexed cdo, address indexed token);
     event AutoWithdrawalsChanged();
     event CdoAdded(address cdo);
     event TranchesAdded();
 
     error InvalidAsset(address vault, address asset);
     error MintedSharesBelowMin(uint256 shares, uint256 minShares);
+    error InsufficientOutputAmount(uint256 received, uint256 minimum);
 
     struct TAutoSwap {
         address router;
@@ -46,10 +48,10 @@ contract TrancheDepositor is AccessControlled {
     }
 
 
-    mapping (address sourceToken => TAutoSwap tokenSwapInfo)            public autoSwaps;
-    mapping (address sourceVault => bool enabled)                       public autoWithdrawals;
-    mapping (address tranche => mapping(address token => bool enabled)) public tranches;
-
+    mapping (address sourceToken => TAutoSwap tokenSwapInfo)              public autoSwaps;
+    mapping (address sourceVault => bool enabled)                         public autoWithdrawals;
+    mapping (address tranche => mapping(address token => bool enabled))   public tranches;
+    mapping (address tranche => mapping(address token => TAutoSwap info)) public trancheAutoSwaps;
 
     function initialize(
         address owner_,
@@ -95,6 +97,18 @@ contract TrancheDepositor is AccessControlled {
             unchecked { i++; }
         }
         emit CdoAdded(address(cdo));
+    }
+
+    /**
+     * @notice Configure swap information for a given CDO and input token
+     * @dev Example: for Neutrl + USDC, use Neutrl's router to swap into the base asset (NUSD)
+     */
+    function addCdoAutoSwap (IStrataCDO cdo, address tokenIn, TAutoSwap calldata swapInfo) external onlyRole(DEPOSITOR_CONFIG_ROLE) {
+        address jrt = address(cdo.jrtVault());
+        address srt = address(cdo.srtVault());
+        trancheAutoSwaps[jrt][tokenIn] = swapInfo;
+        trancheAutoSwaps[srt][tokenIn] = swapInfo;
+        emit CdoSwapInfoChanged(address(cdo), tokenIn);
     }
 
    /**
@@ -180,8 +194,14 @@ contract TrancheDepositor is AccessControlled {
         if (autoWithdrawals[address(asset)] == true) {
             return _deposit_viaWithdraw(vault, IERC4626(address(asset)), from, amount, receiver, params);
         }
-        if (autoSwaps[address(asset)].router != address(0)) {
-            return _deposit_viaSwap(vault, asset, from, amount, receiver, params);
+        TAutoSwap memory tracheSwapInfo = trancheAutoSwaps[address(vault)][address(asset)];
+        if (tracheSwapInfo.router != address(0)) {
+            return _deposit_viaSwap(vault, asset, from, amount, receiver, params, tracheSwapInfo);
+        }
+
+        TAutoSwap memory genericSwapInfo = autoSwaps[address(asset)];
+        if (genericSwapInfo.router != address(0)) {
+            return _deposit_viaSwap(vault, asset, from, amount, receiver, params, genericSwapInfo);
         }
         revert InvalidAsset(address(vault), address(asset));
     }
@@ -225,7 +245,7 @@ contract TrancheDepositor is AccessControlled {
         IERC20 baseAsset = IERC20(sourceVault.asset());
         uint256 baseAssetBalanceBefore = baseAsset.balanceOf(address(this));
 
-        sourceVault.withdraw(amount, address(this), from);
+        sourceVault.redeem(amount, address(this), from);
         uint256 amountOut = baseAsset.balanceOf(address(this)) - baseAssetBalanceBefore;
         return _deposit(vault, baseAsset, address(this), amountOut, receiver, depositParams);
     }
@@ -237,12 +257,11 @@ contract TrancheDepositor is AccessControlled {
         address from,
         uint256 amount,
         address receiver,
-        TDepositParams memory depositParams
+        TDepositParams memory depositParams,
+        TAutoSwap memory swapInfo
     ) internal returns (uint256) {
 
         SafeERC20.safeTransferFrom(tokenIn, from, address(this), amount);
-
-        TAutoSwap memory swapInfo = autoSwaps[address(tokenIn)];
 
         // Approve e.g. Uniswap router to spend Token
         SafeERC20.forceApprove(tokenIn, swapInfo.router, amount);
@@ -288,8 +307,11 @@ contract TrancheDepositor is AccessControlled {
         });
 
         ISwapRouter(swapInfo.router).exactInputSingle(params);
-        uint256 amountOut = IERC20(tokenOut).balanceOf(address(this)) - tokenOutAmountBefore;
-        return _deposit(vault, IERC20(tokenOut), address(this), amountOut, receiver, depositParams);
+        uint256 amountReceived = IERC20(tokenOut).balanceOf(address(this)) - tokenOutAmountBefore;
+        if (amountReceived < amountOutMin) {
+            revert InsufficientOutputAmount(amountReceived, amountOutMin);
+        }
+        return _deposit(vault, IERC20(tokenOut), address(this), amountReceived, receiver, depositParams);
     }
 
 }

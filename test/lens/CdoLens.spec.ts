@@ -1,6 +1,6 @@
 import { UTest } from 'atma-utest'
 import { $hh } from '../tranches/utils/$hh';
-import { TranchesDeployments } from '@s/deployments/TranchesDeployments';
+import { EthenaDeployments } from '@s/deployments/EthenaDeployments';
 import { CDOLens } from '@0xc/hardhat/CDOLens/CDOLens';
 import { l } from 'dequanto/utils/$logger';
 import { $bigint } from 'dequanto/utils/$bigint';
@@ -10,7 +10,7 @@ import { $require } from 'dequanto/utils/$require';
 
 await $hh.test.init();
 
-let forked: TranchesDeployments;
+let forked: EthenaDeployments;
 
 UTest.create({
 

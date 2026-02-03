@@ -7,10 +7,13 @@ import { $erc20 } from '../utils/$erc20';
 import { l } from 'dequanto/utils/$logger';
 import { $ethena } from '../utils/$ethena';
 
-await $hh.test.deploy();
 
-let { deployer, factory } = $hh.test
-let { sUSDe, USDe, strategy, cdo, accounting, unstakeCooldown } = $hh.test.tranches;
+const test = $hh.create('ethena');
+await test.deploy();
+
+let { deployer, factory } = test
+let { sUSDe, USDe, strategy, cdo, accounting, unstakeCooldown } = test.tranches;
+
 
 UAction.create({
     async $before () {
@@ -19,20 +22,20 @@ UAction.create({
 
     },
     async $after () {
-        await $hh.test.reset();
+        await test.reset();
     },
     async $teardown () {
         await accounting.$receipt().setReserveBps(deployer, 0n);
     },
-    async 'withdraw sUSDe' () {
+    async '!withdraw sUSDe' () {
         await accounting.$receipt().setReserveBps(deployer, $bigint.toWei(0.02));
 
-        let { jrtVault, srtVault,  } = $hh.test.tranches;
+        let { jrtVault, srtVault,  } = test.tranches;
         await $erc4626.deposit(jrtVault, deployer, 100_000);
         await $ethena.distribute(sUSDe, USDe, deployer, 1_00);
 
 
-        await $hh.test.mine('4hours');
+        await test.mine('4hours');
 
         let reserve = await accounting.totalReserve();
         $require.eq(Math.round($bigint.toEther(reserve, 18)), 1);
@@ -46,7 +49,7 @@ UAction.create({
         reserve = await accounting.totalReserve();
         $require.eq($bigint.toEther(reserve, 18, 10n), 0.5);
 
-        await $hh.test.mine('4hours');
+        await test.mine('4hours');
         l`Trigger accouning`;
         await $erc4626.deposit(jrtVault, deployer, 5n);
 
@@ -64,7 +67,7 @@ UAction.create({
         l`USDe cooldowns`;
         await $erc20.eqBalance(USDe, '0xff', 0);
 
-        await $hh.test.mine('7days');
+        await test.mine('7days');
 
         await unstakeCooldown.$receipt().finalize(deployer, sUSDe.address, '0xff');
         await $erc20.eqBalanceDiff(USDe, '0xff', reserve, 5n /** rounding */);
@@ -72,12 +75,12 @@ UAction.create({
     async 'sUSDe rounding test' () {
         await accounting.$receipt().setReserveBps(deployer, $bigint.toWei(0.02));
 
-        let { jrtVault, srtVault,  } = $hh.test.tranches;
+        let { jrtVault, srtVault,  } = test.tranches;
 
         await $erc4626.deposit(jrtVault, deployer, 100_001);
         await $ethena.distribute(sUSDe, USDe, deployer, 111111111111111111111111n);
 
-        await $hh.test.mine('8hours');
+        await test.mine('8hours');
         l`Trigger accouning`;
         await $erc4626.deposit(jrtVault, deployer, 5n);
 
@@ -91,14 +94,14 @@ UAction.create({
     },
 
     async 'update reserve should trigger accounting' () {
-        let { jrtVault, srtVault, accounting } = $hh.test.tranches;
+        let { jrtVault, srtVault, accounting } = test.tranches;
 
         console.log(`Balance`, await USDe.balanceOf(deployer.address));
 
         await $erc4626.deposit(jrtVault, deployer, 1_000);
         await $ethena.distribute(sUSDe, USDe, deployer, 2000);
 
-        await $hh.test.mine('8hours');
+        await test.mine('8hours');
         l`Set reserve after distribution is over`;
         await accounting.$receipt().setReserveBps(deployer, $bigint.toWei(0.02))
 

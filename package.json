@@ -41,7 +41,7 @@
     "a-di": "latest",
     "alot": "latest",
     "appcfg": "^0.5.11",
-    "atma-io": "latest",
+    "atma-io": "^1.3.8",
     "atma-loader-ts": "latest",
     "atma-utest": "^0.21.36",
     "class-json": "latest",

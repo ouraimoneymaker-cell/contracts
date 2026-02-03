@@ -30,7 +30,7 @@ UAction.create({
             unstakeCooldown,
             USDe,
             sUSDe,
-        } = await $hh.test.factory.ensureEthenaCDO();
+        } = await $hh.test.factory.ensureDeployment();
 
         // Alice deposits into jrt and srt vaults
         await $usde.mint(USDe, alice, 1000.0);

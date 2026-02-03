@@ -5,7 +5,7 @@ import { $ethena } from './$ethena';
 import { $require } from 'dequanto/utils/$require';
 import { l } from 'dequanto/utils/$logger';
 import { $test } from './$test';
-import { TranchesDeployments } from '@s/deployments/TranchesDeployments';
+import { EthenaDeployments } from '@s/deployments/EthenaDeployments';
 import { $date } from 'dequanto/utils/$date';
 import { AprPairFeed } from '@0xc/hardhat/AprPairFeed/AprPairFeed';
 import { Accounting } from '@0xc/hardhat/Accounting/Accounting';
@@ -13,7 +13,7 @@ import { Accounting } from '@0xc/hardhat/Accounting/Accounting';
 export namespace $strata {
     export const SECONDS_PER_YEAR = 365 * 24 * 60 * 60;
 
-    export async function disableAPRs (tranches: TranchesDeployments) {
+    export async function disableAPRs (tranches: EthenaDeployments) {
         l`Disable APRs`;
         const { client, accounts } = tranches;
         const ROUND_STALE = $date.parseTimespan('1year', { get: 's' });
@@ -32,7 +32,7 @@ export namespace $strata {
     }
 
     export async function setAprsViaDistribution (aprTarget: number, aprBase: number) {
-        let { sUSDe, USDe, sUSDs } = $hh.test.ethena;
+        let { sUSDe, USDe, sUSDs } = $hh.test.underlying;
         let { feed } = $hh.test.tranches;
 
         await sUSDe.storage.$set('vestingAmount', 0n);
@@ -56,7 +56,7 @@ export namespace $strata {
 
     export async function distribute (x: { amount?: number | bigint, apr?: number }) {
         let dt: string = '8hours';
-        let { sUSDe, USDe } = $hh.test.ethena;
+        let { sUSDe, USDe } = $hh.test.underlying;
         let { feed } = $hh.test.tranches;
         let rewards = 0n;
         if (x.apr != null) {

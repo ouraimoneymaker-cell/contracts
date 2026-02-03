@@ -92,13 +92,13 @@ UAction.create({
     async 'previewRedeem - withdraw' () {
         let shares = BigInt(19.9e18);
         let assets = await jrtVault.previewRedeem(sUSDe.address, shares);
-        let sharesFact = await $erc4626.withdrawMeta(jrtVault, sUSDe, alice, assets);
+        let { shares: sharesFact } = await $erc4626.withdrawMeta(jrtVault, sUSDe, alice, assets);
         $require.eq(shares, sharesFact, `previewRedeem -> withdraw returns incorrect amount of shares burned`);
     },
     async 'previewWithdraw' () {
         let assets = BigInt(21.3e18);
         let shares = await jrtVault.previewWithdraw(sUSDe.address, assets);
-        let sharesOutActual = await $erc4626.withdrawMeta(jrtVault, sUSDe, alice, assets);
+        let { shares: sharesOutActual } = await $erc4626.withdrawMeta(jrtVault, sUSDe, alice, assets);
 
         $require.eq(shares, sharesOutActual, `previewWithdraw returns incorrect amount of actual shares burned`);
         await $erc20.eqBalance(sUSDe, alice, assets);

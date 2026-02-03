@@ -102,10 +102,10 @@ export namespace $erc4626 {
         let tokenAmount = await $erc20.toAmount(tranche, amount, sender);
 
         let before = await tranche.balanceOf(sender.address);
-        await tranche.$receipt().withdraw(sender, tokenAddress, tokenAmount, sender.address, sender.address);
+        let tx = await tranche.$receipt().withdraw(sender, tokenAddress, tokenAmount, sender.address, sender.address);
         let after = await tranche.balanceOf(sender.address);
         // burned shares
-        return before - after;
+        return { shares: before - after, tx };
     }
 
     export async function getAssets (erc4626: IERC4626, account: $acc.Address, shares?: number | bigint): Promise<bigint> {

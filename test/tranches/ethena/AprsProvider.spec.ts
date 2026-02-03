@@ -23,7 +23,7 @@ UAction.create({
 
     async 'aprs' () {
         let { factory, deployer } = $hh.test
-        let { sUSDS, sUSDe, USDe } = await factory.ensureEthena();
+        let { sUSDS, sUSDe, USDe } = await factory.ensureUnderlying();
 
         await sUSDS.$receipt().setSsr(deployer, 1000000001471536429740616381n);
         await USDe.$receipt().mint(deployer, deployer.address, 1000n * 10n**18n);

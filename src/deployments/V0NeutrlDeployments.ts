@@ -28,8 +28,10 @@ import { MockNUSD } from '@0xc/hardhat/MockNUSD/MockNUSD';
 import { MockStakedNUSD } from '@0xc/hardhat/MockStakedNUSD/MockStakedNUSD';
 import { MockStakedUSDe } from '@0xc/hardhat/MockStakedUSDe/MockStakedUSDe';
 import { MockUSDe } from '@0xc/hardhat/MockUSDe/MockUSDe';
+import { TrancheDepositor } from '@0xc/hardhat/TrancheDepositor/TrancheDepositor';
+import { SNUSDSwapAdapter } from '@0xc/hardhat/sNUSDSwapAdapter/sNUSDSwapAdapter';
 
-export class NeutrlDeployment {
+export class V0NeutrlDeployments {
     ds: Deployments;
     platform: IPlatform;
     owner: TEth.IAccount;
@@ -474,6 +476,58 @@ export class NeutrlDeployment {
 
         await this.setTrancheActions(cdo, jrtVault, info, 'jrt');
         await this.setTrancheActions(cdo, srtVault, info, 'srt');
+    }
+
+    async ensureDepositor() {
+        let acm = await this.ensureACM();
+        let {  } = await this.ensureNeutrl();
+        let { cdo, jrtVault, NUSD } = await this.ensureNeutrlCDO();
+        let { contract: depositor } = await this.ds.ensureWithProxy(TrancheDepositor, {
+            id: 'TrancheDepositorV3',
+            initialize: [
+                this.owner.address,
+                acm.address
+            ]
+        });
+
+        await this.ensureRole($contract.keccak256('DEPOSITOR_CONFIG_ROLE'), this.owner.address);
+
+        let status = await depositor.tranches(jrtVault.address, NUSD.address);
+        if (status == false) {
+            await depositor.$receipt().addCdo(this.owner, cdo.address);
+        }
+
+        const NUSD_ROUTER = '0xa052883ebEe7354FC2Aa0f9c727E657FdeCa744a';
+        let { contract: swapAdapter } = await this.ds.ensure(SNUSDSwapAdapter, {
+            arguments: [
+                Addresses.eth.NUSD,
+                NUSD_ROUTER
+            ]
+        });
+
+        const TOKENS = [
+            Addresses.eth.USDC,
+            Addresses.eth.USDT,
+            Addresses.eth.USDe,
+        ];
+
+        await this.ds.configure(swapAdapter, {
+            shouldUpdate: async () => {
+                let result = await depositor.trancheAutoSwaps(jrtVault.address, TOKENS[0])
+                return $address.isEmpty(result.router) === false
+            },
+            updater: async () => {
+                for (let token of TOKENS) {
+                    await depositor.$receipt().addCdoAutoSwap(this.owner, cdo.address, token, {
+                        router: swapAdapter.address,
+                        minimumReturnPercentage: 0,
+                        fee: 0,
+                    });
+                }
+            }
+        });
+
+        return depositor;
     }
 
     async setTrancheActions(cdo: StrataCDO, tranche: Tranche, info: typeof Tranches['neutrl'], type: 'srt' | 'jrt') {

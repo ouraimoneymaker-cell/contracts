@@ -293,7 +293,7 @@
     "verified": "2025-10-02T20:01:25.188Z"
   },
   {
-    "id": "sUSDeAprFeeds",
+    "id": "USDeAprFeeds",
     "name": "AprPairFeed",
     "main": "./0xc/hardhat/AprPairFeed/AprPairFeed.ts",
     "bytecodeHash": "0x9895b9f7d6cb79bb3288c579396d4d2ec65c2bfb1c2f8b80a88a120d05b68cb5",
@@ -317,7 +317,7 @@
     ]
   },
   {
-    "id": "sUSDeAprFeedsProxy",
+    "id": "USDeAprFeedsProxy",
     "name": "TransparentUpgradeableProxy",
     "main": "artifacts/@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol/TransparentUpgradeableProxy.json",
     "bytecodeHash": "0xf28eb2a2c5463ee40d33f9140010a6efee14f7e18a27beac9a06acbeb00f60b2",
@@ -331,7 +331,7 @@
     "proxyFor": "0x74188a2a8A5177dD217a8149F1fB1370240FBadc"
   },
   {
-    "id": "sUSDeAprFeedsProxyAdmin",
+    "id": "USDeAprFeedsProxyAdmin",
     "name": "ProxyAdmin",
     "main": "artifacts/@openzeppelin/contracts/proxy/transparent/ProxyAdmin.sol/ProxyAdmin.json",
     "address": "0xE60442F1A12Ec03e22dDd3Bc5FEA62B7bd89d6df",

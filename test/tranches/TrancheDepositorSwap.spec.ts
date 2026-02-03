@@ -3,7 +3,7 @@ import { $require } from 'dequanto/utils/$require';
 import { Addresses } from '@s/constants';
 import { TEth } from 'dequanto/models/TEth';
 import { $hh } from './utils/$hh';
-import { TranchesDeployments } from '@s/deployments/TranchesDeployments';
+import { EthenaDeployments } from '@s/deployments/EthenaDeployments';
 import { TrancheDepositor } from '@0xc/hardhat/TrancheDepositor/TrancheDepositor';
 import { ERC20 } from 'dequanto/prebuilt/openzeppelin/ERC20';
 import { $erc20 } from './utils/$erc20';
@@ -12,7 +12,7 @@ import { $promise } from 'dequanto/utils/$promise';
 
 await $hh.test.init();
 
-let forked: TranchesDeployments;
+let forked: EthenaDeployments;
 
 UTest.create({
 

@@ -5,6 +5,7 @@ export interface IPlatform {
     Tokens?: Record<string, Partial<IToken>>;
 
     Feed?: {
+        name?: string
         stalePeriodAfter: string | '4hours'
     }
 

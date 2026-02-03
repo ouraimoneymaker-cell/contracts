@@ -1,5 +1,5 @@
 import { HardhatProvider } from 'dequanto/hardhat/HardhatProvider';
-import { TranchesDeployments } from '../../../src/deployments/TranchesDeployments';
+import { EthenaDeployments } from '../../../src/deployments/EthenaDeployments';
 import { UTest } from 'atma-utest'
 import { $require } from 'dequanto/utils/$require';
 

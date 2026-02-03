@@ -23,7 +23,7 @@ export class ProtocolExecutor {
     }
 
     async run (data: IExecutionData) {
-        let { sUSDe } = $hh.test.ethena;
+        let { sUSDe } = $hh.test.underlying;
         let { accounting, feed, jrtVault, srtVault, cdo } = $hh.test.tranches;
         let { deployer } = $hh.test;
 

@@ -22,7 +22,7 @@ UAction.create({
     },
     async 'donations should be handled' () {
         let { deployer } = $hh.test;
-        let { sUSDe, USDe } = $hh.test.ethena;
+        let { sUSDe, USDe } = $hh.test.underlying;
         let { jrtVault, strategy, cdo } = $hh.test.tranches;
 
         let griefer = await $hh.test.createAccount('griefer');

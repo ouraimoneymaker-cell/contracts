@@ -23,7 +23,7 @@ let bob = await hh.deployer(2);
 
 await $hh.test.deploy();
 
-let { USDe, sUSDe } = await $hh.test.factory.ensureEthena();
+let { USDe, sUSDe } = await $hh.test.factory.ensureUnderlying();
 let { unstakeCooldown, acm } = await $hh.test.factory.ensureCooldowns();
 
 await $usde.mint(USDe, alice, 1000.0);

@@ -22,7 +22,7 @@ let bob = await hh.deployer(2);
 
 await $hh.test.deploy();
 
-let { USDe, sUSDe } = await $hh.test.factory.ensureEthena();
+let { USDe, sUSDe } = await $hh.test.factory.ensureUnderlying();
 let { erc20Cooldown, acm } = await $hh.test.factory.ensureCooldowns();
 let { strategy } = $hh.test.tranches;
 

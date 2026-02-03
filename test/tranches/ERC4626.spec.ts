@@ -179,7 +179,7 @@ UAction.create({
         $require.eq(await accounting.reserveNav(), 0n, `Fees are not enabled, nothing goes to reserve`);
     },
     async 'ERC4626::permit' () {
-        let { USDe } = $hh.test.ethena;
+        let { USDe } = $hh.test.underlying;
         let { jrtVault } = $hh.test.tranches;
 
         let alice = await $hh.test.createAccount('alice');

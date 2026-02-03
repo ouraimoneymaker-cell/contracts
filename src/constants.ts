@@ -7,6 +7,9 @@ export const Addresses = {
         eUSDe: "0x90d2af7d622ca3141efa4d8f1f24d86e5974cc8f",
         owner: "0xA27cA9292268ee0f0258B749f1D5740c9Bb68B50",
 
+        sNUSD: '0x08EFCC2F3e61185D0EA7F8830B3FEc9Bfa2EE313',
+        NUSD: '0xE556ABa6fe6036275Ec1f87eda296BE72C811BCE',
+
         // https://etherscan.io/token/0xa3931d71877C0E7a3148CB7Eb4463524FEc27fbD
         sUSDS: '0xa3931d71877C0E7a3148CB7Eb4463524FEc27fbD',
         pUSDe: '0xA62B204099277762d1669d283732dCc1B3AA96CE',
@@ -28,4 +31,7 @@ export const Addresses = {
     pUSDe?: TEth.Address;
     owner?: TEth.Address;
     AavePool?: TEth.Address;
+
+    NUSD?: TEth.Address;
+    sNUSD?: TEth.Address;
 }>;

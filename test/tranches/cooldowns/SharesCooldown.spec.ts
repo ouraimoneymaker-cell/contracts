@@ -31,7 +31,7 @@ let {
     cdo,
 } = await $hh.test.deploy();
 
-let { USDe, sUSDe } = await $hh.test.factory.ensureEthena();
+let { USDe, sUSDe } = await $hh.test.factory.ensureUnderlying();
 let { contract: Vault } = await $hh.test.factory.ds.ensure(MockMetaERC4626, {
     arguments: [ USDe.address ]
 });

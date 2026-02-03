@@ -12,15 +12,14 @@ import alot from 'alot';
 UAction.create({
     async '!ensure all contracts are deployed or redeploy on bytecode change'() {
         const { tranches, deployer, client } = await PlatformFactory.init({
-            deployments: 'redeploy'
+            deployments: 'redeploy',
+            cdo: 'ethena'
         });
 
         const batch = TxWriter.DEFAULTS.agent = new BatchAgent();
 
         l`Execute deployment + configuration`;
-        await tranches.ensureEthenaCDO();
-        await tranches.ensureDepositor();
-        await tranches.ensureConfigManager();
+        await tranches.ensureDeployment();
 
         TxWriter.DEFAULTS.agent = null;
 
@@ -72,7 +71,7 @@ UAction.create({
         }
     },
     async 'ensure Lenses'() {
-        const { tranches } = await PlatformFactory.init();
+        const { tranches } = await PlatformFactory.init({ cdo: 'ethena' });
         await tranches.ensureLenses();
     }
 })

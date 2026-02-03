@@ -3,7 +3,12 @@ import { $hh } from '../utils/$hh';
 import { AccountingExecutor } from './AccountingExecutor';
 import { $apr } from '@s/utils/$apr';
 
+
+console.log(`>>> ☀️`)
+
 await $hh.test.deploy();
+
+console.log(`>>> ✅`)
 
 UTest.create({
     async $after () {

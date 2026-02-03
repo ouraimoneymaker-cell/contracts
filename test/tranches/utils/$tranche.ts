@@ -5,9 +5,12 @@ import { $bigint } from 'dequanto/utils/$bigint';
 import { $acc } from './$acc';
 import { $erc20 } from './$erc20';
 import { StrataCDO } from '@0xc/hardhat/StrataCDO/StrataCDO';
+import { $erc4626 } from './$erc4626';
+import { DeploymentsBase } from '@s/deployments/DeploymentsBase';
+import { $hh } from './$hh';
 
 export namespace $tranche {
-    export async function deposit (tranche: Tranche, sender: TEth.IAccount, token: $acc.Address, amount: bigint | number | `${number}%`) {
+    export async function deposit(tranche: Tranche, sender: TEth.IAccount, token: $acc.Address, amount: bigint | number | `${number}%`) {
         let tokenAddress = $acc.toAddress(token);
         let erc20 = new ERC20(tokenAddress, tranche.client);
         let amountWei = await $erc20.toAmount(token, amount, sender);
@@ -16,7 +19,7 @@ export namespace $tranche {
         await tranche.$receipt().deposit(sender, tokenAddress, amountWei, sender.address);
     }
 
-    export async function withdraw (tranche: Tranche, sender: TEth.IAccount, token: $acc.Address, amount: bigint | number | `${number}%`) {
+    export async function withdraw(tranche: Tranche, sender: TEth.IAccount, token: $acc.Address, amount: bigint | number | `${number}%`) {
         let tokenAddress = $acc.toAddress(token);
         let amountWei = await $erc20.toAmount(token, amount, sender);
 
@@ -28,6 +31,45 @@ export namespace $tranche {
         let pps = await cdo.pricePerShare(tranche.address);
         let balance = await tranche.balanceOf(address);
 
-        return $bigint.toEther(balance * pps / 10n**18n);
+        return $bigint.toEther(balance * pps / 10n ** 18n);
+    }
+
+    export async function ensureCoverage(test: $hh.Test<DeploymentsBase>, covPct: number, minimums?: { jrt?: number, srt?: number }) {
+        let { cdo, jrtVault, srtVault } = test.tranches;
+        let { deployer } = test.factory;
+        let { jrtNav, srtNav } = await cdo.totalAssetsUnlocked();
+        let jrtNavEth = $bigint.toEther(jrtNav);
+        let srtNavEth = $bigint.toEther(srtNav);
+
+        if (jrtNavEth === 0 && srtNavEth === 0) {
+            let minJrt = minimums.jrt!
+            let srt = Math.abs(minJrt / (covPct / 100));
+            await $erc4626.deposit(jrtVault, deployer, $bigint.toWei(minJrt));
+            await $erc4626.deposit(srtVault, deployer, $bigint.toWei(srt));
+            return;
+        }
+
+        let current = jrtNavEth / srtNavEth * 100;
+        if (current < covPct) {
+            let amount = covPct / 100 * srtNavEth - jrtNavEth;
+            await $erc4626.deposit(jrtVault, deployer, $bigint.toWei(amount));
+            jrtNavEth += amount;
+        } else if (current > covPct) {
+            let amount = jrtNavEth * 100 / covPct - srtNavEth;
+            await $erc4626.deposit(srtVault, deployer, $bigint.toWei(amount));
+            srtNavEth += amount;
+        }
+
+        let scale = 1;
+        if (minimums?.jrt > jrtNavEth) {
+            scale = minimums.jrt / jrtNavEth;
+        }
+        if (minimums?.srt > srtNavEth) {
+            scale = Math.max(scale, minimums.srt / srtNavEth);
+        }
+        if (scale > 1) {
+            await $erc4626.deposit(jrtVault, deployer, $bigint.toWei(jrtNavEth * scale - jrtNavEth));
+            await $erc4626.deposit(srtVault, deployer, $bigint.toWei(srtNavEth * scale - srtNavEth));
+        }
     }
 }

@@ -1,6 +1,6 @@
 import { UTest } from 'atma-utest'
 import { $hh } from '../../utils/$hh';
-import { TranchesDeployments } from '@s/deployments/TranchesDeployments';
+import { EthenaDeployments } from '@s/deployments/EthenaDeployments';
 import { TimelockService } from 'dequanto/services/TimelockService/TimelockService';
 import { StrataMasterChef } from '@0xc/hardhat/StrataMasterChef/StrataMasterChef';
 import { TEth } from 'dequanto/models/TEth';
@@ -21,7 +21,7 @@ import { $strata } from '../../utils/$strata';
 
 await $hh.test.init();
 
-let forked: TranchesDeployments;
+let forked: EthenaDeployments;
 let TVLs_v110_fees = {
     jrtBefore: 0n,
     jrtAfter: 0n,

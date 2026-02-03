@@ -1,4 +1,4 @@
-import { TranchesDeployments } from '../../../src/deployments/TranchesDeployments';
+import { EthenaDeployments } from '../../../src/deployments/EthenaDeployments';
 import { UTest } from 'atma-utest'
 import { $require } from 'dequanto/utils/$require';
 
@@ -11,7 +11,7 @@ import { l } from 'dequanto/utils/$logger';
 
 await $hh.test.init();
 
-let forked: TranchesDeployments;
+let forked: EthenaDeployments;
 
 UTest.create({
 

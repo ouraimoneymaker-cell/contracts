@@ -5,7 +5,7 @@ import { TimelockService } from 'dequanto/services/TimelockService/TimelockServi
 
 import { $address } from 'dequanto/utils/$address';
 import { l } from 'dequanto/utils/$logger';
-import { TranchesDeployments } from './TranchesDeployments';
+import { EthenaDeployments } from './EthenaDeployments';
 import { StrataMasterChef } from '@0xc/hardhat/StrataMasterChef/StrataMasterChef';
 import { ChainAccountService } from 'dequanto/ChainAccountService';
 
@@ -13,7 +13,7 @@ import { ChainAccountService } from 'dequanto/ChainAccountService';
 
 export class TimelockHandler {
 
-    constructor (public ds: TranchesDeployments, public owner: TEth.IAccount) {
+    constructor (public ds: EthenaDeployments, public owner: TEth.IAccount) {
     }
 
     async get () {

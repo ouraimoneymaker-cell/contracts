@@ -7,7 +7,13 @@ const Tokens = {
     sUSDe: { address: "0x9d39a5de30e57443bff2a8307a4256c8797a3497" , decimals: 18 },
     eUSDe: { address: "0x90d2af7d622ca3141efa4d8f1f24d86e5974cc8f" , decimals: 18 },
     sUSDS: { address: Addresses.eth.sUSDS, decimals: 18 },
-    pUSDe: { address: Addresses.eth.pUSDe, decimals: 18 }
+    pUSDe: { address: Addresses.eth.pUSDe, decimals: 18 },
+
+    USDC: { address: Addresses.eth.USDC, decimals: 6 },
+    USDT: { address: Addresses.eth.USDT, decimals: 6 },
+
+    NUSD: { address: Addresses.eth.NUSD, decimals: 18 },
+    sNUSD: { address: Addresses.eth.sNUSD, decimals: 18 },
 } as Record<string, Partial<IToken>>
 
 export const Eth: IPlatform = {

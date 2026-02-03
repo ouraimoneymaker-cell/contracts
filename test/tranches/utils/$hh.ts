@@ -1,6 +1,6 @@
 import memd from 'memd';
 import { HardhatProvider } from 'dequanto/hardhat/HardhatProvider';
-import { TranchesDeployments } from '@s/deployments/TranchesDeployments';
+import { EthenaDeployments } from '@s/deployments/EthenaDeployments';
 import { $require } from 'dequanto/utils/$require';
 import { Web3Client } from 'dequanto/clients/Web3Client';
 import { TEth } from 'dequanto/models/TEth';
@@ -9,6 +9,12 @@ import { HardhatWeb3Client } from 'dequanto/hardhat/HardhatWeb3Client';
 import { TwoStepConfigManager } from '@0xc/hardhat/TwoStepConfigManager/TwoStepConfigManager';
 import { PlatformFactory } from '../../../tasks/PlatformFactory';
 import { $cli } from 'dequanto/utils/$cli';
+import { TCDOKey } from '@s/platforms/Tranches';
+import { V0NeutrlDeployments } from '@s/deployments/V0NeutrlDeployments';
+import { DeploymentsBase, ICdoDeploymentsBase, TDeploymentContracts } from '@s/deployments/DeploymentsBase';
+import { NeutrlDeployments } from '@s/deployments/NeutrlDeployments';
+import { DeploymentsTypes } from '@s/deployments/DeploymentsTypes';
+import { TrancheDepositor } from '@0xc/hardhat/TrancheDepositor/TrancheDepositor';
 
 
 export namespace $hh {
@@ -23,54 +29,87 @@ export namespace $hh {
         return hh.client('hardhat');
     }
 
-    export async function forked (opts?: { block?: number }) {
+    export async function forked<TKey extends TCDOKey> (opts?: { block?: number, cdo: TKey }) {
         const config = await PlatformFactory.ConfigLoader.fetch();
         const hh = new HardhatProvider();
         const client = await hh.forked({ platform: 'eth', block: opts?.block ?? void 0 });
         client.configureFork('eth');
 
-        const { tranches } = await PlatformFactory.init({ client });
+        const { tranches } = await PlatformFactory.init<TKey>({ client, cdo: opts?.cdo ?? 'ethena' as TKey });
         return tranches;
+    }
+
+    export function create<T extends TCDOKey>(cdo: T, params?: { forked?: number }) {
+        return new Test<DeploymentsTypes.CDOs[T]>(cdo, params)
     }
 
     export async function reset (client: Web3Client) {
         await client.debug.reset({});
-        memd.fn.clearMemoized($hh.test.factory.ensureEthenaCDO);
-        memd.fn.clearMemoized($hh.test.factory.ensureEthena);
-        memd.fn.clearMemoized($hh.test.factory.ensureACM);
-        memd.fn.clearMemoized($hh.test.factory.ensureCooldowns);
-        memd.fn.clearMemoized($hh.test.deploy);
-        memd.fn.clearMemoized($hh.test.init);
+        if (test.factory) {
+            memd.fn.clearMemoized(test.factory.ensureCDO);
+            memd.fn.clearMemoized(test.factory.ensureUnderlying);
+            memd.fn.clearMemoized(test.factory.ensureACM);
+            memd.fn.clearMemoized(test.factory.ensureCooldowns);
+        }
+        memd.fn.clearMemoized(test.deploy);
+        memd.fn.clearMemoized(test.init);
         (client as HardhatWeb3Client).configureFork(null);
     }
 
-    export class Test {
+    export class Test<TDeployments extends DeploymentsBase> {
         snapshots: Record<string, any> = {};
         client: Web3Client;
-        factory: TranchesDeployments;
-        tranches: Awaited<ReturnType<TranchesDeployments['ensureEthenaCDO']>>;
-        ethena: Awaited<ReturnType<TranchesDeployments['ensureEthena']>>;
+        factory: TDeployments;
+        tranches: Awaited<ReturnType<TDeployments['ensureCDO']>>;
+        underlying: Awaited<ReturnType<TDeployments['ensureUnderlying']>>;
         deployer: TEth.IAccount
-        depositor: Awaited<ReturnType<TranchesDeployments['ensureDepositor']>>
+        depositor: TrancheDepositor
         configManager: TwoStepConfigManager;
 
-        @memd.deco.memoize()
+        constructor (private cdoKey: TCDOKey, private params?: {
+            forked?: number
+        }) {
+
+        }
+
+        @memd.deco.memoize({ perInstance: true })
         async init () {
+            const config = await PlatformFactory.ConfigLoader.fetch();
             const hh = new HardhatProvider();
-            const client = await getClient();
+            const client = this.params?.forked == null
+                ? await getClient()
+                : await hh.forked({ platform: 'eth', block: this.params.forked });
+
+            if (this.params?.forked != null) {
+                client.configureFork('eth');
+            }
+
             const deployer = await hh.deployer(0);
-            const depl = new TranchesDeployments({
+
+
+            // const CtorDeployments = this.cdoKey === 'neutrl'
+            //     ? NeutrlDeployments
+            //     : EthenaDeployments;
+
+            console.log(`ℹ️ℹ️ℹ️ `, this.cdoKey);
+
+            const { tranches: factory } = await PlatformFactory.init({
                 client,
-                deployer,
-                accounts: {
-                    deployer: deployer,
-                    safe: { admin: deployer, operator: deployer },
-                    timelock: { admin: deployer, config: deployer },
-                }
+                cdo: this.cdoKey
             });
 
+            // const depl = new CtorDeployments({
+            //     client,
+            //     deployer,
+            //     accounts: {
+            //         deployer: deployer,
+            //         safe: { admin: deployer, operator: deployer },
+            //         timelock: { admin: deployer, config: deployer },
+            //     }
+            // });
+
             this.client = client;
-            this.factory = depl;
+            this.factory = factory as any as TDeployments;//depl as any as TDeployments;
             this.deployer = deployer;
         }
 
@@ -80,20 +119,23 @@ export namespace $hh {
             return account;
         }
 
-        @memd.deco.memoize()
+        @memd.deco.memoize({ perInstance: true })
         async deploy () {
             await this.init();
 
-            this.ethena = await this.factory.ensureEthena();
-            this.tranches = await this.factory.ensureEthenaCDO();
-            this.depositor = await this.factory.ensureDepositor();
+            this.underlying = await this.factory.ensureUnderlying();
+
+            let contracts = await this.factory.ensureDeployment();
+
+            this.tranches = contracts;
+            this.depositor = contracts.depositor;
             let { configManager } = await this.factory.ensureConfigManager();
             this.configManager = configManager;
 
             await this.snapshot();
             return {
                 ...this.tranches,
-                ...this.ethena,
+                ...this.underlying,
             };
         }
 
@@ -125,6 +167,5 @@ export namespace $hh {
         }
     }
 
-    export const test = new Test();
+    export const test = new Test('ethena')
 }
-

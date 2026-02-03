@@ -21,7 +21,7 @@ interface INeutrlRouter {
     ) external;
 }
 
-contract SNUSDSwapAdapter {
+contract sNUSDSwapAdapter {
 
     // e.g. 0xa052883ebEe7354FC2Aa0f9c727E657FdeCa744a
     INeutrlRouter public immutable router;
@@ -39,7 +39,9 @@ contract SNUSDSwapAdapter {
         require(params.tokenOut == nusd, "UnexpectedTokenOut");
 
         SafeERC20.safeTransferFrom(IERC20(params.tokenIn), sender, address(this), params.amountIn);
-        uint256 before = IERC20(params.tokenOut).balanceOf(address(this));
+        SafeERC20.forceApprove(IERC20(params.tokenIn), address(router), params.amountIn);
+
+        uint256 before = IERC20(params.tokenOut).balanceOf(sender);
         router.mint(
             sender,
             params.tokenIn,
@@ -47,6 +49,6 @@ contract SNUSDSwapAdapter {
             params.amountOutMinimum,
             bytes("")
         );
-        return IERC20(params.tokenOut).balanceOf(address(this)) - before;
+        return IERC20(params.tokenOut).balanceOf(sender) - before;
     }
 }

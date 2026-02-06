@@ -100,8 +100,8 @@ export const Tranches: Record<TCDOKey, ICDO> = {
         jrt: {
             symbol: 'jrNUSD',
             name: 'Strata Junior NUSD',
-            depositsEnabled: false,
-            withdrawalsEnabled: false,
+            depositsEnabled: true,
+            withdrawalsEnabled: true,
 
             sharesCooldown: [
                 { covPct: 10, feeBps: 0,   lock: '35days' },
@@ -112,8 +112,8 @@ export const Tranches: Record<TCDOKey, ICDO> = {
         srt: {
             symbol: 'srNUSD',
             name: 'Strata Senior NUSD',
-            depositsEnabled: false,
-            withdrawalsEnabled: false,
+            depositsEnabled: true,
+            withdrawalsEnabled: true,
 
             sharesCooldown: [
                 { covPct: 10, feeBps: 0,   lock: 0 },

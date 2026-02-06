@@ -95,8 +95,6 @@ export namespace PlatformFactory {
         let safeAdmin = await ChainAccountService.get(accounts.safeAdmin);
         let safeOperator = await ChainAccountService.get(accounts.safeOperator);
 
-        $require.notNull(deployer, `Deployer not found ${accounts.deployer}`);
-
         if (network === 'hardhat') {
             deployer = hh.deployer(0);
             timelockAdmin = deployer;

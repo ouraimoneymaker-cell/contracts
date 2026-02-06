@@ -16,6 +16,7 @@ import { V0NeutrlDeployments } from '@s/deployments/V0NeutrlDeployments';
 import { NeutrlDeployments } from '@s/deployments/NeutrlDeployments';
 import { DeploymentsTypes } from '@s/deployments/DeploymentsTypes';
 import alot from 'alot';
+import { $require } from 'dequanto/utils/$require';
 
 
 
@@ -93,6 +94,8 @@ export namespace PlatformFactory {
         let timelockConfig = await ChainAccountService.get(accounts.timelockConfig);
         let safeAdmin = await ChainAccountService.get(accounts.safeAdmin);
         let safeOperator = await ChainAccountService.get(accounts.safeOperator);
+
+        $require.notNull(deployer, `Deployer not found ${accounts.deployer}`);
 
         if (network === 'hardhat') {
             deployer = hh.deployer(0);

@@ -8,8 +8,8 @@ export interface ICDO {
     jrt: {
         symbol: string
         name: string
-        depositsEnabled: true
-        withdrawalsEnabled: true
+        depositsEnabled: boolean
+        withdrawalsEnabled: boolean
 
         sharesCooldown?: [
             { covPct: number, feeBps: number, lock: string | number },
@@ -23,8 +23,8 @@ export interface ICDO {
     srt: {
         symbol: string,
         name: string
-        depositsEnabled: true,
-        withdrawalsEnabled: true,
+        depositsEnabled: boolean,
+        withdrawalsEnabled: boolean,
 
         sharesCooldown?: [
             { covPct: number, feeBps: number, lock: string | number },
@@ -99,9 +99,9 @@ export const Tranches: Record<TCDOKey, ICDO> = {
         },
         jrt: {
             symbol: 'jrNUSD',
-            name: 'Neutrl Junior NUSD',
-            depositsEnabled: true,
-            withdrawalsEnabled: true,
+            name: 'Strata Junior NUSD',
+            depositsEnabled: false,
+            withdrawalsEnabled: false,
 
             sharesCooldown: [
                 { covPct: 10, feeBps: 0,   lock: '35days' },
@@ -111,9 +111,9 @@ export const Tranches: Record<TCDOKey, ICDO> = {
         },
         srt: {
             symbol: 'srNUSD',
-            name: 'Neutrl Senior NUSD',
-            depositsEnabled: true,
-            withdrawalsEnabled: true,
+            name: 'Strata Senior NUSD',
+            depositsEnabled: false,
+            withdrawalsEnabled: false,
 
             sharesCooldown: [
                 { covPct: 10, feeBps: 0,   lock: 0 },
@@ -135,7 +135,7 @@ export const Tranches: Record<TCDOKey, ICDO> = {
         },
         Contracts: {
             '*': {
-                AccessControlManager: 'AccessControlManagerDev',
+                AccessControlManager: 'NeutrlAccessControlManager',
                 ERC20Cooldown: 'NeutrlERC20Cooldown',
                 UnstakeCooldown: 'NeutrlUnstakeCooldown',
                 SharesCooldown: 'NeutrlSharesCooldown'

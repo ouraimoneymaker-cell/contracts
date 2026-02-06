@@ -399,13 +399,8 @@ export abstract class DeploymentsBase<T extends ICdoDeploymentsBase = any> {
         };
     }
 
-    @memd.deco.memoize({ perInstance: true })
-    async ensureCDO() {
-        const { base, ...tokens } = await this.ensureUnderlying();
-
+    async ensureStrataCdo () {
         const acm = await this.ensureACM();
-        const info = this.cdoInfo;
-
         const { contract: cdo } = await this.ds.ensureWithProxy(StrataCDO, {
             id: `${this.pfx}CDO`,
             arguments: [],
@@ -414,12 +409,21 @@ export abstract class DeploymentsBase<T extends ICdoDeploymentsBase = any> {
                 acm.address,
             ]
         });
+        await this.ensureRole(this.ROLES.COOLDOWN_WORKER_ROLE, cdo.address);
+        return cdo;
+    }
 
+    @memd.deco.memoize({ perInstance: true })
+    async ensureCDO() {
+        const { base, ...tokens } = await this.ensureUnderlying();
+
+        const acm = await this.ensureACM();
+        const cdo = await this.ensureStrataCdo();
 
         const { erc20Cooldown, unstakeCooldown, sharesCooldown } = await this.ensureCooldowns(cdo);
         const { strategy } = await this.ensureStrategy(cdo, acm, erc20Cooldown, unstakeCooldown);
         await this.ensureRole(this.ROLES.COOLDOWN_WORKER_ROLE, strategy.address);
-        await this.ensureRole(this.ROLES.COOLDOWN_WORKER_ROLE, cdo.address);
+
 
         // Accounting
         const accounting = await this.ensureAccounting(cdo.address);

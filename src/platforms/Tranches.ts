@@ -44,6 +44,13 @@ export interface ICDO {
         // reserveFee: 1 === 100%
         performanceFee: number
     }
+    riskPremium?: {
+        x: number
+        y: number
+        k: number
+    }
+    minimumJrtSrtRatioBuffer?: number
+    minimumJrtSrtRatio?: number
     accounts?: {
         [platform: TEth.Platform]: {
             deployer: string
@@ -96,6 +103,13 @@ export const Tranches: Record<TCDOKey, ICDO> = {
                 srt: .5,
             },
             performanceFee: .072 // 1 === 100%
+        },
+        minimumJrtSrtRatioBuffer: 0.01,
+        minimumJrtSrtRatio: 0.009,
+        riskPremium: {
+            x: 0.15,
+            y: 0.15,
+            k: 0.3
         },
         jrt: {
             symbol: 'jrNUSD',

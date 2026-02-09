@@ -36,6 +36,7 @@ import { IBeaconProxy } from 'dequanto/contracts/deploy/proxy/ProxyDeployment';
 import { $bigint } from 'dequanto/utils/$bigint';
 import { $exitMode } from '@s/utils/$exitMode';
 import { SUSDeStrategy } from '@0xc/hardhat/sUSDeStrategy/sUSDeStrategy';
+import { $number } from 'dequanto/utils/$number';
 
 
 export interface ICdoDeploymentsBase {
@@ -119,7 +120,7 @@ export abstract class DeploymentsBase<T extends ICdoDeploymentsBase = any> {
         strategy: T['Strategy']
     }>
 
-    abstract configureCooldowns (strategy: IStrategy): Promise<void>
+    abstract configureCooldowns(strategy: IStrategy): Promise<void>
 
     abstract configureDepositor(depositor: TrancheDepositor);
 
@@ -231,7 +232,7 @@ export abstract class DeploymentsBase<T extends ICdoDeploymentsBase = any> {
     }
 
 
-     async ensureTranches(cdo: StrataCDO) {
+    async ensureTranches(cdo: StrataCDO) {
         const { base } = await this.ensureUnderlying();
 
         const acm = await this.ensureACM();
@@ -306,7 +307,7 @@ export abstract class DeploymentsBase<T extends ICdoDeploymentsBase = any> {
         return { configManager };
     }
 
-    @memd.deco.memoize({ perInstance: true  })
+    @memd.deco.memoize({ perInstance: true })
     async ensureCooldowns(cdo?: StrataCDO) {
         const acm = await this.ensureACM();
         const { contract: erc20Cooldown } = await this.ds.ensureWithProxy(ERC20Cooldown, {
@@ -399,7 +400,7 @@ export abstract class DeploymentsBase<T extends ICdoDeploymentsBase = any> {
         };
     }
 
-    async ensureStrataCdo () {
+    async ensureStrataCdo() {
         const acm = await this.ensureACM();
         const { contract: cdo } = await this.ds.ensureWithProxy(StrataCDO, {
             id: `${this.pfx}CDO`,
@@ -555,6 +556,9 @@ export abstract class DeploymentsBase<T extends ICdoDeploymentsBase = any> {
 
         await this._configureFeeRetention(contracts);
         await this._configureExitBounds(contracts);
+        await this._configureRiskPremium(contracts);
+        await this._configureMinumumJrtSrtRatios(contracts);
+
 
         await this.setTrancheActions(cdo, jrtVault, info, 'jrt');
         await this.setTrancheActions(cdo, srtVault, info, 'srt');
@@ -689,7 +693,7 @@ export abstract class DeploymentsBase<T extends ICdoDeploymentsBase = any> {
         });
     }
 
-    private getContractId (name: keyof ICDO['Contracts']['']) {
+    private getContractId(name: keyof ICDO['Contracts']['']) {
         const Contracts = this.cdoInfo.Contracts;
         const id = Contracts?.[this.client.network]?.[name]
             ?? Contracts?.['*']?.[name]
@@ -697,7 +701,7 @@ export abstract class DeploymentsBase<T extends ICdoDeploymentsBase = any> {
         return id;
     }
 
-    private async _configureFeeRetention (contracts: {
+    private async _configureFeeRetention(contracts: {
         accounting: Accounting
     }) {
         const { accounting } = contracts;
@@ -718,7 +722,81 @@ export abstract class DeploymentsBase<T extends ICdoDeploymentsBase = any> {
         });
     }
 
-    private async _configureExitBounds (contracts: {
+    private async _configureRiskPremium(contracts: {
+        accounting: Accounting
+    }) {
+        const risk = this.cdoInfo.riskPremium;
+        if (risk == null) {
+            return null;
+        }
+        const { accounting } = contracts;
+        const x = $bigint.toWei(risk.x ?? 0.2, 18);
+        const y = $bigint.toWei(risk.y ?? 0.2, 18);
+        const k = $bigint.toWei(risk.k ?? 0.3, 18);
+
+        await this.ds.configure(accounting, {
+            title: `Update Accounting Risk Premium Parameters`,
+            shouldUpdate: async () => {
+                let [_x, _y, _k] = await accounting.$executeBatch([
+                    accounting.$req().riskX(),
+                    accounting.$req().riskY(),
+                    accounting.$req().riskK(),
+                ]);
+                return _x !== x || _y !== y || _k !== k;
+            },
+            updater: async (accounting, value) => {
+                await accounting.$receipt().setRiskParameters(this.owner, x, y, k);
+            }
+        });
+    }
+
+    private async _configureMinumumJrtSrtRatios(contracts: {
+        srtVault: Tranche,
+        accounting: Accounting
+    }) {
+
+        if (this.cdoInfo.minimumJrtSrtRatio == null || this.cdoInfo.minimumJrtSrtRatioBuffer == null) {
+            return;
+        }
+
+        $require.notNull(this.cdoInfo.minimumJrtSrtRatioBuffer, `MINIMUM_JRT_SRT_RATIO_BUFFER`);
+        $require.notNull(this.cdoInfo.minimumJrtSrtRatio, `MINIMUM_JRT_SRT_RATIO`);
+
+        const MINIMUM_JRT_SRT_RATIO_BUFFER = $bigint.toWei(this.cdoInfo.minimumJrtSrtRatioBuffer, 18);
+        const MINIMUM_JRT_SRT_RATIO = $bigint.toWei(this.cdoInfo.minimumJrtSrtRatioBuffer, 18);
+
+        const { accounting, srtVault } = contracts;
+        const [curMinimumJrtSrtRatio, curMinimumJrtSrtRatioBuffer] = await accounting.$executeBatch([
+            accounting.$req().minimumJrtSrtRatio(),
+            accounting.$req().minimumJrtSrtRatioBuffer(),
+        ]);
+        const owner = this.owner;
+        await this.ds.configure(accounting, {
+            title: `Update Minimum Jrt/Srt Parameters`,
+            shouldUpdate: async () => {
+                return MINIMUM_JRT_SRT_RATIO_BUFFER !== curMinimumJrtSrtRatioBuffer
+                    || MINIMUM_JRT_SRT_RATIO !== curMinimumJrtSrtRatio;
+            },
+            updater: async (accounting, value) => {
+                const maxDeposit = await srtVault.maxDeposit($address.ZERO);
+                l`MaxDeposit (Additional) cyan<${$number.humanize($bigint.toEther(maxDeposit))}>`;
+
+                // MUST: RATIO <= RATIO_BUFFER; so we check what parameter should be updated as first to keep this invariant.
+                if (MINIMUM_JRT_SRT_RATIO_BUFFER >= curMinimumJrtSrtRatio) {
+                    await accounting.$receipt().setMinimumJrtSrtRatioBuffer(owner, MINIMUM_JRT_SRT_RATIO_BUFFER);
+                    await accounting.$receipt().setMinimumJrtSrtRatio(owner, MINIMUM_JRT_SRT_RATIO);
+                } else {
+                    await accounting.$receipt().setMinimumJrtSrtRatio(owner, MINIMUM_JRT_SRT_RATIO);
+                    await accounting.$receipt().setMinimumJrtSrtRatioBuffer(owner, MINIMUM_JRT_SRT_RATIO_BUFFER);
+                }
+
+                const maxDepositAfter = await srtVault.maxDeposit($address.ZERO);
+                l`MaxDeposit (Additional) cyan<${$number.humanize($bigint.toEther(maxDepositAfter, 18))}>`;
+            }
+        });
+    }
+
+    private async _configureExitBounds(contracts: {
         sharesCooldown: SharesCooldown,
         configManager: TwoStepConfigManager,
         jrtVault: Tranche,
@@ -781,7 +859,7 @@ export abstract class DeploymentsBase<T extends ICdoDeploymentsBase = any> {
         });
     }
 
-    public async ensureDeployment (): Promise<TDeploymentContracts<T>> {
+    public async ensureDeployment(): Promise<TDeploymentContracts<T>> {
         const contracts = await this.ensureCDO();
         const depositor = await this.ensureDepositor();
         const { configManager } = await this.ensureConfigManager();

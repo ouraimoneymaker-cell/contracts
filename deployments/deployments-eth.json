@@ -1127,15 +1127,25 @@
     "id": "TrancheDepositorV3",
     "name": "TrancheDepositor",
     "main": "./0xc/hardhat/TrancheDepositor/TrancheDepositor.ts",
-    "bytecodeHash": "0x51413e1dccc0ae13063700946296e42613914559b35aebedf116412023ece866",
+    "bytecodeHash": "0xd9cdbe8be1849be0286777fc294544ea39010222c8f7c535a0b031794b2cbbd2",
     "address": "0x7945e45c2F39bE3A0cbF467F3fae982C17CB4Bf7",
-    "block": 24392172,
-    "tx": "0x3dae39af2e642e593a1551f9da68f6d004f273048f1e4b45c3dd8db213137167",
-    "gas": "2052709",
+    "block": 24419867,
+    "tx": "0x541d335027b868cbfb0ddf4a0fa52fc3920360b27c01b717cff3fe37a49d5e29",
+    "gas": "2057684",
     "deployer": "0x296400D87BE5cFB63C5025904cD006EBB23d15d5",
-    "timestamp": 1770313142,
-    "implementation": "0xE375C1d79165eC365d0BC0d0c5105A8A17f85cEe",
-    "verified": "2026-02-05T17:44:45.167Z"
+    "timestamp": 1770648048,
+    "implementation": "0x22f92940c5d053CCbAE47F88Fb51752CC04CaBaA",
+    "verified": "2026-02-09T14:41:04.383Z",
+    "history": [
+      {
+        "main": "./0xc/hardhat/TrancheDepositor/TrancheDepositor.ts",
+        "address": "0xE375C1d79165eC365d0BC0d0c5105A8A17f85cEe",
+        "block": 24392172,
+        "tx": "0x3dae39af2e642e593a1551f9da68f6d004f273048f1e4b45c3dd8db213137167",
+        "gas": "2052709",
+        "verified": "2026-02-05T17:44:45.167Z"
+      }
+    ]
   },
   {
     "id": "TrancheDepositorV3Proxy",
@@ -1149,7 +1159,7 @@
     "deployer": "0x296400D87BE5cFB63C5025904cD006EBB23d15d5",
     "timestamp": 1770313165,
     "verified": "2026-02-05T17:44:51.753Z",
-    "proxyFor": "0xE375C1d79165eC365d0BC0d0c5105A8A17f85cEe"
+    "proxyFor": "0x22f92940c5d053CCbAE47F88Fb51752CC04CaBaA"
   },
   {
     "id": "TrancheDepositorV3ProxyAdmin",

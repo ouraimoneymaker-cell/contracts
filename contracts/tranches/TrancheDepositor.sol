@@ -261,7 +261,9 @@ contract TrancheDepositor is AccessControlled {
         TAutoSwap memory swapInfo
     ) internal returns (uint256) {
 
-        SafeERC20.safeTransferFrom(tokenIn, from, address(this), amount);
+        if (from != address(this)) {
+            SafeERC20.safeTransferFrom(tokenIn, from, address(this), amount);
+        }
 
         // Approve e.g. Uniswap router to spend Token
         SafeERC20.forceApprove(tokenIn, swapInfo.router, amount);

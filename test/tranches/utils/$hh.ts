@@ -86,30 +86,13 @@ export namespace $hh {
 
             const deployer = await hh.deployer(0);
 
-
-            // const CtorDeployments = this.cdoKey === 'neutrl'
-            //     ? NeutrlDeployments
-            //     : EthenaDeployments;
-
-            console.log(`ℹ️ℹ️ℹ️ `, this.cdoKey);
-
             const { tranches: factory } = await PlatformFactory.init({
                 client,
                 cdo: this.cdoKey
             });
 
-            // const depl = new CtorDeployments({
-            //     client,
-            //     deployer,
-            //     accounts: {
-            //         deployer: deployer,
-            //         safe: { admin: deployer, operator: deployer },
-            //         timelock: { admin: deployer, config: deployer },
-            //     }
-            // });
-
             this.client = client;
-            this.factory = factory as any as TDeployments;//depl as any as TDeployments;
+            this.factory = factory as any as TDeployments;
             this.deployer = deployer;
         }
 

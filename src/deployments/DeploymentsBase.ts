@@ -688,7 +688,7 @@ export abstract class DeploymentsBase<T extends ICdoDeploymentsBase = any> {
     async ensureLenses() {
         let { contract: cdoLens } = await this.ds.ensureWithProxy(CDOLens, {
             initialize: [
-                this.owner.address
+                this.deployer.address
             ]
         });
     }

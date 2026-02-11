@@ -56,6 +56,14 @@ contract CDOLens is OwnableUpgradeable {
 
         int256 aprJrtSpread = (int256(round.aprBase) - aprSrt) * int256(tvlRatioSrt.unwrap()) / int256(tvlRatioJrt.unwrap());
         int256 aprJrt = int256(round.aprBase) + aprJrtSpread;
+
+        uint256 reserveBps = accounting.reserveBps();
+        if (aprJrt > 0 && reserveBps > 0) {
+            // Net APR = grossApr * (1 - performanceFee)
+            uint256 factor = 1e18 - reserveBps;
+            aprJrt = (aprJrt * int256(factor)) / int256(1e18);
+        }
+
         return TAPRs({
             base: int64(round.aprBase),
             target: int64(round.aprTarget),
@@ -114,6 +122,7 @@ interface IAccountingApi is IAccounting {
     function riskX () external view returns (UD60x18);
     function riskY () external view returns (UD60x18);
     function riskK () external view returns (UD60x18);
+    function reserveBps () external view returns (uint256);
 }
 interface IStrataCDOApi is IStrataCDO{
     function accounting() external view returns (IAccountingApi);

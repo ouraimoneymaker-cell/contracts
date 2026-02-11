@@ -37,6 +37,7 @@ export namespace PlatformFactory {
         platform?: TEth.Platform
         deployments?: 'throw' | 'redeploy',
         cdo: TKey
+        accounts?: TKey | 'operator'
     }) {
         const hh = new HardhatProvider();
         const config = await ConfigLoader.fetch();
@@ -44,7 +45,7 @@ export namespace PlatformFactory {
         const platform = params.platform ?? params?.client?.platform ?? config.$get('chain') ?? 'hardhat';
         const client = params?.client ?? await Web3ClientFactory.getAsync(platform);
 
-        const accounts = await getAccounts(client, params.cdo);
+        const accounts = await getAccounts(client, params.accounts ?? params.cdo);
 
         if (accounts.safe?.admin.type === 'safe') {
             TxWriter.defaultOptions({
@@ -77,11 +78,11 @@ export namespace PlatformFactory {
         }
     }
 
-    async function getAccounts(client: Web3Client, cdo: 'ethena' | 'neutrl') {
+    async function getAccounts(client: Web3Client, group: 'ethena' | 'neutrl' | 'operator') {
         const { platform, network } = client;
         const hh = new HardhatProvider();
 
-        const accounts = Tranches[cdo]?.accounts?.[network] ?? {
+        const accounts = Tranches[group]?.accounts?.[network] ?? {
             deployer: `${network}/deployer`,
             timelockAdmin: `timelock/${network}/strata`,
             timelockConfig: `timelock/${network}/config`,
@@ -103,10 +104,10 @@ export namespace PlatformFactory {
             safeOperator = deployer;
         }
 
-        if (platform !== 'eth') {
+        if (platform !== 'eth' || group === 'operator') {
             safeAdmin ??= deployer;
             safeOperator ??= deployer;
-            timelockAdmin ??= safeAdmin;
+            timelockAdmin ??= safeOperator;
             timelockConfig ??= safeOperator;
         }
 

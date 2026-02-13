@@ -2,6 +2,8 @@
 pragma solidity ^0.8.22;
 
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import { IERC4626 } from "@openzeppelin/contracts/interfaces/IERC4626.sol";
+import { IERC20Metadata } from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 
 import { IAprPairFeed } from "../tranches/interfaces/IAprPairFeed.sol";
@@ -25,6 +27,9 @@ contract CDOLens is OwnableUpgradeable {
     }
 
     IStrataCDOApi[] public cdos;
+
+    /// @notice Chainlink-like price feed per vault, used to convert the exchange rate into USD
+    mapping(address => IChainlinkPriceFeed) public priceFeeds;
 
     function initialize(address owner) external initializer {
         __Ownable_init_unchained(owner);
@@ -70,6 +75,40 @@ contract CDOLens is OwnableUpgradeable {
             jrt: int64(aprJrt),
             srt: int64(aprSrt)
         });
+    }
+
+
+    /**
+     * @notice Returns the USD price per share for an ERC4626 vault (tranche)
+     * @dev Computes the exchange rate via IERC4626.convertToAssets, then multiplies by the
+     *      Chainlink feed answer for the underlying asset to produce a USD-denominated price.
+     *      Result is always normalised to 18 decimal precision.
+     * @param vault The ERC4626 vault (tranche) to price
+     * @return price The USD price per share in 18 decimal precision
+     */
+    function getPrice (IERC4626 vault) external view returns (uint256 price) {
+        uint8 shareDecimals = vault.decimals();
+        uint256 exchangeRate = vault.convertToAssets(10 ** shareDecimals);
+
+        IChainlinkPriceFeed feed = priceFeeds[address(vault)];
+        require(address(feed) != address(0), "Price feed not set");
+
+        (, int256 answer,,,) = feed.latestRoundData();
+        require(answer > 0, "Invalid feed price");
+
+        uint8 assetDecimals = IERC20Metadata(vault.asset()).decimals();
+        uint8 feedDecimals = feed.decimals();
+
+        price = exchangeRate * uint256(answer) * 1e18 / (10 ** (assetDecimals + feedDecimals));
+    }
+
+    /**
+     * @notice Set or remove the Chainlink-like price feed for a vault's underlying asset
+     * @param vault The vault address to configure
+     * @param feed  The Chainlink-compatible feed (set to address(0) to remove)
+     */
+    function setPriceFeed (address vault, IChainlinkPriceFeed feed) external onlyOwner {
+        priceFeeds[vault] = feed;
     }
 
     /**
@@ -126,4 +165,15 @@ interface IAccountingApi is IAccounting {
 }
 interface IStrataCDOApi is IStrataCDO{
     function accounting() external view returns (IAccountingApi);
+}
+
+interface IChainlinkPriceFeed {
+    function decimals() external view returns (uint8);
+    function latestRoundData() external view returns (
+        uint80 roundId,
+        int256 answer,
+        uint256 startedAt,
+        uint256 updatedAt,
+        uint80 answeredInRound
+    );
 }

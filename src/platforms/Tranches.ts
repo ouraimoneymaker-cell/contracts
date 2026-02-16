@@ -136,13 +136,7 @@ export const Tranches: Record<TCDOKey, ICDO> = {
             ]
         },
         accounts: {
-            eth: {
-                deployer: 'eth/deployer',
-                timelockAdmin: 'safe/eth/owner',
-                timelockConfig: 'safe/eth/owner',
-                safeAdmin: 'safe/eth/owner',
-                safeOperator: 'safe/eth/owner',
-            }
+
         },
         Feed: {
             name: 'Neutrl CDO APR Pair'

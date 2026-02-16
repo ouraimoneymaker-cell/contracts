@@ -1,19 +1,18 @@
+import { l } from 'dequanto/utils/$logger';
 import { TAddress } from 'dequanto/models/TAddress';
 import { TEth } from 'dequanto/models/TEth';
 import { ETimelockTxStatus } from 'dequanto/services/TimelockService/ITimelockService';
 import { TimelockService } from 'dequanto/services/TimelockService/TimelockService';
-
 import { $address } from 'dequanto/utils/$address';
-import { l } from 'dequanto/utils/$logger';
-import { EthenaDeployments } from './EthenaDeployments';
 import { StrataMasterChef } from '@0xc/hardhat/StrataMasterChef/StrataMasterChef';
 import { ChainAccountService } from 'dequanto/ChainAccountService';
+import { DeploymentsBase } from './DeploymentsBase';
 
 
 
 export class TimelockHandler {
 
-    constructor (public ds: EthenaDeployments, public owner: TEth.IAccount) {
+    constructor (public ds: DeploymentsBase, public owner: TEth.IAccount) {
     }
 
     async get () {

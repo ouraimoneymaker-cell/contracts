@@ -10,7 +10,7 @@ import { $contract } from 'dequanto/utils/$contract';
 import alot from 'alot';
 
 UAction.create({
-    async '!ensure all contracts are deployed or redeploy on bytecode change'() {
+    async 'ensure all contracts are deployed or redeploy on bytecode change'() {
         const { tranches, deployer, client } = await PlatformFactory.init({
             deployments: 'redeploy',
             cdo: 'ethena'
@@ -71,7 +71,11 @@ UAction.create({
         }
     },
     async 'ensure Lenses'() {
-        const { tranches } = await PlatformFactory.init({ cdo: 'ethena' });
+        const { tranches } = await PlatformFactory.init({
+            cdo: 'ethena',
+            accounts: 'operator',
+            deployments: 'redeploy',
+        });
         await tranches.ensureLenses();
     }
 })

@@ -125,12 +125,19 @@ export abstract class DeploymentsBase<T extends ICdoDeploymentsBase = any> {
     abstract configureDepositor(depositor: TrancheDepositor);
 
 
-    async get<T extends ContractBase>(Ctor: Constructor<T>, params?: { id?: 'jrUSDe' | 'srUSDe', cdo?: 'USDe' }) {
-        if (params?.id != null) {
-            const id = ContractsIDMapping[params.id] ?? params.id;
-            return await this.ds.get(Ctor, { id })
-        }
+    async get<T extends ContractBase>(Ctor: Constructor<T>, params?: { id?: 'jrUSDe' | 'srUSDe' | string, cdo?: 'USDe' }) {
         let all = await this.ds.store.getDeployments();
+
+        if (params?.id != null) {
+            let id = ContractsIDMapping[params.id] ?? ContractsIDMapping[this.pfx + params.id]  ?? params.id;
+            let contract = await this.ds.getIfExists<T>(Ctor, { id })
+                ?? await this.ds.getIfExists<T>(Ctor, { id: `${this.pfx}${id}` })
+            if (contract) {
+                return contract;
+            }
+            throw new Error(`No ${Ctor.name} found for id ${id} and ${this.pfx} in deployments`);
+        }
+
         let byName = all.filter(d => d.name === Ctor.name);
         $require.gt(byName.length, 0, `${Ctor.name} not found in deployments`);
 

@@ -28,7 +28,7 @@ contract CDOLens is OwnableUpgradeable {
 
     IStrataCDOApi[] public cdos;
 
-    /// @notice Chainlink-like price feed per vault, used to convert the exchange rate into USD
+    /// @notice Chainlink-like price feed per asset, used to convert the exchange rate into USD
     mapping(address => IChainlinkPriceFeed) public priceFeeds;
 
     function initialize(address owner) external initializer {
@@ -89,26 +89,27 @@ contract CDOLens is OwnableUpgradeable {
     function getPrice (IERC4626 vault) external view returns (uint256 price) {
         uint8 shareDecimals = vault.decimals();
         uint256 exchangeRate = vault.convertToAssets(10 ** shareDecimals);
+        address asset = vault.asset();
 
-        IChainlinkPriceFeed feed = priceFeeds[address(vault)];
+        IChainlinkPriceFeed feed = priceFeeds[asset];
         require(address(feed) != address(0), "Price feed not set");
 
         (, int256 answer,,,) = feed.latestRoundData();
         require(answer > 0, "Invalid feed price");
 
-        uint8 assetDecimals = IERC20Metadata(vault.asset()).decimals();
+        uint8 assetDecimals = IERC20Metadata(asset).decimals();
         uint8 feedDecimals = feed.decimals();
 
         price = exchangeRate * uint256(answer) * 1e18 / (10 ** (assetDecimals + feedDecimals));
     }
 
     /**
-     * @notice Set or remove the Chainlink-like price feed for a vault's underlying asset
-     * @param vault The vault address to configure
+     * @notice Set or remove the Chainlink-like price feed for an asset
+     * @param asset The asset address to configure
      * @param feed  The Chainlink-compatible feed (set to address(0) to remove)
      */
-    function setPriceFeed (address vault, IChainlinkPriceFeed feed) external onlyOwner {
-        priceFeeds[vault] = feed;
+    function setPriceFeed (address asset, IChainlinkPriceFeed feed) external onlyOwner {
+        priceFeeds[asset] = feed;
     }
 
     /**

@@ -698,6 +698,7 @@ export abstract class DeploymentsBase<T extends ICdoDeploymentsBase = any> {
                 this.deployer.address
             ]
         });
+        return { lens: cdoLens }
     }
 
     private getContractId(name: keyof ICDO['Contracts']['']) {

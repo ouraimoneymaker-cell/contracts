@@ -8,6 +8,9 @@ import { StrataMasterChef } from '@0xc/hardhat/StrataMasterChef/StrataMasterChef
 import { l } from 'dequanto/utils/$logger';
 import { $contract } from 'dequanto/utils/$contract';
 import alot from 'alot';
+import { $address } from 'dequanto/utils/$address';
+import { Addresses } from '@s/constants';
+import { TAddress } from 'dequanto/models/TAddress';
 
 UAction.create({
     async 'ensure all contracts are deployed or redeploy on bytecode change'() {
@@ -71,12 +74,26 @@ UAction.create({
         }
     },
     async 'ensure Lenses'() {
-        const { tranches } = await PlatformFactory.init({
+        const { owner, tranches } = await PlatformFactory.init({
             cdo: 'ethena',
             accounts: 'operator',
             deployments: 'redeploy',
         });
-        await tranches.ensureLenses();
+        const { lens } = await tranches.ensureLenses();
+
+        const oracles = {
+            [Addresses.eth.USDe]: '0xa569d910839Ae8865Da8F8e70FfFb0cBA869F961'
+        };
+        for (let asset in oracles) {
+            let oracle = oracles[asset];
+            await tranches.ds.configure(lens, {
+                title: `Price Feed for ${asset}`,
+                shouldUpdate: async () => false === $address.eq(oracle, await lens.priceFeeds(asset as TAddress)),
+                updater: async () => {
+                    await lens.$receipt().setPriceFeed(owner, asset as TAddress, oracle as TAddress)
+                }
+            });
+        }
     }
 })
 

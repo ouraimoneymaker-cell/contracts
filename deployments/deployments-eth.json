@@ -633,15 +633,15 @@
     "id": "CDOLens",
     "name": "CDOLens",
     "main": "./0xc/hardhat/CDOLens/CDOLens.ts",
-    "bytecodeHash": "0xeccffc11af42e31b98db27565822a256d8d877176ee9dbf78df4cd4a6ba2e19f",
+    "bytecodeHash": "0x4a439cf8dcbd3a866d25435253f49da2fc67b0c449f69edb02113141fbef8796",
     "address": "0xeA62e3a2D5FE8D5b66dc8E1bd2405AD23C851f4e",
-    "block": 24433354,
-    "tx": "0xc50185e1ec344ee4a8294d45d7c063e78f396b2f3f1dcace93738989d51da920",
-    "gas": "1422287",
+    "block": 24472866,
+    "tx": "0x0444ae49fce80040f25a0a42636f95c0ceb581f45b1644be4e1d2b28761bc391",
+    "gas": "1660929",
     "deployer": "0x296400D87BE5cFB63C5025904cD006EBB23d15d5",
-    "timestamp": 1770810782,
-    "implementation": "0x16F62Bc6072A710202E7631be9B6a378de16fFF0",
-    "verified": "2026-02-11T11:53:14.350Z",
+    "timestamp": 1771286892,
+    "implementation": "0x38274dD13F90E6577b61D118fF05819112e1bB25",
+    "verified": "2026-02-17T00:11:13.069Z",
     "history": [
       {
         "main": "./0xc/hardhat/CDOLens/CDOLens.ts",
@@ -650,6 +650,22 @@
         "tx": "0xacaea67e84e80eca4212ead8e770075b4e36376dacd513a8314fe391a1b8f20b",
         "gas": "1378710",
         "verified": "2025-11-03T14:31:32.809Z"
+      },
+      {
+        "main": "./0xc/hardhat/CDOLens/CDOLens.ts",
+        "address": "0x16F62Bc6072A710202E7631be9B6a378de16fFF0",
+        "block": 24433354,
+        "tx": "0xc50185e1ec344ee4a8294d45d7c063e78f396b2f3f1dcace93738989d51da920",
+        "gas": "1422287",
+        "verified": "2026-02-11T11:53:14.350Z"
+      },
+      {
+        "main": "./0xc/hardhat/CDOLens/CDOLens.ts",
+        "address": "0xA7C547Ba0dFD91A6b1e8Ab6Aa5d444F9eC2dA3A4",
+        "block": 24472742,
+        "tx": "0xa023922601fb981f23967bac36ad86c35e0e1b40bda05db8b7be8758127f64b5",
+        "gas": "1661793",
+        "verified": "2026-02-16T23:43:27.920Z"
       }
     ]
   },
@@ -665,7 +681,7 @@
     "deployer": "0x296400D87BE5cFB63C5025904cD006EBB23d15d5",
     "timestamp": 1762180302,
     "verified": "2025-11-03T14:31:54.691Z",
-    "proxyFor": "0x16F62Bc6072A710202E7631be9B6a378de16fFF0"
+    "proxyFor": "0x38274dD13F90E6577b61D118fF05819112e1bB25"
   },
   {
     "id": "CDOLensProxyAdmin",

@@ -688,6 +688,13 @@
         "name": "cdos",
         "size": null,
         "type": "address[]"
+      },
+      {
+        "slot": 1,
+        "position": 0,
+        "name": "priceFeeds",
+        "size": null,
+        "type": "mapping(address => address)"
       }
     ]
   },

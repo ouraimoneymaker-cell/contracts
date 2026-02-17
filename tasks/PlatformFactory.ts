@@ -73,7 +73,7 @@ export namespace PlatformFactory {
         return {
             tranches: depl as any as DeploymentsTypes.CDOs[TKey],
             client,
-            owner: accounts.timelock.admin,
+            owner:  params.accounts === 'operator' ? accounts.safe.operator : accounts.timelock.admin,
             deployer: accounts.deployer,
         }
     }

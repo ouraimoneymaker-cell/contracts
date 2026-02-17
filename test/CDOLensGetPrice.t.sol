@@ -16,6 +16,7 @@ import {CDOLens, IChainlinkPriceFeed} from "../contracts/lens/CDOLens.sol";
 contract CDOLensGetPriceTest is Test {
     CDOLens public lens;
 
+    address constant USDe = 0x4c9EDD5852cd905f086C759E8383e09bff1E68B3;
     address constant SR_USDe = 0x3d7d6fdf07EE548B939A80edbc9B2256d0cdc003;
     address constant JR_USDe = 0xC58D044404d8B14e953C115E67823784dEA53d8F;
 
@@ -33,9 +34,8 @@ contract CDOLensGetPriceTest is Test {
         );
         lens = CDOLens(address(proxy));
 
-        // Configure the Chainlink feed for both tranches (both share USDe as underlying)
-        lens.setPriceFeed(SR_USDe, IChainlinkPriceFeed(USDE_USD_FEED));
-        lens.setPriceFeed(JR_USDe, IChainlinkPriceFeed(USDE_USD_FEED));
+        // Configure the Chainlink feed for USDe
+        lens.setPriceFeed(USDe, IChainlinkPriceFeed(USDE_USD_FEED));
     }
 
     function test_getPrice_srUSDe() public view {

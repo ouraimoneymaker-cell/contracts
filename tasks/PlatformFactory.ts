@@ -68,7 +68,8 @@ export namespace PlatformFactory {
             deployer: accounts.deployer as EoAccount,
             owner: accounts.timelock.admin,
             deployments: params?.deployments,
-            accounts
+            accounts,
+            initialDeposit: params?.initialDeposit
         });
         return {
             tranches: depl as any as DeploymentsTypes.CDOs[TKey],
@@ -104,13 +105,6 @@ export namespace PlatformFactory {
             safeOperator = deployer;
         }
 
-        if (platform !== 'eth' || group === 'operator') {
-            safeAdmin ??= deployer;
-            safeOperator ??= deployer;
-            timelockAdmin ??= safeOperator;
-            timelockConfig ??= safeOperator;
-        }
-
         if (platform === 'hardhat' && client.forked?.platform) {
             // Impersonate safe and timelock accounts in forked networks
             deployer = {
@@ -142,6 +136,13 @@ export namespace PlatformFactory {
             await client.debug.setBalance(timelockConfig.address,   BigInt(1e18));
             await client.debug.setBalance(safeAdmin.address,        BigInt(1e18));
             await client.debug.setBalance(safeOperator.address,     BigInt(1e18));
+
+        } else if (platform !== 'eth' || group === 'operator') {
+
+            safeAdmin = safeOperator;
+            safeOperator = safeOperator;
+            timelockAdmin = safeOperator;
+            timelockConfig = safeOperator;
         }
 
         return {

@@ -7,12 +7,14 @@ import { $address } from 'dequanto/utils/$address';
 import { $erc20 } from '../utils/$erc20';
 
 
-const test = $hh.create('neutrl', { forked: 24375510 });
+const test = $hh.create('neutrl', {
+    forked: 24375510
+});
 
 
 UAction.create({
     async $before() {
-       await test.deploy();
+       await test.deploy({ initialDeposit: false });
        await test.snapshot('neutrl');
     },
     async $after() {

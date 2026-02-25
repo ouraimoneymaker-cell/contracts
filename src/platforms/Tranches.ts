@@ -104,8 +104,8 @@ export const Tranches: Record<TCDOKey, ICDO> = {
             },
             performanceFee: .072 // 1 === 100%
         },
-        minimumJrtSrtRatioBuffer: 0.01,
-        minimumJrtSrtRatio: 0.009,
+        minimumJrtSrtRatioBuffer: 0.055,
+        minimumJrtSrtRatio: 0.05,
         riskPremium: {
             x: 0.15,
             y: 0.15,

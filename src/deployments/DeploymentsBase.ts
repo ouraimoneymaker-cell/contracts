@@ -73,13 +73,14 @@ export abstract class DeploymentsBase<T extends ICdoDeploymentsBase = any> {
 
     protected pfx: string;
 
-    constructor(params: {
+    constructor(private params: {
         cdo: TCDOKey
         client: Web3Client
         deployer: TEth.EoAccount
         owner?: TEth.IAccount
         accounts?: IPlatformAccounts
         deployments?: 'throw' | 'redeploy'
+        initialDeposit?: boolean
     }) {
         this.deployer = params.deployer;
         this.owner = params.owner ?? params.deployer;
@@ -525,7 +526,7 @@ export abstract class DeploymentsBase<T extends ICdoDeploymentsBase = any> {
             }
         });
 
-        if (await jrtVault.totalSupply() === 0n) {
+        if (this.params?.initialDeposit !== false && await jrtVault.totalSupply() === 0n) {
             if (this.client.platform === 'eth') {
                 await this.initialDepositAtomic({ jrtVault, srtVault, cdo });
             } else if (this.client.network === 'eth') {
@@ -771,7 +772,7 @@ export abstract class DeploymentsBase<T extends ICdoDeploymentsBase = any> {
         $require.notNull(this.cdoInfo.minimumJrtSrtRatio, `MINIMUM_JRT_SRT_RATIO`);
 
         const MINIMUM_JRT_SRT_RATIO_BUFFER = $bigint.toWei(this.cdoInfo.minimumJrtSrtRatioBuffer, 18);
-        const MINIMUM_JRT_SRT_RATIO = $bigint.toWei(this.cdoInfo.minimumJrtSrtRatioBuffer, 18);
+        const MINIMUM_JRT_SRT_RATIO = $bigint.toWei(this.cdoInfo.minimumJrtSrtRatio, 18);
 
         const { accounting, srtVault } = contracts;
         const [curMinimumJrtSrtRatio, curMinimumJrtSrtRatioBuffer] = await accounting.$executeBatch([
@@ -867,7 +868,7 @@ export abstract class DeploymentsBase<T extends ICdoDeploymentsBase = any> {
         });
     }
 
-    public async ensureDeployment(): Promise<TDeploymentContracts<T>> {
+    public async ensureDeployment(opts: { initialDeposit?: boolean }): Promise<TDeploymentContracts<T>> {
         const contracts = await this.ensureCDO();
         const depositor = await this.ensureDepositor();
         const { configManager } = await this.ensureConfigManager();

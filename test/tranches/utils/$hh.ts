@@ -73,7 +73,7 @@ export namespace $hh {
         }
 
         @memd.deco.memoize({ perInstance: true })
-        async init () {
+        async init (opts?: { initialDeposit?: boolean }) {
             const config = await PlatformFactory.ConfigLoader.fetch();
             const hh = new HardhatProvider();
             const client = this.params?.forked == null
@@ -88,7 +88,8 @@ export namespace $hh {
 
             const { tranches: factory } = await PlatformFactory.init({
                 client,
-                cdo: this.cdoKey
+                cdo: this.cdoKey,
+                ...(opts ?? {}),
             });
 
             this.client = client;
@@ -103,12 +104,12 @@ export namespace $hh {
         }
 
         @memd.deco.memoize({ perInstance: true })
-        async deploy () {
-            await this.init();
+        async deploy (opts?: { initialDeposit?: boolean }) {
+            await this.init(opts);
 
             this.underlying = await this.factory.ensureUnderlying();
 
-            let contracts = await this.factory.ensureDeployment();
+            let contracts = await this.factory.ensureDeployment(opts);
 
             this.tranches = contracts;
             this.depositor = contracts.depositor;

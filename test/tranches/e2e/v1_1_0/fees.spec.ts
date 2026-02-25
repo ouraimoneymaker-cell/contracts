@@ -72,7 +72,8 @@ UTest.create({
 
     async $before () {
         forked = await $hh.forked({
-            block: 23946200
+            block: 23946200,
+            cdo: 'ethena',
         });
 
         const { client } = forked;

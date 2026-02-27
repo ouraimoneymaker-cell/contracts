@@ -22,6 +22,7 @@ import { MockStakedUSDS } from '@0xc/hardhat/MockStakedUSDS/MockStakedUSDS';
 import { MockERC4626 } from '@0xc/hardhat/MockERC4626/MockERC4626';
 import { SUSDeCooldownRequestImpl } from '@0xc/hardhat/sUSDeCooldownRequestImpl/sUSDeCooldownRequestImpl';
 import { SUSDeStrategy } from '@0xc/hardhat/sUSDeStrategy/sUSDeStrategy';
+import { ICDO } from '@s/platforms/Tranches';
 
 
 type TUnderlyingTokens = {
@@ -41,7 +42,8 @@ export class EthenaDeployments extends DeploymentsBase<{
         deployer: TEth.EoAccount
         owner?: TEth.IAccount
         accounts?: IPlatformAccounts
-        deployments?: 'throw' | 'redeploy'
+        deployments?: 'throw' | 'redeploy',
+        cdoInfo?: Partial<ICDO>;
     }) {
         super({
             cdo: 'ethena',

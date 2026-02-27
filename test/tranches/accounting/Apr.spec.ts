@@ -4,17 +4,20 @@ import { AccountingExecutor } from './AccountingExecutor';
 import { $apr } from '@s/utils/$apr';
 import { ProtocolExecutor } from '../utils/ProtocolExecutor';
 
-await $hh.test.deploy();
+
+const test = $hh.create('ethena', {})
+
+await test.deploy();
 
 UTest.create({
     async $teardown () {
-        await $hh.test.reset();
+        await test.reset();
     },
     async $after () {
-        await $hh.test.reset();
+        await test.reset();
     },
     async 'changes APR in the middle' () {
-        let exec = new AccountingExecutor($hh.test);
+        let exec = new AccountingExecutor(test);
         let srt$ = $apr.value(1000);
         let jrt$ = $apr.value(1000);
         let nav$ = $apr.value(2000);
@@ -40,7 +43,7 @@ UTest.create({
         });
     },
     async 'changes APRssr only' () {
-        let exec = new AccountingExecutor($hh.test);
+        let exec = new AccountingExecutor(test);
         let srt$ = $apr.value(1000);
         let jrt$ = $apr.value(1000);
         let nav$ = $apr.value(2000);
@@ -65,7 +68,7 @@ UTest.create({
         });
     },
     async 'drastically change the APR due to TVL ratio' () {
-        let exec = new ProtocolExecutor($hh.test);
+        let exec = new ProtocolExecutor(test);
 
         await exec.run({
             steps: [
@@ -92,7 +95,7 @@ UTest.create({
         });
     },
     async '//negative APRssr' () {
-        let exec = new AccountingExecutor($hh.test);
+        let exec = new AccountingExecutor(test);
         let srt$ = $apr.value(1000);
         let jrt$ = $apr.value(1000);
         let nav$ = $apr.value(2000);

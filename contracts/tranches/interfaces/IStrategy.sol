@@ -11,6 +11,7 @@ interface IStrategy is ICDOComponent {
     function withdraw (address tranche, address token, uint256 tokenAmount, uint256 baseAssets, address sender, address receiver) external returns (uint256);
     function withdraw (address tranche, address token, uint256 tokenAmount, uint256 baseAssets, address sender, address receiver, bool shouldSkipCooldown) external returns (uint256);
     function totalAssets () external view returns (uint256);
+    function totalAssets (uint256 latestNav, uint256 timestamp) external view returns (uint256);
     function reduceReserve (address token, uint256 tokenAmount, address receiver) external;
 
     function convertToAssets (address token, uint256 tokenAmount, Math.Rounding rounding) external view returns (uint256 baseAssets);

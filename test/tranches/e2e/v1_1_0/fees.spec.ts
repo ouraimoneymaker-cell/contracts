@@ -19,9 +19,14 @@ import { l } from 'dequanto/utils/$logger';
 import { AprPairFeed } from '@0xc/hardhat/AprPairFeed/AprPairFeed';
 import { $strata } from '../../utils/$strata';
 
-await $hh.test.init();
 
-let forked: EthenaDeployments;
+let test = $hh.create('ethena', {
+    forked: 23946200,
+    cdoInfo: { ContractVersions: { accounting: 'continuous' }}
+});
+
+let { factory: forked } = await test.init();
+
 let TVLs_v110_fees = {
     jrtBefore: 0n,
     jrtAfter: 0n,
@@ -71,27 +76,28 @@ UTest.create({
     },
 
     async $before () {
-        forked = await $hh.forked({
-            block: 23946200,
-            cdo: 'ethena',
-        });
+        // forked = await $hh.forked({
+        //     block: 23946200,
+        //     cdo: 'ethena',
+        //     cdoInfo: { ContractVersions: { accounting: 'continuous' }}
+        // });
 
         const { client } = forked;
         await client.debug.mine('10days');
         await $strata.disableAPRs(forked);
 
-        await $hh.test.snapshot('v_1_1_0');
+        await test.snapshot('v_1_1_0');
     },
 
     async $teardown () {
-        await $hh.test.reset('v_1_1_0');
+        await test.reset('v_1_1_0');
     },
     async $after () {
-        await $hh.reset(forked.client)
+        await $hh.reset(forked.client);
     },
 
 
-    async 'v1.1.0: upgrade + enable fee' () {
+    async '!v1.1.0: upgrade + enable fee' () {
         // https://github.com/Strata-Money/contracts-tranches-release-reports/tree/master/v1.1.0
         const timelockConfig = forked.accounts.timelock.config;
         const timelockAdmin = forked.accounts.timelock.admin;

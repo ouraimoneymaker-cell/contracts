@@ -64,12 +64,17 @@ export interface ICDO {
         name?: string
     },
     Contracts?: {
+        // Override contract IDs for the platform
         [platform: TEth.Platform | '*']: {
             AccessControlManager?: string
             SharesCooldown?: string
             ERC20Cooldown?: string
             UnstakeCooldown?: string
         }
+    },
+    ContractVersions?: {
+        // Discrete accounting is the default (backward compatible with previous versions).
+        accounting?: 'continuous' | 'discrete',
     }
 }
 
@@ -93,7 +98,10 @@ export const Tranches: Record<TCDOKey, ICDO> = {
         },
         Feed: {
             name: 'Ethena CDO APR Pair'
-        }
+        },
+        ContractVersions: {
+            accounting: 'continuous',
+        },
     },
     'neutrl': {
         base: 'NUSD',
@@ -148,7 +156,10 @@ export const Tranches: Record<TCDOKey, ICDO> = {
                 UnstakeCooldown: 'NeutrlUnstakeCooldown',
                 SharesCooldown: 'NeutrlSharesCooldown'
             }
-        }
+        },
+        ContractVersions: {
+            accounting: 'continuous',
+        },
     }
 }
 

@@ -99,10 +99,7 @@ contract StrataCDO is IErrors, IStrataCDO, IStrataCDOSetters, AccessControlled {
     ///      2. Uses the accounting contract to calculate the asset split
     ///      3. Returns the assets allocated to the specified tranche
     function totalAssets(address tranche) public view returns (uint256) {
-        uint256 totalAssetsOverall = strategy.totalAssets();
-        (uint256 jrtAssets, uint256 srtAssets, ) = accounting.totalAssets(
-            totalAssetsOverall
-        );
+        (uint256 jrtAssets, uint256 srtAssets, ) = accounting.totalAssets();
         if (isJrt(tranche)) {
             return jrtAssets;
         }
@@ -114,6 +111,10 @@ contract StrataCDO is IErrors, IStrataCDO, IStrataCDOSetters, AccessControlled {
     /// @return uint256 The current total assets in the strategy
     function totalStrategyAssets() public view returns (uint256) {
         return strategy.totalAssets();
+    }
+
+    function totalStrategyAssets(uint256 latestNav, uint256 timestamp) public view returns (uint256) {
+        return strategy.totalAssets(latestNav, timestamp);
     }
 
     function pricePerShare(address tranche) public view returns (uint256) {
@@ -186,8 +187,10 @@ contract StrataCDO is IErrors, IStrataCDO, IStrataCDOSetters, AccessControlled {
     /// @notice Returns tranche NAVs excluding assets locked in the shares cooldown (silo).
     /// @dev Reads accounting totals and subtracts locked assets to compute available TVLs and coverage.
     function totalAssetsUnlocked() public view returns (uint256 jrtNav, uint256 srtNav) {
+        // Saved Junior and Senior TVLs (not projected).
         (jrtNav, srtNav, ) = accounting.totalAssetsT0();
 
+        // Potentially projected Junior and Senior assets.
         uint256 jrtNavLocked = jrtVault.convertToAssets(jrtVault.balanceOf(address(sharesCooldown)));
         uint256 srtNavLocked = srtVault.convertToAssets(srtVault.balanceOf(address(sharesCooldown)));
 
@@ -211,8 +214,7 @@ contract StrataCDO is IErrors, IStrataCDO, IStrataCDOSetters, AccessControlled {
     /// @notice Refreshes accounting state before tranche deposit or redemption flows.
     /// @dev Called by tranche contracts to sync balances with current strategy TVL.
     function updateAccounting () external onlyTranche {
-        uint256 totalAssetsOverall = strategy.totalAssets();
-        accounting.updateAccounting(totalAssetsOverall);
+        accounting.updateAccounting();
     }
 
     function deposit(address tranche, address token, uint256 tokenAmount, uint256 baseAssets) external onlyTranche nonReentrant {

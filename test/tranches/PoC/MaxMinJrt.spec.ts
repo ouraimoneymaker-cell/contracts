@@ -25,7 +25,9 @@ UTest.create({
 
         // simulate loss, transfer 50% to srt
         await accounting.storage.$set('jrtNav', AMOUNT / 2n);
+        await accounting.storage.$set('jrtNavProjected', AMOUNT / 2n);
         await accounting.storage.$set('srtNav', AMOUNT / 2n);
+
         $require.eq(await jrtVault.totalAssets(), AMOUNT / 2n);
         $require.eq(await jrtVault.maxMint(deployer.address), $bigint.MAX_UINT256);
     }

@@ -11,7 +11,7 @@ import { EoAccount } from 'dequanto/models/TAccount';
 import { TEth } from 'dequanto/models/TEth';
 import { InMemoryServiceTransport } from 'dequanto/safe/transport/InMemoryServiceTransport';
 import { TxWriter } from 'dequanto/txs/TxWriter';
-import { TCDOKey, Tranches } from '@s/platforms/Tranches';
+import { ICDO, TCDOKey, Tranches } from '@s/platforms/Tranches';
 import { V0NeutrlDeployments } from '@s/deployments/V0NeutrlDeployments';
 import { NeutrlDeployments } from '@s/deployments/NeutrlDeployments';
 import { DeploymentsTypes } from '@s/deployments/DeploymentsTypes';
@@ -38,6 +38,7 @@ export namespace PlatformFactory {
         deployments?: 'throw' | 'redeploy',
         cdo: TKey
         accounts?: TKey | 'operator'
+        cdoInfo?: Partial<ICDO>
     }) {
         const hh = new HardhatProvider();
         const config = await ConfigLoader.fetch();
@@ -57,19 +58,14 @@ export namespace PlatformFactory {
             ? NeutrlDeployments
             : EthenaDeployments;
 
-
-        // if (client?.platform === 'hardhat') {
-        //     let files = await Directory.readFiles('./deployments/', 'deployments-hard*.json');
-        //     await alot(files).forEachAsync(x => x.removeAsync()).toArrayAsync();
-        // }
-
         const depl = new CtorDeployments({
             client,
             deployer: accounts.deployer as EoAccount,
             owner: accounts.timelock.admin,
             deployments: params?.deployments,
             accounts,
-            initialDeposit: params?.initialDeposit
+            initialDeposit: params?.initialDeposit,
+            cdoInfo: params?.cdoInfo,
         });
         return {
             tranches: depl as any as DeploymentsTypes.CDOs[TKey],

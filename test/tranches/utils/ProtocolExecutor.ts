@@ -1,6 +1,6 @@
 import { $hh } from './$hh';
 import { $bigint } from 'dequanto/utils/$bigint';
-import { Accounting } from '@0xc/hardhat/Accounting/Accounting';
+import { DiscreteAccounting as Accounting } from '@0xc/hardhat/DiscreteAccounting/DiscreteAccounting';
 import { $require } from 'dequanto/utils/$require';
 import { $date } from 'dequanto/utils/$date';
 import { l } from 'dequanto/utils/$logger';
@@ -11,6 +11,7 @@ import { $strata } from './$strata';
 import { $erc4626 } from './$erc4626';
 import { $test } from './$test';
 import { $tranche } from './$tranche';
+import { DeploymentsBase } from '@s/deployments/DeploymentsBase';
 
 let client: Web3Client;
 
@@ -18,30 +19,30 @@ export class ProtocolExecutor {
     users:Record<string, TEth.IAccount> = {};
     user: TEth.IAccount
 
-    constructor(private test: $hh.Test) {
+    constructor(private test: $hh.Test<DeploymentsBase>) {
         client = test.client;
     }
 
     async run (data: IExecutionData) {
-        let { sUSDe } = $hh.test.underlying;
-        let { accounting, feed, jrtVault, srtVault, cdo } = $hh.test.tranches;
-        let { deployer } = $hh.test;
+        let { sUSDe } = this.test.underlying;
+        let { accounting, feed, jrtVault, srtVault, cdo } = this.test.tranches;
+        let { deployer } = this.test;
 
         await $erc4626.deposit(sUSDe, deployer, 1000);
 
 
         for (let step of data.steps) {
             if (step.user != null) {
-                this.user = this.users[step.user] ?? (this.users[step.user] = await $hh.test.createAccount(step.user));
+                this.user = this.users[step.user] ?? (this.users[step.user] = await this.test.createAccount(step.user));
             }
             if (step.aprs != null) {
                 l`gray<Aprs>: Target: cyan<${step.aprs.target}> Base: cyan<${step.aprs.target}>`;
-                await $strata.setAprsViaDistribution(step.aprs.target, step.aprs.base);
+                await $strata.setAprsViaDistribution(this.test, step.aprs.target, step.aprs.base);
             }
             if (step.aprsFixed != null) {
                 l`gray<Aprs Feed>: Target: cyan<${step.aprsFixed.target}> Base: cyan<${step.aprsFixed.target}>`;
                 let { target, base } = step.aprsFixed;
-                await $strata.setAprsViaFeed(target, base);
+                await $strata.setAprsViaFeed(this.test, target, base);
             }
             if (step.risk != null) {
                 let x = $bigint.toWei(step.risk[0]);
@@ -78,8 +79,8 @@ export class ProtocolExecutor {
                 await Balance.eq(accounting.nav(), step.eqNav);
             }
             if (step.logNav != null) {
-                let assets = await accounting.totalAssets(await cdo.totalStrategyAssets())
-                console.log(`JrtNav:`, $bigint.toEther(assets.jrtNavT1));
+                let assets = await accounting.totalAssets(await cdo.totalStrategyAssets());
+                console.log(`JrtNav:`, $bigint.toEther(assets.jrtNavT1Projected));
                 console.log(`SrtNav:`, $bigint.toEther(assets.srtNavT1));
             }
             if (step.eqUserAssets) {

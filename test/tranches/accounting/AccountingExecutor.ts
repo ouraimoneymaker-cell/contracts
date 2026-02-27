@@ -1,6 +1,6 @@
 import { $hh } from '../utils/$hh';
 import { $bigint } from 'dequanto/utils/$bigint';
-import { Accounting } from '@0xc/hardhat/Accounting/Accounting';
+import { DiscreteAccounting as Accounting } from '@0xc/hardhat/DiscreteAccounting/DiscreteAccounting';
 import { $require } from 'dequanto/utils/$require';
 import { $date } from 'dequanto/utils/$date';
 import { l } from 'dequanto/utils/$logger';
@@ -9,6 +9,8 @@ import { $apr } from '@s/utils/$apr';
 import { HardhatProvider } from 'dequanto/hardhat/HardhatProvider';
 import { ContractBase } from 'dequanto/contracts/ContractBase';
 import { $test } from '../utils/$test';
+import { DeploymentsBase } from '@s/deployments/DeploymentsBase';
+
 
 let client: Web3Client;
 
@@ -16,27 +18,33 @@ export class AccountingExecutor {
     srtNav: bigint
     jrtNav: bigint
 
-    constructor(private test: $hh.Test) {
+    constructor(private test: $hh.Test<DeploymentsBase>) {
         client = test.client;
     }
 
     async run (data: IExecutionData) {
 
-        await $hh.test.reset();
+        await this.test.reset();
         let { client } = this.test;
         let { deployer } = this.test.factory;
 
         let hh = new HardhatProvider();
         let { contract: mockCdo } = await hh.deployCode(`
             contract MockCDO {
-                uint256 public totalStrategyAssets = 0;
+                uint256 public _totalStrategyAssets = 0;
                 function setTotalAssets (uint256 amount) external {
-                    totalStrategyAssets = amount;
+                    _totalStrategyAssets = amount;
                 }
                 function increment (int256 amount) external {
-                    totalStrategyAssets = amount > 0
-                        ? totalStrategyAssets + uint256(amount)
-                        : totalStrategyAssets - uint256(amount * -1);
+                    _totalStrategyAssets = amount > 0
+                        ? _totalStrategyAssets + uint256(amount)
+                        : _totalStrategyAssets - uint256(amount * -1);
+                }
+                function totalStrategyAssets () public view returns (uint256) {
+                    return _totalStrategyAssets;
+                }
+                function totalStrategyAssets (uint256, uint256) public view returns (uint256) {
+                    return _totalStrategyAssets;
                 }
             }
         `, { client });
@@ -52,6 +60,9 @@ export class AccountingExecutor {
         await Updater.totalAssets(0);
 
         for (let step of data.steps) {
+            if (step.msg != null) {
+                l`green<${step.msg}>`;
+            }
             if (step.aprs != null) {
                 let aprTarget = $apr.toWei(step.aprs[0]);
                 let aprBase = $apr.toWei(step.aprs[1]);
@@ -85,12 +96,28 @@ export class AccountingExecutor {
                 step.eqAvg[0] != null && await Balance.eqAvg(accounting.jrtNav(), step.eqAvg[0]);
                 step.eqAvg[1] != null && await Balance.eqAvg(accounting.srtNav(), step.eqAvg[1]);
             }
+            if (step.eqProjectedAvg) {
+                const acc = accounting as any as Accounting;
+                console.log('JRTp:', $bigint.toEther(await acc.jrtNavProjected()));
+                console.log('SRT:', $bigint.toEther(await acc.srtNav()));
+                console.log(step);
+                step.eqProjectedAvg[0] != null && await Balance.eqAvg(acc.jrtNavProjected(), step.eqProjectedAvg[0]);
+                step.eqProjectedAvg[1] != null && await Balance.eqAvg(acc.srtNav()         , step.eqProjectedAvg[1]);
+            }
+            if (step.updateAccounting) {
+                await Updater.updateAccounting();
+            }
             if (step.eqNav != null) {
                 await Balance.eq(accounting.nav(), step.eqNav);
             }
             if (step.logNav != null) {
                 console.log(`JrtNav:`, $bigint.toEther(await accounting.jrtNav()));
                 console.log(`SrtNav:`, $bigint.toEther(await accounting.srtNav()));
+            }
+            if (step.logNavP != null) {
+                const acc = accounting as any as Accounting;
+                console.log(`JrtNavP:`, $bigint.toEther(await acc.jrtNavProjected()));
+                console.log(`SrtNav :`, $bigint.toEther(await acc.srtNav()));
             }
             if (step.eqAprSrt != null) {
                 let srtApr = $bigint.toEther(await accounting.aprSrt());
@@ -114,9 +141,14 @@ interface IExecutionStep {
     time?: string
     totalAssets?: number
     eqAvg?: [jrtNav: number, srtNav: number]
+    eqProjectedAvg?: [jrtNavProjected: number, srtNav: number]
     eqNav?: number
     eqAprSrt?: number
     logNav?: boolean
+    logNavP?: boolean
+    updateAccounting?: boolean
+
+    msg?: string
 }
 
 
@@ -147,10 +179,19 @@ namespace Updater {
     export async function totalAssets(currentNAV: number) {
         l`Setting totalAssets cyan<${ currentNAV }>`;
         await cdo.$receipt().setTotalAssets(cdo, $bigint.toWei(currentNAV));
-        await accounting.$receipt().updateAccounting(
-            cdo,
-            $bigint.toWei(currentNAV),
-        );
+        await updateAccounting(currentNAV);
+    }
+    export async function updateAccounting(currentNAV?: number) {
+        if (currentNAV != null) {
+            await accounting.$receipt().updateAccounting(
+                cdo,
+                $bigint.toWei(currentNAV),
+            );
+        } else {
+            await accounting.$receipt().updateAccounting(
+                cdo
+            );
+        }
     }
     export async function time(t: string) {
         let dateBefore = await Block.getDate();

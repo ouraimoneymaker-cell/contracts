@@ -37,6 +37,7 @@ import { $bigint } from 'dequanto/utils/$bigint';
 import { $exitMode } from '@s/utils/$exitMode';
 import { SUSDeStrategy } from '@0xc/hardhat/sUSDeStrategy/sUSDeStrategy';
 import { $number } from 'dequanto/utils/$number';
+import { DiscreteAccounting } from '@0xc/hardhat/DiscreteAccounting/DiscreteAccounting';
 
 
 export interface ICdoDeploymentsBase {
@@ -81,6 +82,7 @@ export abstract class DeploymentsBase<T extends ICdoDeploymentsBase = any> {
         accounts?: IPlatformAccounts
         deployments?: 'throw' | 'redeploy'
         initialDeposit?: boolean
+        cdoInfo?: Partial<ICDO>
     }) {
         this.deployer = params.deployer;
         this.owner = params.owner ?? params.deployer;
@@ -100,6 +102,17 @@ export abstract class DeploymentsBase<T extends ICdoDeploymentsBase = any> {
         if (this.platform.Tranches?.ethena) {
             info.jrt = { ...info.jrt, ...(this.platform.Tranches?.[params.cdo]?.jrt ?? {}) } as any;
             info.srt = { ...info.srt, ...(this.platform.Tranches?.[params.cdo]?.srt ?? {}) } as any;
+        }
+        if (this.params.cdoInfo) {
+            // 1-Level extend
+            for (let key in this.params.cdoInfo) {
+                let values = this.params.cdoInfo[key];
+                let current = info[key];
+                info[key] = {
+                    ...current,
+                    ...values
+                };
+            }
         }
         this.cdoInfo = info;
     }
@@ -479,7 +492,11 @@ export abstract class DeploymentsBase<T extends ICdoDeploymentsBase = any> {
     async ensureAccounting(cdo: TEth.Address) {
         const acm = await this.ensureACM();
         const { feed } = await this.ensureFeeds();
-        const { contract: accounting } = await this.ds.ensureWithProxy(Accounting, {
+        const Contract = this.cdoInfo.ContractVersions?.accounting === 'continuous'
+            ? Accounting
+            : DiscreteAccounting;
+
+        const { contract: accounting } = await this.ds.ensureWithProxy(Contract as typeof Accounting, {
             id: `${this.pfx}Accounting`,
             initialize: [
                 this.owner.address,

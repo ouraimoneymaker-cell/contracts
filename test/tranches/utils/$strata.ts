@@ -8,7 +8,8 @@ import { $test } from './$test';
 import { EthenaDeployments } from '@s/deployments/EthenaDeployments';
 import { $date } from 'dequanto/utils/$date';
 import { AprPairFeed } from '@0xc/hardhat/AprPairFeed/AprPairFeed';
-import { Accounting } from '@0xc/hardhat/Accounting/Accounting';
+import { DiscreteAccounting as Accounting } from '@0xc/hardhat/DiscreteAccounting/DiscreteAccounting';
+import { DeploymentsBase } from '@s/deployments/DeploymentsBase';
 
 export namespace $strata {
     export const SECONDS_PER_YEAR = 365 * 24 * 60 * 60;
@@ -24,40 +25,40 @@ export namespace $strata {
         ] = await Promise.all([
             client.getBlock('latest'),
             tranches.get(AprPairFeed),
-            tranches.get(Accounting)
+            tranches.get(Accounting, { id: 'Accounting' })
         ]);
         await feed.$receipt().setRoundStaleAfter(accounts.timelock.admin, BigInt(ROUND_STALE));
         await feed.$receipt().updateRoundData(accounts.safe.operator, 0, 0, block.timestamp);
         await accounting.$receipt().onAprChanged(accounts.safe.operator);
     }
 
-    export async function setAprsViaDistribution (aprTarget: number, aprBase: number) {
-        let { sUSDe, USDe, sUSDs } = $hh.test.underlying;
-        let { feed } = $hh.test.tranches;
+    export async function setAprsViaDistribution (test: $hh.Test<DeploymentsBase>, aprTarget: number, aprBase: number) {
+        let { sUSDe, USDe, sUSDs } = test.underlying;
+        let { feed } = test.tranches;
 
         await sUSDe.storage.$set('vestingAmount', 0n);
-        await distribute({ apr: aprBase });
+        await distribute(test, { apr: aprBase });
 
         let ssr = $bigint.toWei(aprTarget, 27) / BigInt(SECONDS_PER_YEAR) + 10n**18n;
-        await sUSDs.setSsr($hh.test.deployer,  ssr);
+        await sUSDs.setSsr(test.deployer,  ssr);
 
         let aprs = await feed.latestRoundData();
         l`APR target cyan<${$bigint.toEther(aprs.aprTarget, 12)}>; APR base cyan<${$bigint.toEther(aprs.aprBase, 12)}>;`;
         $require.eq($bigint.toEther(aprs.aprTarget, 12), aprTarget, `APR target does not match`);
     }
-    export async function setAprsViaFeed (aprTarget: number, aprBase: number) {
-        let { deployer } = $hh.test;
-        let { feed, accounting } = $hh.test.tranches;
+    export async function setAprsViaFeed (test: $hh.Test<DeploymentsBase>, aprTarget: number, aprBase: number) {
+        let { deployer } = test;
+        let { feed, accounting } = test.tranches;
 
         let timestamp = (await feed.client.getBlock('latest')).timestamp;
         await feed.$receipt().updateRoundData(deployer, $apr.toWei(aprTarget), $apr.toWei(aprBase), timestamp);
         await accounting.$receipt().onAprChanged(deployer);
     }
 
-    export async function distribute (x: { amount?: number | bigint, apr?: number }) {
+    export async function distribute (test: $hh.Test<DeploymentsBase>, x: { amount?: number | bigint, apr?: number }) {
         let dt: string = '8hours';
-        let { sUSDe, USDe } = $hh.test.underlying;
-        let { feed } = $hh.test.tranches;
+        let { sUSDe, USDe } = test.underlying;
+        let { feed } = test.tranches;
         let rewards = 0n;
         if (x.apr != null) {
             let tvl = await sUSDe.totalAssets();
@@ -68,13 +69,13 @@ export namespace $strata {
             rewards = typeof x.amount === 'number' ? $bigint.toWei(x.amount) : x.amount;
         }
 
-        await $ethena.distribute(sUSDe, USDe, $hh.test.deployer, rewards);
+        await $ethena.distribute(sUSDe, USDe, test.deployer, rewards);
 
         if (x.apr != null) {
             let aprs = await feed.latestRoundData();
             let aprBase = $bigint.toEther(aprs.aprBase, 12);
 
-            let pair = await $hh.test.tranches.sUSDeAprPairProvider.getAprPair();
+            let pair = await test.tranches.sUSDeAprPairProvider.getAprPair();
             $test.eqDiff(aprBase, x.apr, 0.01, 'APR base does not match');
         }
 

@@ -454,7 +454,7 @@ contract DiscreteAccounting is IAccounting, CDOComponent {
             uint256 srtLoss = Math.min(srtNavT0, loss);
 
             srtNavT0 -= srtLoss;
-            jrtNavT1Real += srtLoss;
+            jrtNavT0Real += srtLoss;
             jrtNavT1Projected += srtLoss;
             srtGainTarget = 0;
         }

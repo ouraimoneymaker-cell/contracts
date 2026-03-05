@@ -642,7 +642,7 @@ contract DiscreteAccounting is IAccounting, CDOComponent {
 
     /// @notice Sets the portion of fees from each tranche that is returned to its TVL. The remainder goes to the reserve.
     /// @param jrtRetentionBps The percentage of junior fees that is retained by the junior tranche TVL.
-    /// @param srtRetentionBps The percentage of junior fees that is retained by the senior tranche TVL.
+    /// @param srtRetentionBps The percentage of senior fees that is retained by the senior tranche TVL.
     function setFeeRetentionBps (uint256 jrtRetentionBps, uint256 srtRetentionBps) external onlyOwner {
         require(jrtRetentionBps <= PERCENTAGE_100, "InvalidJrtRetention");
         require(srtRetentionBps <= PERCENTAGE_100, "InvalidSrtRetention");

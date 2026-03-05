@@ -595,6 +595,9 @@ contract DiscreteAccounting is IAccounting, CDOComponent {
         (bool modified, UD60x18 aprTarget_, UD60x18 aprBase_) = fetchAprs();
         if (modified) {
             emit AprDataChangedViaPush(aprTarget_, aprBase_);
+        } else {
+            // If APRs are unchanged, recalculate aprSrt using old APRs and the post-accounting TVL ratio
+            updateAprSrt(aprTarget_, aprBase_);
         }
     }
 

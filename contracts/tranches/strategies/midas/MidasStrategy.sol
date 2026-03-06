@@ -1,20 +1,24 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity ^0.8.28;
 
-import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
-import { IERC20 } from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
-import { IERC4626 } from "@openzeppelin/contracts/interfaces/IERC4626.sol";
-import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import { IMToken } from "./interfaces/IMToken.sol";
-import { IDepositVault } from "./interfaces/IDepositVault.sol";
-import { IRedemptionVault } from "./interfaces/IRedemptionVault.sol";
-import { IErrors } from "../../interfaces/IErrors.sol";
-import { IStrataCDO } from "../../interfaces/IStrataCDO.sol";
-import { IERC20Cooldown, IUnstakeCooldown } from "../../interfaces/cooldown/ICooldown.sol";
-import { Strategy } from "../../Strategy.sol";
+import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import {
+    SafeERC20
+} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {IMToken} from "./interfaces/IMToken.sol";
+import {IDepositVault} from "./interfaces/IDepositVault.sol";
+import {IRedemptionVault} from "./interfaces/IRedemptionVault.sol";
+import {IErrors} from "../../interfaces/IErrors.sol";
+import {IStrataCDO} from "../../interfaces/IStrataCDO.sol";
+import {
+    IERC20Cooldown,
+    IUnstakeCooldown
+} from "../../interfaces/cooldown/ICooldown.sol";
+import {Strategy} from "../../Strategy.sol";
+import {IRoundDataOracle} from "./AaveOracleAprPairProvider.sol";
 
 contract MidasStrategy is Strategy {
-
     // e.g. mHYPER 0x9b5528528656DBC094765E2abB79F293c21191B9
     IMToken public immutable mToken;
 
@@ -23,6 +27,9 @@ contract MidasStrategy is Strategy {
 
     // e.g. 0x570c15bc5faf98531a8b351d69e22e41e3505e47
     IRedemptionVault public immutable redemptionVault;
+
+    // Chainlink-style oracle for mToken price (e.g. 0x43881B05C3BE68B2d33eb70aDdF9F666C5005f68)
+    IRoundDataOracle public immutable oracle;
 
     IERC20 public immutable baseAsset;
 
@@ -38,19 +45,25 @@ contract MidasStrategy is Strategy {
     uint256 public mTokenCooldownJrt;
     uint256 public mTokenCooldownSrt;
 
-    event CooldownsChanged(uint256 jrt, uint256 srt);
+    /// @notice Referrer ID for Midas deposit tracking
+    bytes32 public referrerId;
 
-    constructor (
+    event CooldownsChanged(uint256 jrt, uint256 srt);
+    event ReferrerIdChanged(bytes32 referrerId);
+
+    constructor(
         IERC20 baseAsset_,
         IMToken mToken_,
         IDepositVault depositVault_,
         IRedemptionVault redemptionVault_,
+        IRoundDataOracle oracle_,
         address[] memory depositTokens_
     ) {
         baseAsset = baseAsset_;
         mToken = mToken_;
         depositVault = depositVault_;
         redemptionVault = redemptionVault_;
+        oracle = oracle_;
         depositTokens = depositTokens_;
 
         for (uint256 i = 0; i < depositTokens_.length; i++) {
@@ -71,8 +84,16 @@ contract MidasStrategy is Strategy {
         erc20Cooldown = erc20Cooldown_;
         unstakeCooldown = unstakeCooldown_;
 
-        SafeERC20.forceApprove(mToken, address(erc20Cooldown), type(uint256).max);
-        SafeERC20.forceApprove(mToken, address(unstakeCooldown), type(uint256).max);
+        SafeERC20.forceApprove(
+            mToken,
+            address(erc20Cooldown),
+            type(uint256).max
+        );
+        SafeERC20.forceApprove(
+            mToken,
+            address(unstakeCooldown),
+            type(uint256).max
+        );
     }
 
     /**
@@ -87,20 +108,35 @@ contract MidasStrategy is Strategy {
      * @param owner The address of the asset owner from whom to transfer tokens
      * @return The amount of base assets received after deposit
      */
-    function deposit (address tranche, address token, uint256 tokenAmount, uint256 baseAssets, address owner) external onlyCDO returns (uint256) {
-        SafeERC20.safeTransferFrom(IERC20(token), owner, address(this), tokenAmount);
+    function deposit(
+        address tranche,
+        address token,
+        uint256 tokenAmount,
+        uint256 baseAssets,
+        address owner
+    ) external onlyCDO returns (uint256) {
+        SafeERC20.safeTransferFrom(
+            IERC20(token),
+            owner,
+            address(this),
+            tokenAmount
+        );
 
-        if (token == address(baseAsset) || depositTokensDict[address(baseAsset)] == true) {
-            SafeERC20.forceApprove(IERC20(token), address(depositVault), tokenAmount);
+        if (token == address(baseAsset) || depositTokensDict[token] == true) {
+            SafeERC20.forceApprove(
+                IERC20(token),
+                address(depositVault),
+                tokenAmount
+            );
 
-            // @TODO do we need to pre-calculate
             uint256 minReceiveAmount = 0;
-            // @TODO handle via storage variable and constructor to use OUR referred ID
-            bytes32 referrerId = bytes32(0);
-            depositVault.depositInstant(token, tokenAmount, minReceiveAmount, referrerId);
+            depositVault.depositInstant(
+                token,
+                tokenAmount,
+                minReceiveAmount,
+                referrerId
+            );
 
-            // @TODO Convert depositTokensDict (USDT, DAI) to baseAsset (USDC)
-            // Convert received mToken to baseAsset
             return tokenAmount;
         }
         if (token == address(mToken)) {
@@ -123,19 +159,72 @@ contract MidasStrategy is Strategy {
      * @param sender The account that initiated the withdrawal
      * @return The amount of tokens withdrawn (shares for Midas, baseAssets for USDe)
      */
-    function withdraw (address tranche, address token, uint256 tokenAmount, uint256 baseAssets, address sender, address receiver) external onlyCDO returns (uint256) {
-        return withdrawInner(tranche, token, tokenAmount, baseAssets, sender, receiver, false);
+    function withdraw(
+        address tranche,
+        address token,
+        uint256 tokenAmount,
+        uint256 baseAssets,
+        address sender,
+        address receiver
+    ) external onlyCDO returns (uint256) {
+        return
+            withdrawInner(
+                tranche,
+                token,
+                tokenAmount,
+                baseAssets,
+                sender,
+                receiver,
+                false
+            );
     }
 
-    function withdraw (address tranche, address token, uint256 tokenAmount, uint256 baseAssets, address sender, address receiver, bool shouldSkipCooldown) external onlyCDO returns (uint256) {
-        return withdrawInner(tranche, token, tokenAmount, baseAssets, sender, receiver, shouldSkipCooldown);
+    function withdraw(
+        address tranche,
+        address token,
+        uint256 tokenAmount,
+        uint256 baseAssets,
+        address sender,
+        address receiver,
+        bool shouldSkipCooldown
+    ) external onlyCDO returns (uint256) {
+        return
+            withdrawInner(
+                tranche,
+                token,
+                tokenAmount,
+                baseAssets,
+                sender,
+                receiver,
+                shouldSkipCooldown
+            );
     }
 
-    function withdrawInner (address tranche, address token, uint256 tokenAmount, uint256 baseAssets, address sender, address receiver, bool shouldSkipCooldown) internal returns (uint256) {
-        uint256 shares = convertToTokens(address(mToken), baseAssets, Math.Rounding.Ceil); // aka IERC4626::previewWithdraw
+    function withdrawInner(
+        address tranche,
+        address token,
+        uint256 tokenAmount,
+        uint256 baseAssets,
+        address sender,
+        address receiver,
+        bool shouldSkipCooldown
+    ) internal returns (uint256) {
+        uint256 shares = convertToTokens(
+            address(mToken),
+            baseAssets,
+            Math.Rounding.Ceil
+        ); // aka IERC4626::previewWithdraw
         if (token == address(mToken)) {
-            uint256 cooldownSeconds = shouldSkipCooldown ? 0 : (cdo.isJrt (tranche) ? mTokenCooldownJrt : mTokenCooldownSrt);
-            erc20Cooldown.transfer(mToken, sender, receiver, shares, cooldownSeconds);
+            uint256 cooldownSeconds = shouldSkipCooldown
+                ? 0
+                : (cdo.isJrt(tranche) ? mTokenCooldownJrt : mTokenCooldownSrt);
+            erc20Cooldown.transfer(
+                mToken,
+                sender,
+                receiver,
+                shares,
+                cooldownSeconds
+            );
             return shares;
         }
         if (token == address(baseAsset)) {
@@ -155,14 +244,22 @@ contract MidasStrategy is Strategy {
      * @param tokenAmount The amount of tokens to be withdrawn
      * @param receiver The address that will receive the withdrawn tokens
      */
-    function reduceReserve (address token, uint256 tokenAmount, address receiver) external onlyCDO {
+    function reduceReserve(
+        address token,
+        uint256 tokenAmount,
+        address receiver
+    ) external onlyCDO {
         if (token == address(mToken)) {
             erc20Cooldown.transfer(mToken, receiver, receiver, tokenAmount, 0);
             return;
         }
         if (token == address(baseAsset)) {
             // tokenAmount is in baseAssets, convert to MTokens (Rounding.Floor/in favor of protocol) and trigger unstaking
-            uint256 shares = convertToTokens(address(mToken), tokenAmount, Math.Rounding.Floor);
+            uint256 shares = convertToTokens(
+                address(mToken),
+                tokenAmount,
+                Math.Rounding.Floor
+            );
             if (shares == 0) {
                 revert ZeroAmount();
             }
@@ -174,89 +271,104 @@ contract MidasStrategy is Strategy {
 
     /**
      * @notice Calculates the total assets managed by this strategy
-     * @dev This function returns the current value of the strategy's assets in USDe.
-     * @return baseAssets The total amount of USDe managed by this strategy
+     * @dev Returns the current value of the strategy's mToken holdings in base asset terms.
+     * @return baseAssets_ The total base asset value managed by this strategy
      */
-    function totalAssets () public view returns (uint256 baseAssets) {
+    function totalAssets() public view returns (uint256 baseAssets_) {
         uint256 shares = mToken.balanceOf(address(this));
-        baseAssets = convertToAssets(address(mToken), shares, Math.Rounding.Floor); // aka ERC4626::previewRedeem
-        return baseAssets;
+        baseAssets_ = convertToAssets(
+            address(mToken),
+            shares,
+            Math.Rounding.Floor
+        );
+        return baseAssets_;
     }
 
     /**
-     * @notice Calculates the total assets managed by this strategy
-     * @dev The strategy vests rewards continuously, so it reports the current total assets.
-     * @return baseAssets The total amount of USDe managed by this strategy
+     * @notice Calculates the total assets, returning fresh value only if the oracle has updated since last nav
+     * @dev Used by DiscreteAccounting to detect new gains. If the oracle has not updated since the
+     *      last accounting checkpoint, we return the previous NAV to avoid premature true-ups.
+     * @param latestNav The NAV from the last accounting checkpoint
+     * @param timestamp The timestamp of the last accounting checkpoint
+     * @return baseAssets_ The total base asset value managed by this strategy
      */
-    function totalAssets (uint256 latestNav, uint256 timestamp) public view returns (uint256 baseAssets) {
-        // @TODO fetch latest Oracle update
-        // updatedAt > timestamp => return totalAssets();
-        // else => latestNav;
-
-        return totalAssets();
+    function totalAssets(
+        uint256 latestNav,
+        uint256 timestamp
+    ) public view returns (uint256 baseAssets_) {
+        (, , , uint256 updatedAt, ) = oracle.latestRoundData();
+        if (updatedAt > timestamp) {
+            return totalAssets();
+        }
+        return latestNav;
     }
 
     /**
-     * @notice Converts a given amount of supported tokens to their equivalent in USDe
-     * @dev This function handles conversion for both Midas and USDe tokens.
-     *      For Midas, it uses the vault's exchange rate, considering the rounding direction.
-     *      For USDe, it returns the input amount as is.
-     * @param token The address of the token to convert (either Midas or USDe)
+     * @notice Converts a given amount of supported tokens to their equivalent in base asset
+     * @dev For mToken, uses the oracle exchange rate with the appropriate rounding.
+     *      For baseAsset, returns the input amount as is.
+     * @param token The address of the token to convert (either mToken or baseAsset)
      * @param tokenAmount The amount of tokens to convert
      * @param rounding The rounding direction to use for the conversion (floor or ceiling)
-     * @return The equivalent amount in USDe
+     * @return The equivalent amount in base asset
      */
-    function convertToAssets (address token, uint256 tokenAmount, Math.Rounding rounding) public view returns (uint256) {
+    function convertToAssets(
+        address token,
+        uint256 tokenAmount,
+        Math.Rounding rounding
+    ) public view returns (uint256) {
         if (token == address(mToken)) {
-            // return rounding == Math.Rounding.Floor
-            //     ? Midas.previewRedeem(tokenAmount) // aka convertToAssets(tokenAmount)
-            //     : Midas.previewMint(tokenAmount);
-
-            // @TODO implement the conversion logic mToken => baseAsset
-            return 0;
+            uint256 rate = getOracleRate();
+            return Math.mulDiv(tokenAmount, rate, 1e18, rounding);
         }
         if (token == address(baseAsset)) {
             return tokenAmount;
         }
-
-        // @TODO do we need to convert other Tokens to baseAsset (DAI, USDT)?
-
         revert UnsupportedToken(token);
     }
 
     /**
-     * @notice BaseAsset => Token Amount
-     * @dev This function handles conversion for both Midas and USDe tokens.
-     *      For Midas, it uses the vault's exchange rate, considering the rounding direction.
-     *      For USDe, it returns the input amount as is.
-     * @param token The address of the token to convert to (either Midas or USDe)
-     * @param baseAssets The amount of base assets (USDe) to convert
+     * @notice Converts a given amount of base assets to the equivalent amount of supported tokens
+     * @dev For mToken, uses the oracle exchange rate with the appropriate rounding.
+     *      For baseAsset, returns the input amount as is.
+     * @param token The address of the token to convert to (either mToken or baseAsset)
+     * @param baseAssets The amount of base assets to convert
      * @param rounding The rounding direction to use for the conversion (floor or ceiling)
-     * @return The equivalent amount in the requested token (Midas shares or USDe)
+     * @return The equivalent amount in the requested token (mToken or baseAsset)
      */
-    function convertToTokens (address token, uint256 baseAssets, Math.Rounding rounding) public view returns (uint256) {
+    function convertToTokens(
+        address token,
+        uint256 baseAssets,
+        Math.Rounding rounding
+    ) public view returns (uint256) {
         if (token == address(mToken)) {
-            // return rounding == Math.Rounding.Floor
-            //     ? Midas.previewDeposit(baseAssets) // aka convertToShares(baseAssets)
-            //     : Midas.previewWithdraw(baseAssets);
-
-            // @TODO implement the conversion logic baseAssets => mToken
-            return 0;
+            uint256 rate = getOracleRate();
+            return Math.mulDiv(baseAssets, 1e18, rate, rounding);
         }
         if (token == address(baseAsset)) {
             return baseAssets;
         }
-
-        // @TODO do we need to convert baseAsset to othe tokens (DAI, USDT)?
-
         revert UnsupportedToken(token);
     }
 
+    /**
+     * @notice Reads the mToken price from the oracle, scaled to base18
+     * @dev Validates that the oracle answer is positive
+     * @return rate The mToken price in 18 decimal precision
+     */
+    function getOracleRate() public view returns (uint256 rate) {
+        (, int256 answer, , , ) = oracle.latestRoundData();
+        require(answer > 0, "Oracle: invalid rate");
 
-     /**
+        uint8 decimals = 8; // Chainlink standard
+        // Scale to base18: answer * 10^(18 - decimals)
+        rate = uint256(answer) * 10 ** (18 - decimals);
+    }
+
+    /**
      * @notice Returns an array of supported tokens: Midas and USDe
      */
-    function getSupportedTokens () external view returns (IERC20[] memory) {
+    function getSupportedTokens() external view returns (IERC20[] memory) {
         IERC20[] memory tokens = new IERC20[](2 + depositTokens.length);
         tokens[0] = IERC20(address(mToken));
         tokens[1] = baseAsset;
@@ -266,10 +378,13 @@ contract MidasStrategy is Strategy {
         return tokens;
     }
 
-     /**
+    /**
      * @notice Updates the cooldown periods for Midas withdrawals (USDe cooldown is already defined by Ethena's unstaking period)
      */
-    function setCooldowns (uint256 mTokenCooldownJrt_, uint256 mTokenCooldownSrt_) external onlyRole(UPDATER_STRAT_CONFIG_ROLE) {
+    function setCooldowns(
+        uint256 mTokenCooldownJrt_,
+        uint256 mTokenCooldownSrt_
+    ) external onlyRole(UPDATER_STRAT_CONFIG_ROLE) {
         uint256 WEEK = 7 days;
         if (mTokenCooldownJrt_ > WEEK || mTokenCooldownSrt_ > WEEK) {
             revert InvalidConfigCooldown();
@@ -280,5 +395,15 @@ contract MidasStrategy is Strategy {
         bool isDisabled = mTokenCooldownJrt_ == 0 && mTokenCooldownSrt_ == 0;
         erc20Cooldown.setCooldownDisabled(mToken, isDisabled);
         emit CooldownsChanged(mTokenCooldownJrt_, mTokenCooldownSrt_);
+    }
+
+    /**
+     * @notice Updates the referrer ID used for Midas deposits
+     */
+    function setReferrerId(
+        bytes32 referrerId_
+    ) external onlyRole(UPDATER_STRAT_CONFIG_ROLE) {
+        referrerId = referrerId_;
+        emit ReferrerIdChanged(referrerId_);
     }
 }

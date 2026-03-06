@@ -4,6 +4,7 @@ pragma solidity ^0.8.28;
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { IERC20Metadata } from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import { IStrategyAprPairProvider } from "../../interfaces/IAprPairFeed.sol";
+import { IAccessControlManager } from "../../../governance/interfaces/IAccessControlManager.sol";
 
 /**
  * @title AprPairProvider with Aave as Target APR and Oracle as Base APR
@@ -11,20 +12,39 @@ import { IStrategyAprPairProvider } from "../../interfaces/IAprPairFeed.sol";
  */
 contract AaveOracleAprPairProvider is IStrategyAprPairProvider {
 
+    bytes32 public constant UPDATER_STRAT_CONFIG_ROLE = keccak256("UPDATER_STRAT_CONFIG_ROLE");
+
     uint256 constant SECONDS_PER_YEAR = 31_536_000;
 
     uint256 constant BOUND_MIN = 0;
     uint256 constant BOUND_MAX = .4e12;
 
+    IAccessControlManager public acm;
     IAavePool public aave;
     IRoundDataOracle public oracle;
     address[] public benchmarkTokens;
 
+    /// @notice Risk premium spread added on top of the Aave weighted average target APR
+    int64 public spread;
+
+    event SpreadChanged(int64 spread);
+
+    error AccessControlUnauthorizedAccount(address account, bytes32 neededRole);
+
+    modifier onlyRole(bytes32 role) {
+        if (!acm.hasRole(role, msg.sender)) {
+            revert AccessControlUnauthorizedAccount(msg.sender, role);
+        }
+        _;
+    }
+
     constructor (
+        IAccessControlManager _acm,
         IAavePool _aave,
         address[] memory _benchmarkTokens,
         IRoundDataOracle _oracle
     ) {
+        acm = _acm;
         aave = _aave;
         oracle = _oracle;
         benchmarkTokens = _benchmarkTokens;
@@ -51,7 +71,7 @@ contract AaveOracleAprPairProvider is IStrategyAprPairProvider {
         }
         uint256 aprAvg = weightedSum  / totalWeight;
         require(BOUND_MIN <= aprAvg && aprAvg <= BOUND_MAX, "Invalid_Apr_Avg");
-        return int64(int256(aprAvg));
+        return int64(int256(aprAvg)) + spread;
     }
 
     /**
@@ -91,7 +111,20 @@ contract AaveOracleAprPairProvider is IStrategyAprPairProvider {
             / ppsT0
             / int256(deltaT);
 
+        if (apr < int256(BOUND_MIN) || apr > int256(BOUND_MAX)) {
+            return 0;
+        }
         return int64(apr);
+    }
+
+    /**
+     * @notice Updates the risk premium spread applied to the target APR
+     * @param _spread The new spread value, scaled by 1e12 (12 decimal places)
+     */
+    function setSpread (int64 _spread) external onlyRole(UPDATER_STRAT_CONFIG_ROLE) {
+        require(_spread >= 0 && _spread <= int64(int256(BOUND_MAX)), "Invalid_Spread");
+        spread = _spread;
+        emit SpreadChanged(_spread);
     }
 
     function getAaveAsset (uint256 i) external view returns (uint256 apr, uint256 totalSupply) {

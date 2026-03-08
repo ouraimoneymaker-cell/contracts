@@ -19,7 +19,8 @@ import {IRedemptionVault} from "./interfaces/IRedemptionVault.sol";
  * It handles the cooldown request, finalization, and asset transfer for unstaking Midas tokens.
  *
  * Flow:
- * 1. `request()` — approves mToken to the RedemptionVault and calls `redeemRequest`.
+ * 1. `request()` — tries instant redemption first via `redeemInstant` (wrapped in try/catch).
+ *    If instant fails (e.g. daily limit exceeded), falls back to `redeemRequest`.
  *    Midas creates a Request struct and holds the mTokens.
  * 2. Midas admin approves the request off-chain, which transfers the base asset (e.g. USDC)
  *    from the `requestRedeemer` to this proxy contract.
@@ -70,21 +71,32 @@ contract MidasCooldownRequestImpl is IUnstakeHandler, Initializable {
         uint256 shares = mToken.balanceOf(address(this));
         require(shares > 0, "No mToken to redeem");
 
-        // Always use redeemRequest — redeemInstant can revert when daily limits are exceeded
         SafeERC20.forceApprove(
             IERC20(address(mToken)),
             address(redemptionVault),
             shares
         );
-        redemptionVault.redeemRequest(address(baseAsset), shares);
 
-        requestedAt = block.timestamp;
-        receiver = receiver_;
-        pending = true;
-        requestedAmount = shares;
+        // Try instant redemption first (may fail when daily limits are exceeded)
+        try redemptionVault.redeemInstant(address(baseAsset), shares, 0) {
+            // Instant succeeded — transfer baseAsset directly to receiver
+            uint256 received = baseAsset.balanceOf(address(this));
+            if (received > 0) {
+                SafeERC20.safeTransfer(baseAsset, receiver_, received);
+            }
+            return block.timestamp; // signals instant to UnstakeCooldown
+        } catch {
+            // Instant failed — fall back to redeemRequest
+            redemptionVault.redeemRequest(address(baseAsset), shares);
 
-        // Midas typically processes requests within 1-3 days
-        return block.timestamp + 3 days;
+            requestedAt = block.timestamp;
+            receiver = receiver_;
+            pending = true;
+            requestedAmount = shares;
+
+            // Midas typically processes requests within 1-3 days
+            return block.timestamp + 3 days;
+        }
     }
 
     /**
@@ -92,15 +104,16 @@ contract MidasCooldownRequestImpl is IUnstakeHandler, Initializable {
      * After Midas admin approves the request, the base asset is transferred
      * from the requestRedeemer to this proxy. This function transfers those assets
      * to the final receiver.
+     * Reverts if assets have not been received yet — this allows UnstakeCooldown
+     * to skip unready requests via try/catch without marking them as completed.
      * Can be called by the UnstakeHandler, which can be triggered permissionlessly.
      */
     function finalize() external returns (uint256 amount) {
         require(msg.sender == handler, "NotAuthorized");
 
         amount = baseAsset.balanceOf(address(this));
-        if (amount > 0) {
-            SafeERC20.safeTransfer(baseAsset, receiver, amount);
-        }
+        require(amount > 0, "Assets not received");
+        SafeERC20.safeTransfer(baseAsset, receiver, amount);
 
         pending = false;
         requestedAmount = 0;
@@ -113,10 +126,11 @@ contract MidasCooldownRequestImpl is IUnstakeHandler, Initializable {
     }
 
     /**
-     * @notice Midas redemptions always go through the request path.
+     * @notice Midas redemptions go through the cooldown flow.
      * @dev Returns true so that the cooldown flow is always used.
-     *      redeemInstant could revert when daily limits are exceeded,
-     *      so using redeemRequest is safer and more predictable.
+     *      The instant path is handled inside `request()` via try/catch —
+     *      if redeemInstant succeeds, `request()` returns block.timestamp,
+     *      which UnstakeCooldown treats as an instant transfer (no TRequest stored).
      */
     function isCooldownActive() public pure returns (bool) {
         return true;

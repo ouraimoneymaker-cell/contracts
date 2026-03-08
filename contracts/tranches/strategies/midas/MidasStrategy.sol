@@ -4,6 +4,9 @@ pragma solidity ^0.8.28;
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {
+    IERC20Metadata
+} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
+import {
     SafeERC20
 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {IMToken} from "./interfaces/IMToken.sol";
@@ -32,6 +35,10 @@ contract MidasStrategy is Strategy {
     IRoundDataOracle public immutable oracle;
 
     IERC20 public immutable baseAsset;
+
+    /// @notice Pre-computed scale factor: 10^(18 + mTokenDecimals - baseAssetDecimals)
+    /// For USDC (6 decimals): 10^(18 + 18 - 6) = 10^30
+    uint256 public immutable RATE_SCALE;
 
     // Additional supported tokens to deposit, beyond the base asset and mToken
     mapping(address token => bool isSupported) public depositTokensDict;
@@ -65,6 +72,9 @@ contract MidasStrategy is Strategy {
         redemptionVault = redemptionVault_;
         oracle = oracle_;
         depositTokens = depositTokens_;
+
+        uint8 baseDecimals = IERC20Metadata(address(baseAsset_)).decimals();
+        RATE_SCALE = 10 ** (18 + 18 - baseDecimals);
 
         for (uint256 i = 0; i < depositTokens_.length; i++) {
             depositTokensDict[depositTokens_[i]] = true;
@@ -319,7 +329,7 @@ contract MidasStrategy is Strategy {
     ) public view returns (uint256) {
         if (token == address(mToken)) {
             uint256 rate = getOracleRate();
-            return Math.mulDiv(tokenAmount, rate, 1e18, rounding);
+            return Math.mulDiv(tokenAmount, rate, RATE_SCALE, rounding);
         }
         if (token == address(baseAsset)) {
             return tokenAmount;
@@ -343,7 +353,7 @@ contract MidasStrategy is Strategy {
     ) public view returns (uint256) {
         if (token == address(mToken)) {
             uint256 rate = getOracleRate();
-            return Math.mulDiv(baseAssets, 1e18, rate, rounding);
+            return Math.mulDiv(baseAssets, RATE_SCALE, rate, rounding);
         }
         if (token == address(baseAsset)) {
             return baseAssets;

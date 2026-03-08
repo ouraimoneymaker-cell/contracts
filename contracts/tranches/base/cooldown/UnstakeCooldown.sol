@@ -1,18 +1,19 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity ^0.8.28;
 
-import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import { Clones } from "@openzeppelin/contracts/proxy/Clones.sol";
-import { IUnstakeHandler } from "../../interfaces/cooldown/IUnstakeHandler.sol";
-import { IUnstakeCooldown } from "../../interfaces/cooldown/ICooldown.sol";
-import { CooldownBase } from "./CooldownBase.sol";
+import {
+    SafeERC20
+} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {Clones} from "@openzeppelin/contracts/proxy/Clones.sol";
+import {IUnstakeHandler} from "../../interfaces/cooldown/IUnstakeHandler.sol";
+import {IUnstakeCooldown} from "../../interfaces/cooldown/ICooldown.sol";
+import {CooldownBase} from "./CooldownBase.sol";
 
 /**
  * @title Strata Unstake Cooldown Manager
  */
 contract UnstakeCooldown is IUnstakeCooldown, CooldownBase {
-
     event UserProxyCreated(address indexed user, address proxy);
     event UserProxyImplementationSet(address token, address impl);
 
@@ -22,13 +23,16 @@ contract UnstakeCooldown is IUnstakeCooldown, CooldownBase {
     }
 
     /// @dev Unstaking implementations for each supported token and protocol
-    mapping(address token => IUnstakeHandler unstakeImpl) public implementations;
+    mapping(address token => IUnstakeHandler unstakeImpl)
+        public implementations;
 
     /// @dev Active requests
-    mapping(address token => mapping(address account => TRequest[] requests)) public activeRequests;
+    mapping(address token => mapping(address account => TRequest[] requests))
+        public activeRequests;
 
     /// @dev Maintain proxies Pool, after the request is completed, the proxy is returned to the pool
-    mapping(address token => mapping(address account => IUnstakeHandler[] proxy)) public proxiesPool;
+    mapping(address token => mapping(address account => IUnstakeHandler[] proxy))
+        public proxiesPool;
 
     /// @notice Transfers assets from msg.sender (Strategy) to the specified user by creating an unstake request in the underlying protocol
     /// @dev After the cooldown period elapses in the underlying protocol,
@@ -38,7 +42,12 @@ contract UnstakeCooldown is IUnstakeCooldown, CooldownBase {
     /// @param to The recipient of the unstaked assets
     /// @param amount The amount of tokens to transfer
     /// @custom:access Restricted to COOLDOWN_WORKER_ROLE
-    function transfer(IERC20 token, address initialFrom, address to, uint256 amount) external onlyRole(COOLDOWN_WORKER_ROLE) {
+    function transfer(
+        IERC20 token,
+        address initialFrom,
+        address to,
+        uint256 amount
+    ) external onlyRole(COOLDOWN_WORKER_ROLE) {
         address worker = msg.sender;
         if (amount == 0) {
             return;
@@ -55,12 +64,19 @@ contract UnstakeCooldown is IUnstakeCooldown, CooldownBase {
         bool shouldReuseRequest = false;
         uint256 requestsCount = requests.length;
         if (initialFrom != to && requestsCount >= PUBLIC_REQUEST_SLOTS_CAP) {
-            revert ExternalReceiverRequestLimitReached(token, initialFrom, to, amount);
+            revert ExternalReceiverRequestLimitReached(
+                token,
+                initialFrom,
+                to,
+                amount
+            );
         }
         if (requestsCount > 0) {
             // Check if we should create a new request or extend the last one
-            shouldReuseRequest = requestsCount >= MAX_ACTIVE_REQUEST_SLOTS
-                || requests[requestsCount - 1].proxy.requestedAt() == block.timestamp;
+            shouldReuseRequest =
+                requestsCount >= MAX_ACTIVE_REQUEST_SLOTS ||
+                requests[requestsCount - 1].proxy.requestedAt() ==
+                block.timestamp;
         }
         if (shouldReuseRequest) {
             proxy = requests[requestsCount - 1].proxy;
@@ -101,7 +117,10 @@ contract UnstakeCooldown is IUnstakeCooldown, CooldownBase {
 
     /// @notice Finalizes the requests up to the current block timestamp
     /// @custom:see finalize(IERC20 token, address user, uint256 at) for more detailed documentation
-    function finalize(IERC20 token, address user) external returns (uint256 claimed) {
+    function finalize(
+        IERC20 token,
+        address user
+    ) external returns (uint256 claimed) {
         return finalize(token, user, block.timestamp);
     }
 
@@ -110,7 +129,11 @@ contract UnstakeCooldown is IUnstakeCooldown, CooldownBase {
     /// @param user The address of the user whose requests are being finalized
     /// @param at The timestamp up to which requests should be processed
     /// @return claimed The total amount of tokens claimed from finalized requests
-    function finalize(IERC20 token, address user, uint256 at) public returns (uint256 claimed) {
+    function finalize(
+        IERC20 token,
+        address user,
+        uint256 at
+    ) public returns (uint256 claimed) {
         if (at > block.timestamp) {
             revert InvalidTime();
         }
@@ -125,19 +148,31 @@ contract UnstakeCooldown is IUnstakeCooldown, CooldownBase {
             TRequest memory req = requests[i];
             if (isCooldownActive && req.unlockAt > at) {
                 // Still pending
-                unchecked { i++; }
+                unchecked {
+                    i++;
+                }
                 continue;
             }
 
-            claimed += req.proxy.finalize();
-            // Return proxy to the pool (reuse later)
-            proxies.push(req.proxy);
+            try req.proxy.finalize() returns (uint256 amount) {
+                claimed += amount;
+                // Return proxy to the pool (reuse later)
+                proxies.push(req.proxy);
 
-            if (i < len - 1) {
-                requests[i] = requests[len - 1];
+                if (i < len - 1) {
+                    requests[i] = requests[len - 1];
+                }
+                requests.pop();
+                unchecked {
+                    len--;
+                }
+            } catch {
+                // Implementation not ready (e.g. Midas assets not yet airdropped)
+                // Skip this request — it stays in the array for retry
+                unchecked {
+                    i++;
+                }
             }
-            requests.pop();
-            unchecked { len--; }
         }
         if (claimed == 0) {
             revert NothingToFinalize();
@@ -149,7 +184,10 @@ contract UnstakeCooldown is IUnstakeCooldown, CooldownBase {
 
     /// @notice Returns the user's balance state at the current block timestamp
     /// @custom:see balanceOf(IERC20 token, address user, uint256 at) for more detailed documentation
-    function balanceOf (IERC20 token, address user) external view returns (TBalanceState memory) {
+    function balanceOf(
+        IERC20 token,
+        address user
+    ) external view returns (TBalanceState memory) {
         return balanceOf(token, user, block.timestamp);
     }
 
@@ -159,7 +197,11 @@ contract UnstakeCooldown is IUnstakeCooldown, CooldownBase {
     /// @param user The user's address
     /// @param at The timestamp for which to calculate the balance
     /// @return TBalanceState struct containing pending, claimable, and next unlock details in underlying tokens
-    function balanceOf (IERC20 token, address user, uint256 at) public view returns (TBalanceState memory) {
+    function balanceOf(
+        IERC20 token,
+        address user,
+        uint256 at
+    ) public view returns (TBalanceState memory) {
         TRequest[] storage requests = activeRequests[address(token)][user];
         IUnstakeHandler imp = implementations[address(token)];
         bool isCooldownActive = imp.isCooldownActive();
@@ -188,16 +230,20 @@ contract UnstakeCooldown is IUnstakeCooldown, CooldownBase {
             }
             claimable += amount;
         }
-        return TBalanceState({
-            pending: pending,
-            claimable: claimable,
-            nextUnlockAt: nextUnlockAt,
-            nextUnlockAmount: nextUnlockAmount,
-            totalRequests: l
-        });
+        return
+            TBalanceState({
+                pending: pending,
+                claimable: claimable,
+                nextUnlockAt: nextUnlockAt,
+                nextUnlockAmount: nextUnlockAmount,
+                totalRequests: l
+            });
     }
 
-    function createFor(address implementation, address user) internal returns (IUnstakeHandler proxy) {
+    function createFor(
+        address implementation,
+        address user
+    ) internal returns (IUnstakeHandler proxy) {
         proxy = IUnstakeHandler(Clones.clone(implementation, 0));
         proxy.initialize(address(this), user);
         emit UserProxyCreated(user, address(proxy));
@@ -207,18 +253,25 @@ contract UnstakeCooldown is IUnstakeCooldown, CooldownBase {
     /**
      * @dev Updates the implementations for tokens. Implementation can be ZERO address in case we want to remove supported token.
      */
-    function setImplementations(address[] calldata tokens_, IUnstakeHandler[] calldata implementations_) external onlyOwner {
+    function setImplementations(
+        address[] calldata tokens_,
+        IUnstakeHandler[] calldata implementations_
+    ) external onlyOwner {
         uint256 len = tokens_.length;
         for (uint256 i = 0; i < len; ) {
             address token = tokens_[i];
             IUnstakeHandler impl = implementations_[i];
             implementations[token] = impl;
             emit UserProxyImplementationSet(token, address(impl));
-            unchecked { i++; }
+            unchecked {
+                i++;
+            }
         }
     }
 
-    function getImplementation(address proxy) internal view returns (address implementation) {
+    function getImplementation(
+        address proxy
+    ) internal view returns (address implementation) {
         assembly {
             // Clones.clone := 0x363d3d373d3d3d363d73<20-byte implementation>5af43d82803e903d91602b57fd5bf3
             let ptr := mload(0x40)

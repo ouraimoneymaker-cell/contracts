@@ -1,7 +1,7 @@
 import { TEth } from 'dequanto/models/TEth';
 import { $date } from 'dequanto/utils/$date';
 
-export type TCDOKey = 'ethena' | 'neutrl'
+export type TCDOKey = 'ethena' | 'neutrl' | 'mhyper'
 export interface ICDO {
     // token symbol
     base: string;
@@ -160,7 +160,28 @@ export const Tranches: Record<TCDOKey, ICDO> = {
         ContractVersions: {
             accounting: 'continuous',
         },
-    }
+    },
+    'mhyper': {
+        base: 'USDC',
+        jrt: {
+            symbol: 'jrmHyper',
+            name: 'Strata Junior mHyper',
+            depositsEnabled: true,
+            withdrawalsEnabled: true
+        },
+        srt: {
+            symbol: 'srmHyper',
+            name: 'Strata Senior mHyper',
+            depositsEnabled: true,
+            withdrawalsEnabled: true
+        },
+        Feed: {
+            name: 'mHyper CDO APR Pair'
+        },
+        ContractVersions: {
+            accounting: 'discrete',
+        },
+    },
 }
 
 export const ContractsIDMapping = {
@@ -172,4 +193,5 @@ export const ContractsIDMapping = {
 export const ContractsPrefixMapping = {
     'ethena': 'USDe',
     'neutrl': 'Neutrl',
+    'mhyper': 'MHyper',
 } as Record<TCDOKey, string>

@@ -14,11 +14,23 @@ const Tokens = {
 
     NUSD: { address: Addresses.eth.NUSD, decimals: 18 },
     sNUSD: { address: Addresses.eth.sNUSD, decimals: 18 },
+
+    DAI: { address: '0x6b175474e89094c44da98b954eedeac495271d0f', decimals: 18 },
+    USDS: { address: '0xdC035D45d973E3EC169d2276DDab16f1e407384F', decimals: 18 },
+
+    mHYPER: { address: '0x9b5528528656DBC094765E2abB79F293c21191B9', decimals: 18 },
+
 } as Record<string, Partial<IToken>>
 
 export const Eth: IPlatform = {
     Tokens: Tokens,
     Feed: {
         stalePeriodAfter: '4hours'
+    },
+
+    mhyper: {
+        oracle: '0x9b5528528656DBC094765E2abB79F293c21191B9',
+        depositVault: '0xbA9FD2850965053Ffab368Df8AA7eD2486f11024',
+        redemptionVault: '0x6Be2f55816efd0d91f52720f096006d63c366e98',
     }
 }

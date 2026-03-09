@@ -54,9 +54,7 @@ export namespace PlatformFactory {
             });
         }
 
-        const CtorDeployments = params.cdo === 'neutrl'
-            ? NeutrlDeployments
-            : EthenaDeployments;
+        const CtorDeployments =  DeploymentsTypes.Tranches[params.cdo];
 
         const depl = new CtorDeployments({
             client,
@@ -75,7 +73,7 @@ export namespace PlatformFactory {
         }
     }
 
-    async function getAccounts(client: Web3Client, group: 'ethena' | 'neutrl' | 'operator') {
+    async function getAccounts(client: Web3Client, group: TCDOKey | 'operator') {
         const { platform, network } = client;
         const hh = new HardhatProvider();
 

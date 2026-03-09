@@ -3,21 +3,14 @@ pragma solidity ^0.8.28;
 
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
-import {
-    IERC20Metadata
-} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
-import {
-    SafeERC20
-} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {IMToken} from "./interfaces/IMToken.sol";
 import {IDepositVault} from "./interfaces/IDepositVault.sol";
 import {IRedemptionVault} from "./interfaces/IRedemptionVault.sol";
 import {IErrors} from "../../interfaces/IErrors.sol";
 import {IStrataCDO} from "../../interfaces/IStrataCDO.sol";
-import {
-    IERC20Cooldown,
-    IUnstakeCooldown
-} from "../../interfaces/cooldown/ICooldown.sol";
+import {IERC20Cooldown, IUnstakeCooldown} from "../../interfaces/cooldown/ICooldown.sol";
 import {Strategy} from "../../Strategy.sol";
 import {IRoundDataOracle} from "./AaveOracleAprPairProvider.sol";
 
@@ -50,8 +43,9 @@ contract MidasStrategy is Strategy {
     IERC20Cooldown public erc20Cooldown;
     IUnstakeCooldown public unstakeCooldown;
 
-    /** configuration */
-
+    /**
+     * configuration
+     */
     uint256 public mTokenCooldownJrt;
     uint256 public mTokenCooldownSrt;
 
@@ -158,7 +152,8 @@ contract MidasStrategy is Strategy {
                 uint8 tokenDec = depositTokenDecimals[token];
                 if (tokenDec > baseAssetDecimals) {
                     return tokenAmount / (10 ** (tokenDec - baseAssetDecimals));
-                } else if (tokenDec < baseAssetDecimals) {
+                }
+                if (tokenDec < baseAssetDecimals) {
                     return tokenAmount * (10 ** (baseAssetDecimals - tokenDec));
                 }
             }
@@ -388,7 +383,8 @@ contract MidasStrategy is Strategy {
             uint8 tokenDec = depositTokenDecimals[token];
             if (tokenDec > baseAssetDecimals) {
                 return baseAssets * (10 ** (tokenDec - baseAssetDecimals));
-            } else if (tokenDec < baseAssetDecimals) {
+            }
+            if (tokenDec < baseAssetDecimals) {
                 return baseAssets / (10 ** (baseAssetDecimals - tokenDec));
             }
             return baseAssets;
@@ -403,7 +399,7 @@ contract MidasStrategy is Strategy {
      */
     function getOracleRate() public view returns (uint256 rate) {
         (, int256 answer, , , ) = oracle.latestRoundData();
-        require(answer > 0, "Oracle: invalid rate");
+        require(answer > 0, "InvalidRate");
 
         uint8 decimals = 8; // Chainlink standard
         // Scale to base18: answer * 10^(18 - decimals)
@@ -417,7 +413,7 @@ contract MidasStrategy is Strategy {
         IERC20[] memory tokens = new IERC20[](2 + depositTokens.length);
         tokens[0] = IERC20(address(mToken));
         tokens[1] = baseAsset;
-        for (uint i = 0; i < depositTokens.length; i++) {
+        for (uint256 i = 0; i < depositTokens.length; i++) {
             tokens[2 + i] = IERC20(depositTokens[i]);
         }
         return tokens;

@@ -101,10 +101,7 @@ contract UnstakeCooldown is IUnstakeCooldown, CooldownBase {
 
     /// @notice Finalizes the requests up to the current block timestamp
     /// @custom:see finalize(IERC20 token, address user, uint256 at) for more detailed documentation
-    function finalize(
-        IERC20 token,
-        address user
-    ) external returns (uint256 claimed) {
+    function finalize(IERC20 token, address user) external returns (uint256 claimed) {
         return finalize(token, user, block.timestamp);
     }
 
@@ -141,9 +138,7 @@ contract UnstakeCooldown is IUnstakeCooldown, CooldownBase {
                     requests[i] = requests[len - 1];
                 }
                 requests.pop();
-                unchecked {
-                    len--;
-                }
+                unchecked { len--; }
             } catch {
                 // Implementation not ready (e.g. Midas assets not yet airdropped)
                 // Skip this request — it stays in the array for retry
@@ -160,7 +155,7 @@ contract UnstakeCooldown is IUnstakeCooldown, CooldownBase {
 
     /// @notice Returns the user's balance state at the current block timestamp
     /// @custom:see balanceOf(IERC20 token, address user, uint256 at) for more detailed documentation
-    function balanceOf(IERC20 token, address user) external view returns (TBalanceState memory) {
+    function balanceOf (IERC20 token, address user) external view returns (TBalanceState memory) {
         return balanceOf(token, user, block.timestamp);
     }
 
@@ -170,7 +165,7 @@ contract UnstakeCooldown is IUnstakeCooldown, CooldownBase {
     /// @param user The user's address
     /// @param at The timestamp for which to calculate the balance
     /// @return TBalanceState struct containing pending, claimable, and next unlock details in underlying tokens
-    function balanceOf(IERC20 token, address user, uint256 at) public view returns (TBalanceState memory) {
+    function balanceOf (IERC20 token, address user, uint256 at) public view returns (TBalanceState memory) {
         TRequest[] storage requests = activeRequests[address(token)][user];
         IUnstakeHandler imp = implementations[address(token)];
         bool isCooldownActive = imp.isCooldownActive();

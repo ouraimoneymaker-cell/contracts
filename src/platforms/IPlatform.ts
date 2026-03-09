@@ -21,6 +21,12 @@ export interface IPlatform {
             sUSDeCooldown: string | number
         }
     }>
+
+    mhyper?: {
+        oracle: TEth.Address
+        depositVault: TEth.Address
+        redemptionVault: TEth.Address
+    }
 }
 
 export interface IPlatformAccounts {

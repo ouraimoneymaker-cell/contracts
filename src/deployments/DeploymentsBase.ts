@@ -391,14 +391,14 @@ export abstract class DeploymentsBase<T extends ICdoDeploymentsBase = any> {
 
         const { provider } = await this.ensureFeedProvider();
 
-        const CURRENT_PROVIDER = provider.address;
+        const CURRENT_PROVIDER = provider?.address ?? $address.ZERO;
         const stalePeriodAfter = $date.parseTimespan(this.platform.Feed.stalePeriodAfter, { get: 's' });
         const { contract: feed } = await this.ds.ensureWithProxy(AprPairFeed, {
             id: `${this.pfx}AprFeeds`,
             initialize: [
                 this.owner.address,
                 acm.address,
-                provider.address,
+                CURRENT_PROVIDER,
                 BigInt(stalePeriodAfter),
                 this.cdoInfo.Feed.name ?? "Ethena CDO APR Pair"
             ]

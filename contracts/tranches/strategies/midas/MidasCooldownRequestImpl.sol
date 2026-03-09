@@ -104,8 +104,10 @@ contract MidasCooldownRequestImpl is IUnstakeHandler, Initializable {
      * After Midas admin approves the request, the base asset is transferred
      * from the requestRedeemer to this proxy. This function transfers those assets
      * to the final receiver.
-     * Reverts if assets have not been received yet — this allows UnstakeCooldown
+     * Reverts if no assets have been received yet — this allows UnstakeCooldown
      * to skip unready requests via try/catch without marking them as completed.
+     * Note: We cannot compare against requestedAmount (mToken shares, 18 dec)
+     * since the received base asset (USDC, 6 dec) is in different units.
      * Can be called by the UnstakeHandler, which can be triggered permissionlessly.
      */
     function finalize() external returns (uint256 amount) {
@@ -117,6 +119,23 @@ contract MidasCooldownRequestImpl is IUnstakeHandler, Initializable {
 
         pending = false;
         requestedAmount = 0;
+        return amount;
+    }
+
+    /**
+     * @dev Sweeps any residual base asset balance to the receiver.
+     * Can only be called when there is no active pending request.
+     * Useful if assets arrive after finalization, or if a small remainder
+     * is left behind due to rounding or partial fulfillment.
+     */
+    function finalizeInternal() external returns (uint256 amount) {
+        require(msg.sender == handler, "NotAuthorized");
+        require(pending == false, "Has active request");
+
+        amount = baseAsset.balanceOf(address(this));
+        if (amount > 0) {
+            SafeERC20.safeTransfer(baseAsset, receiver, amount);
+        }
         return amount;
     }
 

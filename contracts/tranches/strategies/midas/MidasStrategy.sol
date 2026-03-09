@@ -40,8 +40,11 @@ contract MidasStrategy is Strategy {
     /// For USDC (6 decimals): 10^(18 + 18 - 6) = 10^30
     uint256 public immutable RATE_SCALE;
 
+    uint8 public immutable baseAssetDecimals;
+
     // Additional supported tokens to deposit, beyond the base asset and mToken
     mapping(address token => bool isSupported) public depositTokensDict;
+    mapping(address token => uint8 decimals) public depositTokenDecimals;
     address[] public depositTokens;
 
     IERC20Cooldown public erc20Cooldown;
@@ -74,10 +77,13 @@ contract MidasStrategy is Strategy {
         depositTokens = depositTokens_;
 
         uint8 baseDecimals = IERC20Metadata(address(baseAsset_)).decimals();
+        baseAssetDecimals = baseDecimals;
         RATE_SCALE = 10 ** (18 + 18 - baseDecimals);
 
         for (uint256 i = 0; i < depositTokens_.length; i++) {
-            depositTokensDict[depositTokens_[i]] = true;
+            address dt = depositTokens_[i];
+            depositTokensDict[dt] = true;
+            depositTokenDecimals[dt] = IERC20Metadata(dt).decimals();
         }
     }
 
@@ -147,6 +153,15 @@ contract MidasStrategy is Strategy {
                 referrerId
             );
 
+            // Scale tokenAmount to base asset decimals (e.g. DAI 18→USDC 6 at 1:1)
+            if (token != address(baseAsset)) {
+                uint8 tokenDec = depositTokenDecimals[token];
+                if (tokenDec > baseAssetDecimals) {
+                    return tokenAmount / (10 ** (tokenDec - baseAssetDecimals));
+                } else if (tokenDec < baseAssetDecimals) {
+                    return tokenAmount * (10 ** (baseAssetDecimals - tokenDec));
+                }
+            }
             return tokenAmount;
         }
         if (token == address(mToken)) {
@@ -334,6 +349,16 @@ contract MidasStrategy is Strategy {
         if (token == address(baseAsset)) {
             return tokenAmount;
         }
+        if (depositTokensDict[token]) {
+            // 1:1 rate, just scale decimals (e.g. DAI 18→USDC 6)
+            uint8 tokenDec = depositTokenDecimals[token];
+            if (tokenDec > baseAssetDecimals) {
+                return tokenAmount / (10 ** (tokenDec - baseAssetDecimals));
+            } else if (tokenDec < baseAssetDecimals) {
+                return tokenAmount * (10 ** (baseAssetDecimals - tokenDec));
+            }
+            return tokenAmount;
+        }
         revert UnsupportedToken(token);
     }
 
@@ -356,6 +381,16 @@ contract MidasStrategy is Strategy {
             return Math.mulDiv(baseAssets, RATE_SCALE, rate, rounding);
         }
         if (token == address(baseAsset)) {
+            return baseAssets;
+        }
+        if (depositTokensDict[token]) {
+            // 1:1 rate, just scale decimals (e.g. USDC 6→DAI 18)
+            uint8 tokenDec = depositTokenDecimals[token];
+            if (tokenDec > baseAssetDecimals) {
+                return baseAssets * (10 ** (tokenDec - baseAssetDecimals));
+            } else if (tokenDec < baseAssetDecimals) {
+                return baseAssets / (10 ** (baseAssetDecimals - tokenDec));
+            }
             return baseAssets;
         }
         revert UnsupportedToken(token);

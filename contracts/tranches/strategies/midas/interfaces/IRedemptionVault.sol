@@ -33,6 +33,12 @@ struct FiatRedeptionInitParams {
  */
 interface IRedemptionVault is IManageableVault {
     /**
+     * @notice Returns the redemption request data for a given request ID
+     */
+    function redeemRequests(
+        uint256 requestId
+    ) external view returns (Request memory);
+    /**
      * @param user function caller (msg.sender)
      * @param tokenOut address of tokenOut
      * @param amount amount of mToken
@@ -175,9 +181,10 @@ interface IRedemptionVault is IManageableVault {
      * @param amountMTokenIn amount of mToken to redeem (decimals 18)
      * @return request id
      */
-    function redeemRequest(address tokenOut, uint256 amountMTokenIn)
-        external
-        returns (uint256);
+    function redeemRequest(
+        address tokenOut,
+        uint256 amountMTokenIn
+    ) external returns (uint256);
 
     /**
      * @notice Does the same as original `redeemRequest` but allows specifying a custom tokensReceiver address.
@@ -199,9 +206,9 @@ interface IRedemptionVault is IManageableVault {
      * @param amountMTokenIn amount of mToken to redeem (decimals 18)
      * @return request id
      */
-    function redeemFiatRequest(uint256 amountMTokenIn)
-        external
-        returns (uint256);
+    function redeemFiatRequest(
+        uint256 amountMTokenIn
+    ) external returns (uint256);
 
     /**
      * @notice approving requests from the `requestIds` array with the
@@ -246,8 +253,10 @@ interface IRedemptionVault is IManageableVault {
      * @param requestId request id
      * @param newMTokenRate new mToken rate inputted by vault admin
      */
-    function safeApproveRequest(uint256 requestId, uint256 newMTokenRate)
-        external;
+    function safeApproveRequest(
+        uint256 requestId,
+        uint256 newMTokenRate
+    ) external;
 
     /**
      * @notice rejecting request

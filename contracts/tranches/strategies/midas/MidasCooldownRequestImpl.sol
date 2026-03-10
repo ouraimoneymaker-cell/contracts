@@ -6,11 +6,15 @@ import {
 } from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {
+    IERC20Metadata
+} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
+import {
     SafeERC20
 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {IUnstakeHandler} from "../../interfaces/cooldown/IUnstakeHandler.sol";
 import {IMToken} from "./interfaces/IMToken.sol";
 import {IRedemptionVault} from "./interfaces/IRedemptionVault.sol";
+import {Request} from "./interfaces/IRedemptionVault.sol";
 
 /**
  * @title MidasCooldownRequestImpl
@@ -66,10 +70,10 @@ contract MidasCooldownRequestImpl is IUnstakeHandler, Initializable {
     }
     function request(address receiver_) public returns (uint256 unlockAt) {
         require(msg.sender == handler, "NotAuthorized");
-        require(pending == false, "Already has an active request");
+        require(pending == false, "HasActiveRequest");
 
         uint256 shares = mToken.balanceOf(address(this));
-        require(shares > 0, "No mToken to redeem");
+        require(shares > 0, "NoMTokenToRedeem");
 
         SafeERC20.forceApprove(
             IERC20(address(mToken)),
@@ -87,12 +91,25 @@ contract MidasCooldownRequestImpl is IUnstakeHandler, Initializable {
             return block.timestamp; // signals instant to UnstakeCooldown
         } catch {
             // Instant failed — fall back to redeemRequest
-            redemptionVault.redeemRequest(address(baseAsset), shares);
+            uint256 requestId = redemptionVault.redeemRequest(
+                address(baseAsset),
+                shares
+            );
+
+            // Query the Midas request to get the expected base asset amount
+            Request memory req = redemptionVault.redeemRequests(requestId);
+            // amountMToken * mTokenRate / tokenOutRate gives base18 result
+            // Convert from base18 to actual tokenOut decimals (e.g. USDC = 6)
+            uint256 expectedBase18 = (req.amountMToken * req.mTokenRate) /
+                req.tokenOutRate;
+            uint8 tokenOutDec = IERC20Metadata(address(baseAsset)).decimals();
+            uint256 expectedBaseAssets = expectedBase18 /
+                (10 ** (18 - tokenOutDec));
 
             requestedAt = block.timestamp;
             receiver = receiver_;
             pending = true;
-            requestedAmount = shares;
+            requestedAmount = expectedBaseAssets;
 
             // Midas typically processes requests within 1-3 days
             return block.timestamp + 3 days;
@@ -104,17 +121,16 @@ contract MidasCooldownRequestImpl is IUnstakeHandler, Initializable {
      * After Midas admin approves the request, the base asset is transferred
      * from the requestRedeemer to this proxy. This function transfers those assets
      * to the final receiver.
-     * Reverts if no assets have been received yet — this allows UnstakeCooldown
-     * to skip unready requests via try/catch without marking them as completed.
-     * Note: We cannot compare against requestedAmount (mToken shares, 18 dec)
-     * since the received base asset (USDC, 6 dec) is in different units.
+     * Reverts if received amount is less than 90% of the expected base asset —
+     * this allows UnstakeCooldown to skip unready requests via try/catch
+     * without marking them as completed.
      * Can be called by the UnstakeHandler, which can be triggered permissionlessly.
      */
     function finalize() external returns (uint256 amount) {
         require(msg.sender == handler, "NotAuthorized");
 
         amount = baseAsset.balanceOf(address(this));
-        require(amount > 0, "Assets not received");
+        require(amount >= (requestedAmount * 90) / 100, "AssetsNotReceived");
         SafeERC20.safeTransfer(baseAsset, receiver, amount);
 
         pending = false;
@@ -124,13 +140,13 @@ contract MidasCooldownRequestImpl is IUnstakeHandler, Initializable {
 
     /**
      * @dev Sweeps any residual base asset balance to the receiver.
-     * Can only be called when there is no active pending request.
+     * Permissionless — when pending is false, this proxy is no longer managed
+     * by UnstakeCooldown, so anyone can trigger the late settlement.
      * Useful if assets arrive after finalization, or if a small remainder
      * is left behind due to rounding or partial fulfillment.
      */
-    function finalizeInternal() external returns (uint256 amount) {
-        require(msg.sender == handler, "NotAuthorized");
-        require(pending == false, "Has active request");
+    function finalizeLateSettlement() external returns (uint256 amount) {
+        require(pending == false, "HasActiveRequest");
 
         amount = baseAsset.balanceOf(address(this));
         if (amount > 0) {

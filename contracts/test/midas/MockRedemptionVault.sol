@@ -4,6 +4,10 @@ pragma solidity ^0.8.28;
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {MockMToken} from "./MockMToken.sol";
 import {MockBaseAsset} from "./MockBaseAsset.sol";
+import {
+    Request,
+    RequestStatus
+} from "../../tranches/strategies/midas/interfaces/IRedemptionVault.sol";
 
 /**
  * @title MockRedemptionVault
@@ -13,18 +17,16 @@ contract MockRedemptionVault {
     MockMToken public mToken;
     MockBaseAsset public baseAsset;
 
-    struct RedeemRequest {
-        address sender;
-        address tokenOut;
-        uint256 amountMToken;
-        bool processed;
-    }
-
     uint256 public nextRequestId;
-    mapping(uint256 => RedeemRequest) public requests;
+    mapping(uint256 => Request) public _requests;
 
     /// @dev Controls whether redeemInstant succeeds or reverts
     bool public instantEnabled;
+
+    /// @dev Mock rate: 1.05e18 (mToken price in base18)
+    uint256 public mTokenRate = 1_050000000000000000;
+    /// @dev Mock rate: 1e18 (stablecoin = $1)
+    uint256 public tokenOutRate = 1_000000000000000000;
 
     constructor(MockMToken _mToken, MockBaseAsset _baseAsset) {
         mToken = _mToken;
@@ -34,6 +36,11 @@ contract MockRedemptionVault {
 
     function setInstantEnabled(bool _enabled) external {
         instantEnabled = _enabled;
+    }
+
+    function setRates(uint256 _mTokenRate, uint256 _tokenOutRate) external {
+        mTokenRate = _mTokenRate;
+        tokenOutRate = _tokenOutRate;
     }
 
     function redeemInstant(
@@ -67,13 +74,21 @@ contract MockRedemptionVault {
         );
 
         uint256 requestId = nextRequestId++;
-        requests[requestId] = RedeemRequest(
+        _requests[requestId] = Request(
             msg.sender,
             tokenOut,
+            RequestStatus.Pending,
             amountMTokenIn,
-            false
+            mTokenRate,
+            tokenOutRate
         );
         return requestId;
+    }
+
+    function redeemRequests(
+        uint256 requestId
+    ) external view returns (Request memory) {
+        return _requests[requestId];
     }
 
     // Admin function to fulfill a redeem request — sends baseAsset to the original sender (proxy)
@@ -81,9 +96,9 @@ contract MockRedemptionVault {
         uint256 requestId,
         uint256 baseAssetAmount
     ) external {
-        RedeemRequest storage req = requests[requestId];
-        require(!req.processed, "Already processed");
-        req.processed = true;
+        Request storage req = _requests[requestId];
+        require(req.status == RequestStatus.Pending, "Not pending");
+        req.status = RequestStatus.Processed;
 
         // Mint baseAsset and send to the original sender (the proxy contract)
         baseAsset.mint(req.sender, baseAssetAmount);

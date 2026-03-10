@@ -77,7 +77,7 @@ contract AaveOracleAprPairProvider is IStrategyAprPairProvider {
             totalWeight += totalSupply;
         }
         uint256 aprAvg = weightedSum / totalWeight;
-        require(BOUND_MIN <= aprAvg && aprAvg <= BOUND_MAX, "Invalid_Apr_Avg");
+        require(BOUND_MIN <= aprAvg && aprAvg <= BOUND_MAX, "InvalidAprAvg");
         return int64(int256(aprAvg)) + spread;
     }
 
@@ -117,7 +117,7 @@ contract AaveOracleAprPairProvider is IStrategyAprPairProvider {
     function setSpread(int64 _spread) external onlyRole(UPDATER_FEED_ROLE) {
         require(
             _spread >= 0 && _spread <= int64(int256(BOUND_MAX)),
-            "Invalid_Spread"
+            "InvalidSpread"
         );
         spread = _spread;
         emit SpreadChanged(_spread);

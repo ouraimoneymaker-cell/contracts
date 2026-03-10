@@ -94,7 +94,7 @@ contract MidasStrategyTest is Test {
             dt
         );
 
-        vm.expectRevert("Oracle: invalid rate");
+        vm.expectRevert("InvalidRate");
         badStrategy.getOracleRate();
     }
 
@@ -112,7 +112,7 @@ contract MidasStrategyTest is Test {
             dt
         );
 
-        vm.expectRevert("Oracle: invalid rate");
+        vm.expectRevert("InvalidRate");
         badStrategy2.getOracleRate();
     }
 

@@ -10,6 +10,7 @@ pragma solidity ^0.8.28;
 */
 
 import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
+import { IERC20Metadata } from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import { AccessControlled } from "../governance/AccessControlled.sol";
 import { IErrors } from "./interfaces/IErrors.sol";
 import { ITranche } from "./interfaces/ITranche.sol";
@@ -63,6 +64,8 @@ contract StrataCDO is IErrors, IStrataCDO, IStrataCDOSetters, AccessControlled {
 
     ISharesCooldown public sharesCooldown;
 
+    uint256 public immutable baseAssetDecimals;
+
     event DepositsStateChanged(address indexed tranche, bool enabled);
     event WithdrawalsStateChanged(address indexed tranche, bool enabled);
     event ReserveReduced(address token, uint256 amount);
@@ -80,6 +83,10 @@ contract StrataCDO is IErrors, IStrataCDO, IStrataCDOSetters, AccessControlled {
             revert InvalidCaller(msg.sender);
         }
         _;
+    }
+
+    constructor (IERC20Metadata baseAsset) {
+        baseAssetDecimals = baseAsset.decimals();
     }
 
     function initialize(
@@ -120,7 +127,7 @@ contract StrataCDO is IErrors, IStrataCDO, IStrataCDOSetters, AccessControlled {
     function pricePerShare(address tranche) public view returns (uint256) {
         uint256 assets = totalAssets(tranche);
         uint256 supply = ITranche(tranche).totalSupply();
-        return calculatePricePerShare(assets, supply);
+        return calculatePricePerShare(assets, supply, baseAssetDecimals);
     }
 
     function maxDeposit(address tranche) external view returns (uint256) {
@@ -408,7 +415,7 @@ contract StrataCDO is IErrors, IStrataCDO, IStrataCDOSetters, AccessControlled {
 
     function shortfallPauser () internal {
         (uint256 jrtNav,,) = accounting.totalAssetsT0();
-        uint256 jrtPrice = calculatePricePerShare(jrtNav, jrtVault.totalSupply());
+        uint256 jrtPrice = calculatePricePerShare(jrtNav, jrtVault.totalSupply(), baseAssetDecimals);
         if (jrtPrice <= jrtShortfallPausePrice) {
             actionsJrt.isDepositEnabled = false;
             actionsSrt.isDepositEnabled = false;
@@ -418,9 +425,9 @@ contract StrataCDO is IErrors, IStrataCDO, IStrataCDOSetters, AccessControlled {
         }
     }
 
-    function calculatePricePerShare (uint256 assets, uint256 supply) internal pure returns (uint256) {
+    function calculatePricePerShare (uint256 assets, uint256 supply, uint256 assetsDecimals) internal pure returns (uint256) {
         return supply == 0
-            ? 1e18
-            : Math.mulDiv(assets, 1e18, supply, Math.Rounding.Floor);
+            ? 10 ** assetsDecimals
+            : Math.mulDiv(assets, 10**(18 - assetsDecimals) * 1e18, supply, Math.Rounding.Floor);
     }
 }

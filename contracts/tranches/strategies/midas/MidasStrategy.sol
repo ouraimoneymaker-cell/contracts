@@ -414,6 +414,15 @@ contract MidasStrategy is Strategy {
     }
 
     /**
+     * @notice Ensures that the caller can withdraw the deposited tokenAssets amount
+     * @param caller The address of the caller
+     * @param baseAssets The amount of base assets to check against
+     */
+    function ensureRedeemable(address caller, address /* token */, uint256 baseAssets) external view {
+
+    }
+
+    /**
      * @notice Returns an array of supported tokens: Midas and USDe
      */
     function getSupportedTokens() external view returns (IERC20[] memory) {

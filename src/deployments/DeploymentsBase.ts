@@ -423,9 +423,10 @@ export abstract class DeploymentsBase<T extends ICdoDeploymentsBase = any> {
 
     async ensureStrataCdo() {
         const acm = await this.ensureACM();
+         const { base } = await this.ensureUnderlying();
         const { contract: cdo } = await this.ds.ensureWithProxy(StrataCDO, {
             id: `${this.pfx}CDO`,
-            arguments: [],
+            arguments: [ $require.Address(base.address) ],
             initialize: [
                 this.owner.address,
                 acm.address,

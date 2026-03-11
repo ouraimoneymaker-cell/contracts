@@ -44,19 +44,19 @@ UTest.create({
 
         // convertToAssets: 100 mToken (100e18) at $1.05 = 105 USDC (105e6)
         const mTokenAmount = 100n * 10n ** 18n;
-        const assets = await strategy.convertToAssets(mHYPER.address, mTokenAmount, 0n);
+        const assets = await strategy.convertToAssets(mHYPER.address, mTokenAmount, 0);
         l`100 mToken => cyan<${$bigint.toEther(assets, 6)}> USDC`;
         $require.eq(assets, 105n * 10n ** 6n, '100 mToken at $1.05 = 105 USDC (6 decimals)');
 
         // convertToTokens: 105 USDC (105e6) at $1.05 = 100 mToken (100e18)
         const baseAmount = 105n * 10n ** 6n;
-        const tokens = await strategy.convertToTokens(mHYPER.address, baseAmount, 0n);
+        const tokens = await strategy.convertToTokens(mHYPER.address, baseAmount, 0);
         l`105 USDC => cyan<${$bigint.toEther(tokens, 18)}> mToken`;
         $require.eq(tokens, 100n * 10n ** 18n, '105 USDC at $1.05 = 100 mToken');
 
         // baseAsset identity conversion
         const identityAmount = 42n * 10n ** 6n;
-        const identity = await strategy.convertToAssets(USDC.address, identityAmount, 0n);
+        const identity = await strategy.convertToAssets(USDC.address, identityAmount, 0);
         $require.eq(identity, identityAmount, 'baseAsset conversion should be identity');
     },
 
@@ -66,14 +66,14 @@ UTest.create({
 
         // 100 USDC (100e6) / 1.05 = 95.238095... mToken (18 decimals)
         const baseAmount = 100n * 10n ** 6n;
-        const tokensFloor = await strategy.convertToTokens(mHYPER.address, baseAmount, 0n);
-        const tokensCeil = await strategy.convertToTokens(mHYPER.address, baseAmount, 1n);
+        const tokensFloor = await strategy.convertToTokens(mHYPER.address, baseAmount, 0);
+        const tokensCeil = await strategy.convertToTokens(mHYPER.address, baseAmount, 1);
         l`Floor: cyan<${$bigint.toEther(tokensFloor, 18)}> Ceil: cyan<${$bigint.toEther(tokensCeil, 18)}>`;
         $require.gte(tokensCeil, tokensFloor, 'Ceil should be >= Floor');
 
         // 1 wei mToken: edge case
-        const tinyFloor = await strategy.convertToAssets(mHYPER.address, 1n, 0n);
-        const tinyCeil = await strategy.convertToAssets(mHYPER.address, 1n, 1n);
+        const tinyFloor = await strategy.convertToAssets(mHYPER.address, 1n, 0);
+        const tinyCeil = await strategy.convertToAssets(mHYPER.address, 1n, 1);
         l`1 wei: floor=cyan<${tinyFloor}> ceil=cyan<${tinyCeil}>`;
         $require.gte(tinyCeil, tinyFloor, 'Ceil should be >= Floor for 1 wei');
     },
@@ -111,7 +111,7 @@ UTest.create({
         await oracle.$receipt().setRoundData(deployer, 1n, 0n, BigInt($date.toUnixTimestamp()));
 
         const { error } = await $promise.caught(strategy.getOracleRate());
-        $require.match(/invalid rate/, error?.message, `Revert expected on zero oracle price`)
+        $require.match(/InvalidRate/, error?.message, `Revert expected on zero oracle price`)
     },
 
     async 'Unsupported token reverts' () {

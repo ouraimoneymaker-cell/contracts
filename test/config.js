@@ -40,8 +40,5 @@ module.exports = {
         node: {
             tests: 'test/tranches/**.spec.ts',
         },
-        midas: {
-            tests: 'test/tranches/midas/**.spec.ts',
-        },
     }
 };

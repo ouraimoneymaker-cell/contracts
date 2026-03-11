@@ -116,8 +116,9 @@ contract MidasStrategy is Strategy {
     /**
      * @notice Processes asset deposits for the CDO contract.
      * @dev This method is called by the CDO contract to handle asset deposits.
-     *      If the deposited token is USDe, it will be staked to receive Midas.
-     *      If the deposited token is already Midas, it will be accepted as is.
+     *      If the deposited token is the base asset (or a deposit token like DAI/USDS),
+     *      it will be deposited into the Midas vault to receive mToken.
+     *      If the deposited token is already mToken, it will be accepted as is.
      * @param tranche The address of the tranche depositing assets (not used in this strategy)
      * @param token The address of the token being deposited
      * @param tokenAmount The amount of tokens being deposited
@@ -264,10 +265,10 @@ contract MidasStrategy is Strategy {
     /**
      * @notice Allows the CDO to withdraw tokens from the strategy's reserve
      * @dev This function is part of the reserve reduction process and can only be called by the CDO.
-     *      It handles both Midas and USDe tokens, applying different transfer mechanisms for each.
-     *      For Midas, it uses erc20Cooldown with no cooldown period.
-     *      For USDe, it uses unstakeCooldown to handle the unstaking process.
-     * @param token The address of the token to be withdrawn (either Midas or USDe)
+     *      It handles both mToken and base asset tokens, applying different transfer mechanisms for each.
+     *      For mToken, it uses erc20Cooldown with no cooldown period.
+     *      For base asset, it uses unstakeCooldown to handle the unstaking process.
+     * @param token The address of the token to be withdrawn (either mToken or base asset)
      * @param tokenAmount The amount of tokens to be withdrawn
      * @param receiver The address that will receive the withdrawn tokens
      */
@@ -418,12 +419,14 @@ contract MidasStrategy is Strategy {
      * @param caller The address of the caller
      * @param baseAssets The amount of base assets to check against
      */
-    function ensureRedeemable(address caller, address /* token */, uint256 baseAssets) external view {
-
-    }
+    function ensureRedeemable(
+        address caller,
+        address /* token */,
+        uint256 baseAssets
+    ) external view {}
 
     /**
-     * @notice Returns an array of supported tokens: Midas and USDe
+     * @notice Returns an array of supported tokens: mToken, base asset, and deposit tokens
      */
     function getSupportedTokens() external view returns (IERC20[] memory) {
         IERC20[] memory tokens = new IERC20[](2 + depositTokens.length);

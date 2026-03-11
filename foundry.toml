@@ -9,4 +9,4 @@ via_ir = true
 [fmt]
 line_length = 100
 func_attrs_with_params_multiline = true
-int_types = long
+int_types = "long"

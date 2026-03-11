@@ -21,6 +21,7 @@ contract DiscreteAccounting is IAccounting, CDOComponent {
     int64   private constant APR_FEED_BOUNDARY_MAX = 2e12; // 200%
     int64   private constant APR_FEED_BOUNDARY_MIN = 0;
     uint256 private constant APR_FEED_DECIMALS = 12;
+    uint256 private immutable ONE_ASSET;
 
     /// @dev The oracle to fetch the latest APR floor and APR base.
     /// @notice When the oracle is updated, it can actively push the latest values to this contract, allowing us to adjust srtTargetIndex.
@@ -95,6 +96,10 @@ contract DiscreteAccounting is IAccounting, CDOComponent {
     event MinimumJrtSrtRatioBufferChanged(uint256 ratio);
     event FeeAccrued(bool isJrt, uint256 amountToReserve, uint256 amountToTranche);
     event FeeRetentionChanged(uint256 feeJrtRetention, uint256 feeSrtRetention);
+
+    constructor (uint256 navDecimals) {
+        ONE_ASSET = 10 ** navDecimals;
+    }
 
     function initialize(
         address owner_,
@@ -364,7 +369,7 @@ contract DiscreteAccounting is IAccounting, CDOComponent {
         }
         uint256 srtGainTargetAbs = Math.min(
             uint256(srtGainTarget),
-            Math.saturatingSub(jrtNavT1Real, 1e18)
+            Math.saturatingSub(jrtNavT1Real, ONE_ASSET)
         );
 
         // #2 Final new Jrt
@@ -409,7 +414,7 @@ contract DiscreteAccounting is IAccounting, CDOComponent {
 
             uint256 jrtLoss = Math.min(
                 loss,
-                Math.saturatingSub(jrtNavT0Projected, 1e18)
+                Math.saturatingSub(jrtNavT0Projected, ONE_ASSET)
             );
 
             loss -= jrtLoss;
@@ -460,7 +465,7 @@ contract DiscreteAccounting is IAccounting, CDOComponent {
         }
         uint256 srtGainTargetAbs = Math.min(
             uint256(srtGainTarget),
-            Math.saturatingSub(jrtNavT1Projected, 1e18)
+            Math.saturatingSub(jrtNavT1Projected, ONE_ASSET)
         );
 
 
@@ -524,7 +529,7 @@ contract DiscreteAccounting is IAccounting, CDOComponent {
 
 
     function calculateRiskPremium () internal view returns (UD60x18){
-        UD60x18 tvlRatio = UD60x18.wrap(srtNav == 0 ? 0 : (srtNav * 1e18 / (srtNav + jrtNavProjected)));
+        UD60x18 tvlRatio = UD60x18.wrap(srtNav == 0 ? 0 : (srtNav * ONE_ASSET / (srtNav + jrtNavProjected)));
         UD60x18 riskPremium = calculateRiskPremiumInner(riskX, riskY, riskK, tvlRatio);
         return riskPremium;
     }

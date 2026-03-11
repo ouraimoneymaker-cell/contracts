@@ -164,14 +164,14 @@ export const Tranches: Record<TCDOKey, ICDO> = {
     'mhyper': {
         base: 'USDC',
         jrt: {
-            symbol: 'jrmHyper',
-            name: 'Strata Junior mHyper',
+            symbol: 'jrmHYPER',
+            name: 'Strata Junior mHYPER',
             depositsEnabled: true,
             withdrawalsEnabled: true
         },
         srt: {
-            symbol: 'srmHyper',
-            name: 'Strata Senior mHyper',
+            symbol: 'srmHYPER',
+            name: 'Strata Senior mHYPER',
             depositsEnabled: true,
             withdrawalsEnabled: true
         },

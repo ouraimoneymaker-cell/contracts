@@ -493,9 +493,14 @@ export abstract class DeploymentsBase<T extends ICdoDeploymentsBase = any> {
     async ensureAccounting(cdo: TEth.Address) {
         const acm = await this.ensureACM();
         const { feed } = await this.ensureFeeds();
+        const { base } = await this.ensureUnderlying();
+        const decimals = await base.decimals();
         const Contract = this.cdoInfo.ContractVersions?.accounting === 'continuous'
             ? Accounting
             : DiscreteAccounting;
+        const args = this.cdoInfo.ContractVersions?.accounting === 'continuous'
+            ? []
+            : [ decimals ];
 
         const { contract: accounting } = await this.ds.ensureWithProxy(Contract as typeof Accounting, {
             id: `${this.pfx}Accounting`,
@@ -504,7 +509,8 @@ export abstract class DeploymentsBase<T extends ICdoDeploymentsBase = any> {
                 acm.address,
                 cdo,
                 feed.address,
-            ]
+            ],
+            arguments: args,
         });
         return accounting;
     }

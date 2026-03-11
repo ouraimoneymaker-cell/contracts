@@ -87,12 +87,15 @@ export class MHyperDeployments extends DeploymentsBase<{
         let network = this.ds.client.network;
         if (network === 'hardhat') {
             const USDC = await this.ds.ensureContract(MockERC20, {
+                id: 'USDC',
                 arguments: ['USDC', 6]
             });
             const DAI = await this.ds.ensureContract(MockERC20, {
+                id: 'DAI',
                 arguments: ['DAI', 18]
             });
             const USDS = await this.ds.ensureContract(MockERC20, {
+                id: 'USDS',
                 arguments: ['USDS', 18]
             });
 
@@ -169,14 +172,14 @@ export class MHyperDeployments extends DeploymentsBase<{
                 depositVault.address,
                 redemptionVault.address,
                 oracle.address,
-                [ DAI.address, USDS.address ],
             ],
             initialize: [
                 this.owner.address,
                 acm.address,
                 cdo.address,
                 erc20Cooldown.address,
-                unstakeCooldown.address
+                unstakeCooldown.address,
+                [ DAI.address, USDS.address ],
             ]
         });
         return { strategy }

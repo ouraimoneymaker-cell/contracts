@@ -67,25 +67,17 @@ contract MidasStrategy is Strategy {
         IMToken mToken_,
         IDepositVault depositVault_,
         IRedemptionVault redemptionVault_,
-        IRoundDataOracle oracle_,
-        address[] memory depositTokens_
+        IRoundDataOracle oracle_
     ) {
         baseAsset = baseAsset_;
         mToken = mToken_;
         depositVault = depositVault_;
         redemptionVault = redemptionVault_;
         oracle = oracle_;
-        depositTokens = depositTokens_;
 
         uint8 baseDecimals = IERC20Metadata(address(baseAsset_)).decimals();
         baseAssetDecimals = baseDecimals;
         RATE_SCALE = 10 ** (18 + 18 - baseDecimals);
-
-        for (uint256 i = 0; i < depositTokens_.length; i++) {
-            address dt = depositTokens_[i];
-            depositTokensDict[dt] = true;
-            depositTokenDecimals[dt] = IERC20Metadata(dt).decimals();
-        }
     }
 
     function initialize(
@@ -93,13 +85,21 @@ contract MidasStrategy is Strategy {
         address acm_,
         IStrataCDO cdo_,
         IERC20Cooldown erc20Cooldown_,
-        IUnstakeCooldown unstakeCooldown_
+        IUnstakeCooldown unstakeCooldown_,
+        address[] memory depositTokens_
     ) public virtual initializer {
         AccessControlled_init(owner_, acm_);
 
         cdo = cdo_;
         erc20Cooldown = erc20Cooldown_;
         unstakeCooldown = unstakeCooldown_;
+
+        depositTokens = depositTokens_;
+        for (uint256 i = 0; i < depositTokens_.length; i++) {
+            address dt = depositTokens_[i];
+            depositTokensDict[dt] = true;
+            depositTokenDecimals[dt] = IERC20Metadata(dt).decimals();
+        }
 
         SafeERC20.forceApprove(
             mToken,

@@ -5,7 +5,7 @@ import { $require } from 'dequanto/utils/$require';
 import { $promise } from 'dequanto/utils/$promise';
 import { l } from 'dequanto/utils/$logger';
 import { $hh } from './utils/$hh';
-import { DiscreteAccounting as Accounting } from '@0xc/hardhat/DiscreteAccounting/DiscreteAccounting';
+import { Accounting } from '@0xc/hardhat/Accounting/Accounting';
 import { StrataMasterChef } from '@0xc/hardhat/StrataMasterChef/StrataMasterChef';
 import { $date } from 'dequanto/utils/$date';
 import { $contract } from 'dequanto/utils/$contract';

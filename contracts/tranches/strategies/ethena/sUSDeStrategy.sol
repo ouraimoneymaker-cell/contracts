@@ -202,6 +202,16 @@ contract sUSDeStrategy is Strategy {
         revert UnsupportedToken(token);
     }
 
+    /**
+     * @notice Ensures that the caller can withdraw the deposited tokenAssets amount
+     * @param caller The address of the caller
+     * @param baseAssets The amount of base assets to check against
+     */
+    function ensureRedeemable(address caller, address /* token */, uint256 baseAssets) external view {
+        uint256 maxTokenToBaseAssetsWithdraw = sUSDe.maxWithdraw(caller);
+        require(maxTokenToBaseAssetsWithdraw >= baseAssets, "MetaVaultExceededMaxWithdraw");
+    }
+
      /**
      * @notice Returns an array of supported tokens: sUSDe and USDe
      */

@@ -18,4 +18,5 @@ interface IStrategy is ICDOComponent {
     function convertToTokens (address token, uint256 baseAssets, Math.Rounding rounding) external view returns (uint256 tokenAmount);
 
     function getSupportedTokens () external view returns (IERC20[] memory);
+    function ensureRedeemable(address caller, address metaToken, uint256 baseAssets) external view;
 }

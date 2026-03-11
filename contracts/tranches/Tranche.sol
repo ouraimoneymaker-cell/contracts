@@ -221,8 +221,7 @@ contract Tranche is ITranche, CDOComponent, ERC4626Upgradeable, ERC20PermitUpgra
      */
     function _deposit(address token, address caller, address receiver, uint256 baseAssets, uint256 tokenAssets, uint256 shares) internal virtual {
         // Ensure the caller can withdraw the deposited tokenAssets amount
-        uint256 maxTokenToBaseAssetsWithdraw = IERC4626(token).maxWithdraw(caller);
-        require(maxTokenToBaseAssetsWithdraw >= baseAssets, "MetaVaultExceededMaxWithdraw");
+        cdo.strategy().ensureRedeemable(caller, token, baseAssets);
 
         SafeERC20.safeTransferFrom(IERC20(token), caller, address(this), tokenAssets);
         _mint(receiver, shares);

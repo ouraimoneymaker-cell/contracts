@@ -325,7 +325,7 @@ contract MidasStrategy is Strategy {
         uint256 timestamp
     ) public view returns (uint256 baseAssets_) {
         (, , , uint256 updatedAt, ) = oracle.latestRoundData();
-        if (updatedAt > timestamp) {
+        if (updatedAt >= timestamp) {
             return totalAssets();
         }
         return latestNav;

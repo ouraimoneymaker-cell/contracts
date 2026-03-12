@@ -2,6 +2,7 @@
 pragma solidity ^0.8.28;
 
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import { IERC20Metadata } from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import {MockMToken} from "./MockMToken.sol";
 
 /**
@@ -32,7 +33,7 @@ contract MockDepositVault {
         // Transfer tokenIn from caller
         IERC20(tokenIn).transferFrom(msg.sender, address(this), amountToken);
         // Mint mToken to caller based on rate
-        uint256 mTokenAmount = (amountToken * 1e18) / rate;
+        uint256 mTokenAmount = (amountToken * 10 ** (18 - IERC20Metadata(tokenIn).decimals()) * 1e18) / rate;
         mToken.mint(msg.sender, mTokenAmount);
     }
 }

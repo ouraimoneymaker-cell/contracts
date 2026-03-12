@@ -29,7 +29,7 @@ export const Eth: IPlatform = {
     },
 
     mhyper: {
-        oracle: '0x9b5528528656DBC094765E2abB79F293c21191B9',
+        oracle: '0x43881B05C3BE68B2d33eb70aDdF9F666C5005f68',
         depositVault: '0xbA9FD2850965053Ffab368Df8AA7eD2486f11024',
         redemptionVault: '0x6Be2f55816efd0d91f52720f096006d63c366e98',
     }

@@ -28,9 +28,9 @@ const acc = accounting as any as DiscreteAccounting
 
 UTest.create({
     async $before () {
-        await setAPRs(0, 0);
         await feed.$receipt().setRoundStaleAfter(deployer, BigInt($date.parseTimespan('5years', { get:'s' })));
         await oracle.$receipt().setRoundData(deployer, 1n, BigInt(1e8), BigInt($date.toUnixTimestamp()));
+        await setAPRs(0, 0);
         await test.snapshot('midas');
     },
 
@@ -100,40 +100,78 @@ UTest.create({
         // Effectively disables the risk premium (target is used for SRT)
         await acc.$receipt().setRiskParameters(deployer, BigInt(0.9e18), 0n, BigInt(0.3e18));
         await setAPRs(.01, .02);
-        await $tranche.deposit(jrtVault, deployer, USDS, 200);
-        await $tranche.deposit(srtVault, deployer, USDS, 200);
+
+        let jrtTVL = 200;
+        let srtTVL = 200;
+        await $tranche.deposit(jrtVault, deployer, USDS, jrtTVL);
+        await $tranche.deposit(srtVault, deployer, USDS, srtTVL);
 
         await test.mine('1year');
         // Trigger accounting
         await setAPRs(.01, .02);
 
-        console.log(`APR`, await acc.aprSrt());
 
-        const jrtGain = 200 * .02 /*2% base*/ * 1.5 /* +50% from Seniors */;
-        const srtGain = 200 * .01;
+        let jrtGain = jrtTVL * .02 /*2% base*/ * 1.5 /* +50% from Seniors */;
+        let srtGain = srtTVL * .01;
 
-        $require.eq(await srtVault.totalAssets(), $bigint.toWei(200 + srtGain, 6));
-        $require.eq(await jrtVault.totalAssets(), $bigint.toWei(200 + jrtGain, 6));
+        jrtTVL += jrtGain;
+        srtTVL += srtGain;
 
+        $require.eq(await srtVault.totalAssets(), $bigint.toWei(srtTVL, 6));
+        $require.eq(await jrtVault.totalAssets(), $bigint.toWei(jrtTVL, 6));
+
+        l`After 1 year, JRT ${jrtTVL} SRT ${srtTVL}`;
 
         await $erc20.mint(mHYPER, deployer, deployer, 1000);
         // aka donation attack (alice donates 100$)
         await mHYPER.$receipt().transfer(deployer, strategy.address, $bigint.toWei(100, 18));
 
         // No Oracle UPDATES, ignores manual transfers
-        $require.eq(await srtVault.totalAssets(), $bigint.toWei(200 + srtGain, 6));
-        $require.eq(await jrtVault.totalAssets(), $bigint.toWei(200 + jrtGain, 6));
+        $require.eq(await srtVault.totalAssets(), $bigint.toWei(srtTVL, 6));
+        $require.eq(await jrtVault.totalAssets(), $bigint.toWei(jrtTVL, 6));
 
 
         await setOraclePrice(1.02);
         // Trigger accounting
         await setAPRs(.01, .02);
 
-        const jrtGainWithDonation = 200 * .02 /* 2% base */ * 1.5 /* +50% from Seniors */ + 100 * 1.02 /* donation received JRT */;
-        const srtGainWithDonation = 200 * .01 /* donation receives JRT */;
+        const jrtGainWithDonation = 100 * 1.02 /* donation received JRT */;
+        const srtGainWithDonation = 0 /* donation receives JRT */;
 
-        $require.eq(await srtVault.totalAssets(), $bigint.toWei(200 + srtGainWithDonation, 6));
-        $require.eq(await jrtVault.totalAssets(), $bigint.toWei(200 + jrtGainWithDonation, 6));
+        jrtTVL += jrtGainWithDonation;
+        srtTVL += srtGainWithDonation;
+
+        $require.eq(await srtVault.totalAssets(), $bigint.toWei(srtTVL, 6));
+        $require.eq(await jrtVault.totalAssets(), $bigint.toWei(jrtTVL, 6));
+
+        l`Descrease price after 1 year`
+        await test.mine('1year');
+        // Trigger accounting
+        await setAPRs(.01, .02);
+
+
+        srtGain = srtTVL * .01;
+        jrtGain = jrtTVL * .02 /*2% base*/ + srtGain /* +50% from Seniors */;
+        srtTVL += srtGain;
+        jrtTVL += jrtGain;
+        $require.eq(await srtVault.totalAssets(), $bigint.toWei(srtTVL, 6));
+        $require.eq(await jrtVault.totalAssets(), $bigint.toWei(jrtTVL, 6));
+
+
+
+        const sharesBalance = $bigint.toEther(await mHYPER.balanceOf(strategy.address));
+        // Price drops
+        await setOraclePrice(1);
+        // Trigger accounting
+        await setAPRs(.01, .02);
+
+        // No changes for SRT TVL after price drop
+        $require.eq(await srtVault.totalAssets(), $bigint.toWei(srtTVL, 6));
+
+        // Junior should hold the reset
+        jrtTVL = sharesBalance * 1.0 - srtTVL;
+        $require.eq(await jrtVault.totalAssets(), $bigint.toWei(jrtTVL, 6));
+
     }
 
 });
@@ -145,7 +183,7 @@ async function setAPRs(aprTarget: number, aprBase: number) {
     await accounting.$receipt().onAprChanged(deployer);
 }
 
+let ROUND_ID = 1n;
 async function setOraclePrice(price: number) {
-    const block = await client.getBlock('latest');
-    await oracle.$receipt().setRoundData(deployer, 1n, $bigint.toWei(price, 8), BigInt(block.timestamp));
+    await oracle.$receipt().setRoundData(deployer, ROUND_ID++, $bigint.toWei(price, 8), 0n);
 }

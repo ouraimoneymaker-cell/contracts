@@ -3,6 +3,7 @@ pragma solidity ^0.8.28;
 import { Test } from "forge-std/Test.sol";
 import { ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import { IERC20Metadata } from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import { IERC4626 } from "@openzeppelin/contracts/interfaces/IERC4626.sol";
 import { AccessControlManager } from "../../../contracts/governance/AccessControlManager.sol";
 import { StrataCDO } from "../../../contracts/tranches/StrataCDO.sol";
@@ -72,7 +73,7 @@ contract WithdrawGriefingDoS is Test {
         vm.startPrank(owner);
         acm = new AccessControlManager(owner);
         vm.label(address(acm), "AccessControlManager");
-        StrataCDO cdoImpl = new StrataCDO();
+        StrataCDO cdoImpl = new StrataCDO(IERC20Metadata(USDE));
         vm.label(address(cdoImpl), "StrataCDO_Impl");
         cdo = StrataCDO(
             address(

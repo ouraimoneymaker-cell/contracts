@@ -97,7 +97,7 @@ contract CDOTest is Test {
         cdo = StrataCDO(
             address(
                 new ERC1967Proxy(
-                    address(new StrataCDO()),
+                    address(new StrataCDO(USDe)),
                     abi.encodeWithSelector(StrataCDO.initialize.selector, owner, address(acm))
                 )
             )

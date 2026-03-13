@@ -26,6 +26,9 @@ contract MockOracle is IRoundDataOracle {
         int256 answer,
         uint256 updatedAt
     ) external {
+        if (updatedAt == 0) {
+            updatedAt = block.timestamp;
+        }
         rounds[roundId] = RoundData(
             roundId,
             answer,

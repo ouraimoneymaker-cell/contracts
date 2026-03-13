@@ -25,9 +25,9 @@ const { deployer, client } = test;
 
 UTest.create({
     async $before () {
-        await setAPRs(0, 0);
         await feed.$receipt().setRoundStaleAfter(deployer, BigInt($date.parseTimespan('5years', { get:'s' })));
         await oracle.$receipt().setRoundData(deployer, 1n, BigInt(1e8), BigInt($date.toUnixTimestamp()));
+        await setAPRs(0, 0);
         await test.snapshot('midas');
     },
 

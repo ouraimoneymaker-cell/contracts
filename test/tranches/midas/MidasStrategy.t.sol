@@ -59,15 +59,12 @@ contract MidasStrategyTest is Test {
         oracle.setRoundData(1, 1_00000000, block.timestamp - 86400); // Round 1: $1.00
         oracle.setRoundData(2, 1_05000000, block.timestamp); // Round 2: $1.05
 
-        address[] memory depositTokens_ = new address[](0);
-
         strategy = new MidasStrategy(
             IERC20(address(baseAsset)),
             IMToken(address(mToken)),
             IDepositVault(address(depositVault)),
             IRedemptionVault(address(redemptionVault)),
-            oracle,
-            depositTokens_
+            oracle
         );
     }
 
@@ -84,14 +81,12 @@ contract MidasStrategyTest is Test {
         MockOracle badOracle = new MockOracle();
         badOracle.setRoundData(1, 0, block.timestamp);
 
-        address[] memory dt = new address[](0);
         MidasStrategy badStrategy = new MidasStrategy(
             IERC20(address(baseAsset)),
             IMToken(address(mToken)),
             IDepositVault(address(depositVault)),
             IRedemptionVault(address(redemptionVault)),
-            badOracle,
-            dt
+            badOracle
         );
 
         vm.expectRevert("InvalidRate");
@@ -102,14 +97,12 @@ contract MidasStrategyTest is Test {
         MockOracle badOracle = new MockOracle();
         badOracle.setRoundData(1, -1_00000000, block.timestamp);
 
-        address[] memory dt = new address[](0);
         MidasStrategy badStrategy2 = new MidasStrategy(
             IERC20(address(baseAsset)),
             IMToken(address(mToken)),
             IDepositVault(address(depositVault)),
             IRedemptionVault(address(redemptionVault)),
-            badOracle,
-            dt
+            badOracle
         );
 
         vm.expectRevert("InvalidRate");
@@ -360,14 +353,12 @@ contract MidasStrategyTest is Test {
         MockOracle fuzzOracle = new MockOracle();
         fuzzOracle.setRoundData(1, answer, block.timestamp);
 
-        address[] memory dt = new address[](0);
         MidasStrategy fuzzStrategy = new MidasStrategy(
             IERC20(address(baseAsset)),
             IMToken(address(mToken)),
             IDepositVault(address(depositVault)),
             IRedemptionVault(address(redemptionVault)),
-            fuzzOracle,
-            dt
+            fuzzOracle
         );
 
         uint256 rate = fuzzStrategy.getOracleRate();

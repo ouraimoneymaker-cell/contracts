@@ -227,14 +227,10 @@ contract DiscreteAccounting is IAccounting, CDOComponent {
         return Math.saturatingSub(maxSrt, srtNav);
     }
 
-    /// @notice Updates the accounting for the CDO, calculating new TVL split
-    /// @dev This method should be called before any deposits or withdrawals in tranches
-    /// @dev It calculates the new TVL split, allowing tranches to accurately calculate their share prices
-    /// @param navT1 The current total assets (Net Asset Value) held by the CDO in the strategy
-    function updateAccounting (uint256 navT1) external onlyCDO {
-        updateAccountingInner(navT1);
-    }
-
+    /// @notice Updates the accounting by fetching the current total assets from the strategy
+    /// @dev Fetches total assets by providing the last accounted NAV and timestamp to the strategy,
+    ///      allowing it to determine if new yield has arrived and should be reconciled.
+    ///      This triggers a true-up between projected and realized Junior NAV if rewards are detected.
     function updateAccounting () external onlyCDO {
         updateAccountingInner(cdo.totalStrategyAssets(nav, navTimestamp));
     }

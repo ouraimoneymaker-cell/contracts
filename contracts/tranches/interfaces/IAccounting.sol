@@ -6,7 +6,6 @@ import { IAprPairFeedListener } from "./IAprPairFeed.sol";
 
 interface IAccounting is ICDOComponent, IAprPairFeedListener {
 
-    function updateAccounting (uint256 navT1) external;
     function updateAccounting () external;
     function updateBalanceFlow (
         uint256 jrtAssetsIn,

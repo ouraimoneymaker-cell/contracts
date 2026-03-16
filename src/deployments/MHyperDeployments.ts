@@ -65,6 +65,7 @@ export class MHyperDeployments extends DeploymentsBase<{
         }
 
         const { contract: provider } = await this.ds.ensure(AaveOracleAprPairProvider, {
+            id: `${this.pfx}AaveOracleAprPairProvider`,
             arguments: [
                 acm.address,
                 aavePool,
@@ -149,7 +150,7 @@ export class MHyperDeployments extends DeploymentsBase<{
     async ensureUnstakeImplemenetations(): Promise<{ token: TEth.Address; impl: IBeaconProxy }[]> {
         let { USDC, mHYPER, redemptionVault  } = await this.ensureUnderlying();
         const { contractBeaconProxy: midasCooldownRequestImpl } = await this.ds.ensureWithBeacon(MidasCooldownRequestImpl, {
-            id: 'MHyperCooldownRequestBeacon',
+            id: `${this.pfx}CooldownRequestBeacon`,
             arguments: [ USDC.address, mHYPER.address, redemptionVault.address ],
             initialize: [$address.ZERO, $address.ZERO]
         });
@@ -166,6 +167,7 @@ export class MHyperDeployments extends DeploymentsBase<{
     ): Promise<{ strategy: MidasStrategy; }> {
         const { USDC, DAI, USDS, mHYPER, depositVault, redemptionVault, oracle } = await this.ensureUnderlying();
         const { contract: strategy } = await this.ds.ensureWithProxy(MidasStrategy, {
+            id: `${this.pfx}MidasStrategy`,
             arguments: [
                 USDC.address,
                 mHYPER.address,

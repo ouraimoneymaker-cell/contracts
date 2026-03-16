@@ -24,6 +24,9 @@ jobs:
           name: Check forge
           command: forge --version
       - run:
+          name: Check hardhat
+          command: npx hardhat --version
+      - run:
           name: Compile
           command: npm run compile
       - run:

@@ -37,8 +37,9 @@ export namespace PlatformFactory {
         platform?: TEth.Platform
         deployments?: 'throw' | 'redeploy',
         cdo: TKey
-        accounts?: TKey | 'operator'
+        accounts?: TKey | 'operator' | 'deployer'
         cdoInfo?: Partial<ICDO>
+        initialDeposit?: boolean
     }) {
         const hh = new HardhatProvider();
         const config = await ConfigLoader.fetch();
@@ -73,7 +74,7 @@ export namespace PlatformFactory {
         }
     }
 
-    async function getAccounts(client: Web3Client, group: TCDOKey | 'operator') {
+    async function getAccounts(client: Web3Client, group: TCDOKey | 'operator' | 'deployer') {
         const { platform, network } = client;
         const hh = new HardhatProvider();
 
@@ -91,15 +92,13 @@ export namespace PlatformFactory {
         let safeAdmin = await ChainAccountService.get(accounts.safeAdmin);
         let safeOperator = await ChainAccountService.get(accounts.safeOperator);
 
-        if (network === 'hardhat') {
+        if (network === 'hardhat' || (platform === 'hardhat' && group === 'deployer')) {
             deployer = hh.deployer(0);
             timelockAdmin = deployer;
             timelockConfig = deployer;
             safeAdmin = deployer;
             safeOperator = deployer;
-        }
-
-        if (platform === 'hardhat' && client.forked?.platform) {
+        } else if (platform === 'hardhat' && client.forked?.platform) {
             // Impersonate safe and timelock accounts in forked networks
             deployer = {
                 name: 'impersonated',

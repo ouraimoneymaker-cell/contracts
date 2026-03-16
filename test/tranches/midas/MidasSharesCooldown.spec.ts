@@ -9,7 +9,6 @@ import { $promise } from 'dequanto/utils/$promise';
 import { l } from 'dequanto/utils/$logger';
 import { $erc4626 } from '../utils/$erc4626';
 import { $exitMode } from '@s/utils/$exitMode';
-import { MockMetaERC4626 } from '@0xc/hardhat/MockMetaERC4626/MockMetaERC4626';
 import { $address } from 'dequanto/utils/$address';
 
 
@@ -54,19 +53,17 @@ UAction.create({
         await $exitMode.set(sharesCooldown, alice, jrtVault.address, [
             { covPct: 100, lock: 60 }
         ]);
-        await test.snapshot('midasSharesCooldown');
+        await test.snapshot('midas');
     },
     async $teardown() {
         await test.client.debug.setAutomine(true);
-        await test.reset('midasSharesCooldown');
+        await test.reset('midas');
     },
     async $after() {
-        await test.reset();
+        await test.wipe();
     },
 
-
-
-    async '!finalize' () {
+    async 'finalize' () {
         return UAction.create({
             async $before () {
                 await $erc4626.deposit(jrtVault, bob, 1000);

@@ -19,7 +19,7 @@ const {
     feed,
     redemptionVault,
     unstakeCooldown,
-} = await test.deploy();
+} = await test.deploy({ initialDeposit: false });
 
 const { deployer, client } = test;
 
@@ -32,12 +32,12 @@ UTest.create({
     },
 
     async $after () {
-        await test.reset();
+        await test.wipe();
     },
     async $teardown () {
         await test.reset('midas');
     },
-    async '!should redeem instant' () {
+    async 'should redeem instant' () {
         await $erc20.mint(USDC, deployer, deployer, 11);
 
         await $tranche.deposit(jrtVault, deployer, USDC, 4.1);

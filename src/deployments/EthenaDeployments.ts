@@ -78,7 +78,7 @@ export class EthenaDeployments extends DeploymentsBase<{
         return { provider: sUSDeAprPairProvider };
     }
 
-    @memd.deco.memoize()
+    @memd.deco.memoize({ perInstance: true })
     async ensureUnderlying(): Promise<{
         base: MockUSDe
         USDe: MockUSDe

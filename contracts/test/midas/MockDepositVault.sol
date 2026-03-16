@@ -26,14 +26,17 @@ contract MockDepositVault {
 
     function depositInstant(
         address tokenIn,
-        uint256 amountToken,
+        uint256 amountTokenBase18,
         uint256 /* minReceiveAmount */,
         bytes32 /* referrerId */
     ) external {
+        uint256 decimals = IERC20Metadata(tokenIn).decimals();
+
+        uint256 amountToken = amountTokenBase18 / (10 ** (18 - decimals));
         // Transfer tokenIn from caller
         IERC20(tokenIn).transferFrom(msg.sender, address(this), amountToken);
         // Mint mToken to caller based on rate
-        uint256 mTokenAmount = (amountToken * 10 ** (18 - IERC20Metadata(tokenIn).decimals()) * 1e18) / rate;
+        uint256 mTokenAmount = (amountTokenBase18 * 1e18) / rate;
         mToken.mint(msg.sender, mTokenAmount);
     }
 }

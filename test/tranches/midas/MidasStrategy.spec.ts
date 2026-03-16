@@ -24,7 +24,7 @@ UTest.create({
     async $before () {},
 
     async $after () {
-        await test.reset();
+        await test.wipe();
     },
     async $teardown () {
         await test.reset('midas');

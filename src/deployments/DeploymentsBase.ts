@@ -89,7 +89,7 @@ export abstract class DeploymentsBase<T extends ICdoDeploymentsBase = any> {
         this.client = params.client;
         this.platform = Platforms[params.client.network];
         this.accounts = params.accounts;
-        this.pfx = $require.notNull(ContractsPrefixMapping[params.cdo], `No contract prefix for ${params.cdo} found`);
+        this.pfx = $require.notNull(params.cdoInfo?.pfx ?? ContractsPrefixMapping[params.cdo], `No contract prefix for ${params.cdo} found`);
 
         this.ds = new Deployments(params.client, params.deployer, {
             directory: './deployments/',
@@ -693,7 +693,9 @@ export abstract class DeploymentsBase<T extends ICdoDeploymentsBase = any> {
         let { base } = await this.ensureUnderlying();
         let { cdo, jrtVault } = await this.ensureCDO();
         let { contract: depositor } = await this.ds.ensureWithProxy(TrancheDepositor, {
-            id: 'TrancheDepositorV3',
+            id: this.isTestnet()
+                ? `${this.pfx}TrancheDepositor`
+                : `TrancheDepositorV3`,
             initialize: [
                 this.owner.address,
                 acm.address
@@ -701,7 +703,6 @@ export abstract class DeploymentsBase<T extends ICdoDeploymentsBase = any> {
         });
 
         await this.ensureRole($contract.keccak256('DEPOSITOR_CONFIG_ROLE'), this.owner.address);
-
         let status = await depositor.tranches(jrtVault.address, base.address);
         if (status == false) {
             await depositor.$receipt().addCdo(this.owner, cdo.address);
@@ -730,7 +731,7 @@ export abstract class DeploymentsBase<T extends ICdoDeploymentsBase = any> {
         const Contracts = this.cdoInfo.Contracts;
         const id = Contracts?.[this.client.network]?.[name]
             ?? Contracts?.['*']?.[name]
-            ?? void 0;
+            ?? `${this.pfx}${name}`;
         return id;
     }
 

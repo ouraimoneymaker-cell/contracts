@@ -46,7 +46,8 @@ export namespace $hh {
 
     export function create<T extends TCDOKey>(cdo: T, params?: {
         forked?: number
-        cdoInfo: Partial<ICDO>,
+        cdoInfo?: Partial<ICDO>
+        accounts?: TCDOKey | 'operator' | 'deployer'
     }) {
         return new Test<DeploymentsTypes.CDOs[T]>(cdo, params)
     }
@@ -75,8 +76,9 @@ export namespace $hh {
         configManager: TwoStepConfigManager;
 
         constructor (private cdoKey: TCDOKey, private params?: {
-            forked?: number,
-            cdoInfo?: Partial<ICDO>,
+            forked?: number
+            cdoInfo?: Partial<ICDO>
+            accounts?: TCDOKey | 'operator' | 'deployer'
         }) {
             // Override default CDO infos for tests
             this.params ??= {};
@@ -103,7 +105,8 @@ export namespace $hh {
                 client,
                 cdo: this.cdoKey,
                 cdoInfo: this.params?.cdoInfo,
-
+                accounts: this.params?.accounts,
+                initialDeposit: opts?.initialDeposit,
                 ...(opts ?? {}),
             });
 
@@ -160,6 +163,20 @@ export namespace $hh {
 
             let newSnapshotId = await this.client.debug.snapshot();
             this.snapshots[snapshotName] = newSnapshotId;
+        }
+
+        async wipe () {
+            const { client, factory } = this;
+            await client.debug.reset({});
+            if (factory) {
+                memd.fn.clearMemoized(factory.ensureCDO);
+                memd.fn.clearMemoized(factory.ensureUnderlying);
+                memd.fn.clearMemoized(factory.ensureACM);
+                memd.fn.clearMemoized(factory.ensureCooldowns);
+            }
+            memd.fn.clearMemoized(this.deploy);
+            memd.fn.clearMemoized(this.init);
+            (client as HardhatWeb3Client).configureFork(null);
         }
 
         async mine (t: string | '30mins' | '5hours' | '1year') {

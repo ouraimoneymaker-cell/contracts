@@ -52,7 +52,7 @@ export interface ICDO {
     minimumJrtSrtRatioBuffer?: number
     minimumJrtSrtRatio?: number
     accounts?: {
-        [platform: TEth.Platform]: {
+        [platform: TEth.Platform]: string | {
             deployer: string
             timelockAdmin: string
             timelockConfig: string
@@ -75,7 +75,10 @@ export interface ICDO {
     ContractVersions?: {
         // Discrete accounting is the default (backward compatible with previous versions).
         accounting?: 'continuous' | 'discrete',
-    }
+    },
+
+    // Contracts prefixes (can be overridden for testing)
+    pfx?: string
 }
 
 

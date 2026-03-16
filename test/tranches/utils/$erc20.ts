@@ -65,7 +65,7 @@ export namespace $erc20 {
     }
 
     class Tools {
-        @memd.deco.memoize()
+        @memd.deco.memoize({ keyResolver: x => x.address, maxAge: 2 })
         static async decimals (erc20: ERC20) {
             return await erc20.decimals();
         }

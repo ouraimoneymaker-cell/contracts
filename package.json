@@ -28,7 +28,7 @@
   "devDependencies": {
     "@nomicfoundation/hardhat-toolbox": "^5.0.0",
     "atma": "^0.15.24",
-    "hardhat": "^2.24.2"
+    "hardhat": "^2.28.6"
   },
   "dependencies": {
     "@0xweb/hardhat": "^0.1.41",
@@ -47,7 +47,6 @@
     "class-json": "latest",
     "dequanto": "^0.2.8",
     "dotenv": "^16.4.7",
-    "hardhat": "latest",
     "memd": "latest",
     "tsconfig-paths": "^4.2.0"
   },

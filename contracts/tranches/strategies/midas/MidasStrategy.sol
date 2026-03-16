@@ -153,24 +153,16 @@ contract MidasStrategy is Strategy {
                 : depositTokenDecimals[token];
             uint256 amountBase18 = tokenAmount * 10 ** (18 - tokenDec);
 
-            uint256 minReceiveAmount = 0;
-            depositVault.depositInstant(
-                token,
-                amountBase18,
-                minReceiveAmount,
-                referrerId
-            );
-
-            // Scale tokenAmount to base asset decimals (e.g. DAI 18→USDC 6 at 1:1)
-            if (token != address(baseAsset)) {
-                if (tokenDec > baseAssetDecimals) {
-                    return tokenAmount / (10 ** (tokenDec - baseAssetDecimals));
-                }
-                if (tokenDec < baseAssetDecimals) {
-                    return tokenAmount * (10 ** (baseAssetDecimals - tokenDec));
-                }
-            }
-            return tokenAmount;
+            // Measure actual mToken received (accounts for Midas fees)
+            uint256 mTokenBefore = mToken.balanceOf(address(this));
+            depositVault.depositInstant(token, amountBase18, 0, referrerId);
+            uint256 mTokenReceived = mToken.balanceOf(address(this)) - mTokenBefore;
+            return
+                convertToAssets(
+                    address(mToken),
+                    mTokenReceived,
+                    Math.Rounding.Floor
+                );
         }
         if (token == address(mToken)) {
             // already transferred in ↑

@@ -167,6 +167,9 @@ export namespace $hh {
 
         async wipe () {
             const { client, factory } = this;
+            if ('root' in this.snapshots) {
+                await this.reset('root');
+            }
             await client.debug.reset({});
             if (factory) {
                 memd.fn.clearMemoized(factory.ensureCDO);

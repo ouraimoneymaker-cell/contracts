@@ -59,8 +59,12 @@ contract MidasStrategy is Strategy {
     /// @notice Referrer ID for Midas deposit tracking
     bytes32 public referrerId;
 
+    /// @notice Maximum slippage tolerance for Midas deposits in basis points (100 = 1%)
+    uint256 public maxDepositSlippageBps;
+
     event CooldownsChanged(uint256 jrt, uint256 srt);
     event ReferrerIdChanged(bytes32 referrerId);
+    event MaxDepositSlippageBpsChanged(uint256 bps);
 
     constructor(
         IERC20 baseAsset_,
@@ -155,7 +159,21 @@ contract MidasStrategy is Strategy {
 
             // Measure actual mToken received (accounts for Midas fees)
             uint256 mTokenBefore = mToken.balanceOf(address(this));
-            depositVault.depositInstant(token, amountBase18, 0, referrerId);
+
+            // Calculate minimum acceptable mToken output
+            uint256 minReceiveAmount = maxDepositSlippageBps > 0
+                ? (convertToTokens(
+                    address(mToken),
+                    baseAssets,
+                    Math.Rounding.Floor
+                ) * (10_000 - maxDepositSlippageBps)) / 10_000
+                : 0;
+            depositVault.depositInstant(
+                token,
+                amountBase18,
+                minReceiveAmount,
+                referrerId
+            );
             uint256 mTokenReceived = mToken.balanceOf(address(this)) - mTokenBefore;
             return
                 convertToAssets(
@@ -462,5 +480,17 @@ contract MidasStrategy is Strategy {
     ) external onlyRole(UPDATER_STRAT_CONFIG_ROLE) {
         referrerId = referrerId_;
         emit ReferrerIdChanged(referrerId_);
+    }
+
+    /**
+     * @notice Updates the maximum slippage tolerance for Midas deposits
+     * @param bps_ Slippage in basis points (100 = 1%, max 1000 = 10%)
+     */
+    function setMaxDepositSlippageBps(
+        uint256 bps_
+    ) external onlyRole(UPDATER_STRAT_CONFIG_ROLE) {
+        require(bps_ <= 1000, "SlippageTooHigh");
+        maxDepositSlippageBps = bps_;
+        emit MaxDepositSlippageBpsChanged(bps_);
     }
 }

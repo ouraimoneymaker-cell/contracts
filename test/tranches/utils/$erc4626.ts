@@ -22,7 +22,8 @@ export namespace $erc4626 {
         }
         let before = await erc4626.balanceOf(sender.address);
         await erc20.$receipt().approve(sender, erc4626.address, amountWei);
-        console.log(`$erc4626.deposit: Vault: ${erc4626.address} Base: ${await erc20.symbol()} ${erc20.address}; B: ${await erc4626.asset()}`);
+        console.log(`$erc4626.deposit: Vault: ${erc4626.address} Base: ${await erc20.symbol()} ${erc20.address}; Base: ${await erc4626.asset()}; Total: ${erc4626.totalSupply()}`);
+        console.log(`TotalAssets`, await erc4626.totalAssets());
         await erc4626.$receipt().deposit(sender, amountWei, sender.address);
         let after = await erc4626.balanceOf(sender.address);
         // shares minted

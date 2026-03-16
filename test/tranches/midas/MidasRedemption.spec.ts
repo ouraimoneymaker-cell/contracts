@@ -37,7 +37,7 @@ UTest.create({
     async $teardown () {
         await test.reset('midas');
     },
-    async 'should redeem instant' () {
+    async '// (no-instant-redeem) should redeem instant' () {
         await $erc20.mint(USDC, deployer, deployer, 11);
 
         await $tranche.deposit(jrtVault, deployer, USDC, 4.1);
@@ -54,8 +54,6 @@ UTest.create({
 
         await $tranche.deposit(jrtVault, deployer, USDC, 4.1);
         await $erc20.eqBalance(USDC, deployer, 6.9);
-
-
 
         await redemptionVault.$receipt().setInstantEnabled(deployer, false);
         await redemptionVault.$receipt().setOracle(deployer, oracle.address);

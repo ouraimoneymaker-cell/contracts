@@ -13,8 +13,8 @@ import {
 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {IUnstakeHandler} from "../../interfaces/cooldown/IUnstakeHandler.sol";
 import {IMToken} from "./interfaces/IMToken.sol";
-import {IRedemptionVault} from "./interfaces/IRedemptionVault.sol";
-import {Request} from "./interfaces/IRedemptionVault.sol";
+import {IRedemptionVault, Request } from "./interfaces/IRedemptionVault.sol";
+import {RequestStatus} from "./interfaces/IManageableVault.sol";
 
 /**
  * @title MidasCooldownRequestImpl
@@ -40,6 +40,7 @@ contract MidasCooldownRequestImpl is IUnstakeHandler, Initializable {
     address public receiver;
     uint256 public requestedAt;
     uint256 public requestedAmount;
+    uint256 public requestId;
 
     bool public pending;
 
@@ -81,39 +82,29 @@ contract MidasCooldownRequestImpl is IUnstakeHandler, Initializable {
             shares
         );
 
-        // Try instant redemption first (may fail when daily limits are exceeded)
-        try redemptionVault.redeemInstant(address(baseAsset), shares, 0) {
-            // Instant succeeded — transfer baseAsset directly to receiver
-            uint256 received = baseAsset.balanceOf(address(this));
-            if (received > 0) {
-                SafeERC20.safeTransfer(baseAsset, receiver_, received);
-            }
-            return block.timestamp; // signals instant to UnstakeCooldown
-        } catch {
-            // Instant failed — fall back to redeemRequest
-            uint256 requestId = redemptionVault.redeemRequest(
-                address(baseAsset),
-                shares
-            );
+        // Use the "redeemRequest" path. For instant redemption, users may redeem mTokens directly
+        // by paying the Midas instant fee.
+        requestId = redemptionVault.redeemRequest(
+            address(baseAsset),
+            shares
+        );
 
-            // Query the Midas request to get the expected base asset amount
-            Request memory req = redemptionVault.redeemRequests(requestId);
-            // amountMToken * mTokenRate / tokenOutRate gives base18 result
-            // Convert from base18 to actual tokenOut decimals (e.g. USDC = 6)
-            uint256 expectedBase18 = (req.amountMToken * req.mTokenRate) /
-                req.tokenOutRate;
-            uint8 tokenOutDec = IERC20Metadata(address(baseAsset)).decimals();
-            uint256 expectedBaseAssets = expectedBase18 /
-                (10 ** (18 - tokenOutDec));
+        // Query the Midas request to get the expected base asset amount
+        Request memory req = redemptionVault.redeemRequests(requestId);
+        // amountMToken * mTokenRate / tokenOutRate gives base18 result
+        // Convert from base18 to actual tokenOut decimals (e.g. USDC = 6)
+        uint256 expectedBase18 = (req.amountMToken * req.mTokenRate) / req.tokenOutRate;
+        uint8 tokenOutDec = IERC20Metadata(address(baseAsset)).decimals();
+        uint256 expectedBaseAssets = expectedBase18 / (10 ** (18 - tokenOutDec));
 
-            requestedAt = block.timestamp;
-            receiver = receiver_;
-            pending = true;
-            requestedAmount = expectedBaseAssets;
+        requestedAt = block.timestamp;
+        receiver = receiver_;
+        pending = true;
+        requestedAmount = expectedBaseAssets;
 
-            // Midas typically processes requests within 1-3 days
-            return block.timestamp + 3 days;
-        }
+        // Midas typically processes requests within 1-3 days
+        return block.timestamp + 3 days;
+
     }
 
     /**
@@ -121,7 +112,7 @@ contract MidasCooldownRequestImpl is IUnstakeHandler, Initializable {
      * After Midas admin approves the request, the base asset is transferred
      * from the requestRedeemer to this proxy. This function transfers those assets
      * to the final receiver.
-     * Reverts if received amount is less than 90% of the expected base asset —
+     * Reverts if Midas request is still pending (not yet approved or canceled) —
      * this allows UnstakeCooldown to skip unready requests via try/catch
      * without marking them as completed.
      * Can be called by the UnstakeHandler, which can be triggered permissionlessly.
@@ -129,12 +120,21 @@ contract MidasCooldownRequestImpl is IUnstakeHandler, Initializable {
     function finalize() external returns (uint256 amount) {
         require(msg.sender == handler, "NotAuthorized");
 
+        Request memory req = redemptionVault.redeemRequests(requestId);
+        require (req.status != RequestStatus.Pending, "RequestPending");
+
         amount = baseAsset.balanceOf(address(this));
-        require(amount >= (requestedAmount * 90) / 100, "AssetsNotReceived");
         SafeERC20.safeTransfer(baseAsset, receiver, amount);
+
+        if (req.status == RequestStatus.Canceled) {
+            // If the request was canceled, return any mToken balance to the receiver (just in case)
+            amount = mToken.balanceOf(address(this));
+            SafeERC20.safeTransfer(mToken, receiver, amount);
+        }
 
         pending = false;
         requestedAmount = 0;
+        requestId = 0;
         return amount;
     }
 

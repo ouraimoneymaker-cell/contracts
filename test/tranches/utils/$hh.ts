@@ -12,6 +12,7 @@ import { ICDO, TCDOKey } from '@s/platforms/Tranches';
 import { DeploymentsBase } from '@s/deployments/DeploymentsBase';
 import { DeploymentsTypes } from '@s/deployments/DeploymentsTypes';
 import { TrancheDepositor } from '@0xc/hardhat/TrancheDepositor/TrancheDepositor';
+import { Web3ClientFactory } from 'dequanto/clients/Web3ClientFactory';
 
 
 export namespace $hh {
@@ -45,7 +46,7 @@ export namespace $hh {
     }
 
     export function create<T extends TCDOKey>(cdo: T, params?: {
-        forked?: number
+        forked?: number | 'latest'
         cdoInfo?: Partial<ICDO>
         accounts?: TCDOKey | 'operator' | 'deployer'
     }) {
@@ -76,7 +77,7 @@ export namespace $hh {
         configManager: TwoStepConfigManager;
 
         constructor (private cdoKey: TCDOKey, private params?: {
-            forked?: number
+            forked?: number | 'latest'
             cdoInfo?: Partial<ICDO>
             accounts?: TCDOKey | 'operator' | 'deployer'
         }) {
@@ -91,6 +92,13 @@ export namespace $hh {
         async init (opts?: { initialDeposit?: boolean }) {
             const config = await PlatformFactory.ConfigLoader.fetch();
             const hh = new HardhatProvider();
+
+            if (this.params?.forked === 'latest') {
+                let eth = await Web3ClientFactory.getAsync('eth');
+                let block = await eth.getBlockNumber();
+                this.params.forked = block - 50;
+            }
+
             const client = this.params?.forked == null
                 ? await getClient()
                 : await hh.forked({ platform: 'eth', block: this.params.forked });

@@ -1,145 +1,153 @@
 import { IAccount } from "dequanto/models/TAccount";
-import { AggregatorDomain, ChainName, NUSD, Token, USDC } from "./libs/constants";
+import { AggregatorDomain, ChainName, Token } from "./libs/constants";
+import { TEth } from 'dequanto/models/TEth';
+import { $require } from 'dequanto/utils/$require';
 
-export interface SwapRoute {
-  routeSummary: any;
+interface ISwapCalldata {
+    routerAddress: TEth.Address;
+    encodedData: string;
+    tokenIn: string;
+    tokenOut: string;
+    amountIn: string;
+    sender: string;
+    recipient: string;
+    routeSummary: any;
 }
 
-export interface SwapCalldata {
-  routerAddress: string;
-  encodedData: string;
-  tokenIn: string;
-  tokenOut: string;
-  amountIn: string;
-  sender: string;
-  recipient: string;
-  routeSummary: any;
+interface ISwapParams {
+    tokenIn: Token;
+    tokenOut: Token;
+    amountIn: bigint;
+    sender?: string;
+    recipient?: string;
+
+    routeOptions?: IKyberSwapRouteOptions
+    swapOptions?: IKyberSwapCalldataOptions
 }
 
-export interface SwapParams {
-  tokenIn: Token;
-  tokenOut: Token;
-  amountIn: bigint;
-  slippageTolerance: number;
-  sender?: string;
-  recipient?: string;
+interface IKyberSwapRoute {
+    routeSummary: any;
 }
-
-export interface BuildSwapCalldataParams {
-  routeSummary: any;
-  slippageTolerance: number;
-  sender?: string;
-  recipient?: string;
+interface IKyberSwapRouteOptions {
+    onlySinglePath: boolean
+}
+interface IKyberSwapCalldataOptions {
+    slippageTolerance: number;
 }
 
 /**
  * Client for the KyberSwap Aggregator API.
  * Builds swap routes and encodes calldata that can be passed directly
  * to KyberSwapAdapter / Strategy.executeSwap on-chain.
+ *
+ * https://docs.kyberswap.com/kyberswap-solutions/kyberswap-aggregator/aggregator-api-specification/evm-swaps
  */
 export class KyberSwapClient {
-  private readonly chain: ChainName;
-  private readonly account?: IAccount;
 
-  constructor(chain: ChainName, account?: IAccount) {
-    this.chain = chain;
-    this.account = account;
-  }
+    constructor(
+        public chain: ChainName = ChainName.MAINNET,
+        public account?: IAccount
+    ) {
 
-  async getRoute(tokenIn: Token, tokenOut: Token, amountIn: bigint): Promise<SwapRoute> {
-    const path = `/${this.chain}/api/v1/routes`;
-    const url = new URL(path, AggregatorDomain);
-    url.searchParams.set("tokenIn", tokenIn.address);
-    url.searchParams.set("tokenOut", tokenOut.address);
-    url.searchParams.set("amountIn", amountIn.toString());
-
-    const response = await fetch(url.toString(), {
-      method: "GET",
-      headers: { "Content-Type": "application/json" },
-    });
-    if (!response.ok) {
-      throw new Error(`Kyber route request failed: ${response.status} ${response.statusText}`);
     }
 
-    const body = await response.json() as { data: SwapRoute };
-    return body.data;
-  }
-
-  async buildSwapCalldata(params: BuildSwapCalldataParams): Promise<SwapCalldata> {
-    const path = `/${this.chain}/api/v1/route/build`;
-    const sender = await this.resolveAddress(params.sender);
-    const recipient = params.recipient ?? sender;
-
-    const response = await fetch(new URL(path, AggregatorDomain).toString(), {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        routeSummary: params.routeSummary,
-        sender,
-        recipient,
-        slippageTolerance: params.slippageTolerance,
-      }),
-    });
-    if (!response.ok) {
-      throw new Error(`Kyber build request failed: ${response.status} ${response.statusText}`);
+    private async getRoutes(params: {
+        tokenIn: Token
+        tokenOut: Token
+        amountIn: bigint
+    }, options: IKyberSwapRouteOptions) {
+        type TResponse = {
+            routeSummary: any
+        }
+        const resp = await this.fetch<TResponse>('GET', `routes`, {
+            tokenIn: params.tokenIn.address,
+            tokenOut: params.tokenOut.address,
+            amountIn: params.amountIn.toString(),
+            ...(options ?? {})
+        });
+        return resp;
     }
 
-    const body = await response.json() as { data: { routerAddress: string; data: string } };
+    private async buildSwapCalldata(params: {
+        routeSummary: any;
+        sender?: string;
+        recipient?: string;
+    }, options: IKyberSwapCalldataOptions) {
+        const sender = await this.resolveAddress(params.sender);
+        const recipient = params.recipient ?? this.account?.address ?? params.sender;
 
-    return {
-      routerAddress: body.data.routerAddress,
-      encodedData: body.data.data,
-      tokenIn: params.routeSummary.tokenIn,
-      tokenOut: params.routeSummary.tokenOut,
-      amountIn: params.routeSummary.amountIn,
-      sender,
-      recipient,
-      routeSummary: params.routeSummary,
-    };
-  }
+        type TResponse = {
+            routerAddress: TEth.Address
+            data: string
+        };
+        const resp = await this.fetch<TResponse>('POST', 'route/build', {
+            routeSummary: params.routeSummary,
+            sender,
+            recipient,
+            ...(options ?? {})
+        });
 
-  /**
-   * End-to-end helper: fetches the optimal route then encodes the swap
-   * calldata ready for on-chain execution.
-   */
-  async getSwapCalldata(params: SwapParams): Promise<SwapCalldata> {
-    const route = await this.getRoute(params.tokenIn, params.tokenOut, params.amountIn);
-    return this.buildSwapCalldata({
-      routeSummary: route.routeSummary,
-      slippageTolerance: params.slippageTolerance,
-      sender: params.sender,
-      recipient: params.recipient,
-    });
-  }
-
-  private async resolveAddress(address?: string): Promise<string> {
-    if (address) {
-      return address;
+        return {
+            routerAddress: resp.routerAddress,
+            encodedData: resp.data,
+            tokenIn: params.routeSummary.tokenIn,
+            tokenOut: params.routeSummary.tokenOut,
+            amountIn: params.routeSummary.amountIn,
+            sender,
+            recipient,
+            routeSummary: params.routeSummary,
+        };
     }
 
-    if (!this.account?.address) {
-      throw new Error("sender is required when no dequanto account is configured");
+    /**
+     * End-to-end helper: fetches the optimal route then encodes the swap
+     * calldata ready for on-chain execution.
+     */
+    async getSwapCalldata(params: ISwapParams): Promise<ISwapCalldata> {
+        const route = await this.getRoutes({
+                ...params
+            },
+            params.routeOptions,
+        );
+        return this.buildSwapCalldata({
+            routeSummary: route.routeSummary,
+            sender: params.sender,
+            recipient: params.recipient,
+        }, params.swapOptions);
     }
 
-    return this.account.address;
-  }
+    private async resolveAddress(address?: string): Promise<string> {
+        return $require.Address(
+            address ?? this.account.address,
+            'Invalid sender address'
+        );
+    }
+
+    private async fetch<T>(method: 'GET' | 'POST', path: string, params: any) {
+        let url = `${AggregatorDomain}/${this.chain}/api/v1/${path}`;
+        let body: string | undefined;
+        if (method === 'GET') {
+            const q = new URLSearchParams(params);
+            url += `?${q}`;
+        } else if (method === 'POST') {
+            body = JSON.stringify(params);
+        }
+
+        const response = await fetch(url, {
+            method,
+            headers: {
+                "Content-Type": "application/json",
+                "X-Client-Id": "strata"
+            },
+            body,
+        });
+        if (!response.ok) {
+            throw new Error(`Kyber route request failed: ${response.status} ${response.statusText}`);
+        }
+
+        const resp = await response.json() as { data: T };
+        return resp.data;
+    }
 }
 
-async function main() {
-  const sender = "0xD6cC5015F816575C606D972C4A4aD0b3E0E50440";
-  const client = new KyberSwapClient(ChainName.MAINNET);
-
-  const result = await client.getSwapCalldata({
-    tokenIn: NUSD,
-    tokenOut: USDC,
-    amountIn: 25n * 10n ** 18n,
-    slippageTolerance: 10,
-    sender,
-    recipient: sender,
-  });
-
-  console.log(result);
-}
-
-main().catch(console.error);
 

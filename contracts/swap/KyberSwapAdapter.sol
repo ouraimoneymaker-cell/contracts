@@ -12,7 +12,7 @@ contract KyberSwapAdapter is ISwapAdapter {
     using SafeERC20 for IERC20;
 
     error ZeroAddress();
-    error SwapFailed();
+    error SwapFailed(string reason);
 
     event SwapExecuted(
         address indexed router,
@@ -39,8 +39,13 @@ contract KyberSwapAdapter is ISwapAdapter {
 
         uint256 balanceBefore = IERC20(tokenOut).balanceOf(recipient);
 
-        (bool success,) = router.call{value: value}(data);
-        if (!success) revert SwapFailed();
+        (bool success, bytes memory returndata) = router.call{value: value}(data);
+        if (!success) {
+            if (returndata.length >= 68 && bytes4(returndata) == 0x08c379a0) {
+                revert SwapFailed(_getRevertMsg(returndata));
+            }
+            revert SwapFailed("SwapFailed");
+        }
 
         amountOut = IERC20(tokenOut).balanceOf(recipient) - balanceBefore;
 
@@ -54,4 +59,11 @@ contract KyberSwapAdapter is ISwapAdapter {
     }
 
     receive() external payable {}
+
+    function _getRevertMsg(bytes memory revertData) internal pure returns (string memory) {
+        assembly {
+            revertData := add(revertData, 0x04)
+        }
+        return abi.decode(revertData, (string));
+    }
 }

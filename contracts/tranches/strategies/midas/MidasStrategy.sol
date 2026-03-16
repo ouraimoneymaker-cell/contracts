@@ -147,17 +147,22 @@ contract MidasStrategy is Strategy {
                 tokenAmount
             );
 
+            // Scale tokenAmount to base18 — Midas expects all amounts in 18 decimals
+            uint8 tokenDec = token == address(baseAsset)
+                ? baseAssetDecimals
+                : depositTokenDecimals[token];
+            uint256 amountBase18 = tokenAmount * 10 ** (18 - tokenDec);
+
             uint256 minReceiveAmount = 0;
             depositVault.depositInstant(
                 token,
-                tokenAmount,
+                amountBase18,
                 minReceiveAmount,
                 referrerId
             );
 
             // Scale tokenAmount to base asset decimals (e.g. DAI 18→USDC 6 at 1:1)
             if (token != address(baseAsset)) {
-                uint8 tokenDec = depositTokenDecimals[token];
                 if (tokenDec > baseAssetDecimals) {
                     return tokenAmount / (10 ** (tokenDec - baseAssetDecimals));
                 }

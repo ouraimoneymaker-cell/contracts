@@ -1,130 +1,132 @@
 import { ITestHelperConstructor } from '@s/strategies/interfaces/ITestHelper';
 import { MidasTestHelper } from '@s/strategies/midas/MidasTestHelper';
+import { MM1UsdTestHelper } from '@s/strategies/midas/MM1UsdTestHelper';
 import { NeutrlTestHelper } from '@s/strategies/neutrl/NeutrlTestHelper';
 import { TEth } from 'dequanto/models/TEth';
 
-export type TCDOKey = 'ethena' | 'neutrl' | 'mhyper'
+export type TCDOKey = 'ethena' | 'neutrl' | 'mhyper' | 'mm1usd';
 export interface ICDO {
     // token symbol
     base: string;
     jrt: {
-        symbol: string
-        name: string
-        depositsEnabled: boolean
-        withdrawalsEnabled: boolean
+        symbol: string;
+        name: string;
+        depositsEnabled: boolean;
+        withdrawalsEnabled: boolean;
 
         sharesCooldown?: [
-            { covPct: number, feeBps: number, lock: string | number },
-            { covPct: number, feeBps: number, lock: string | number },
-            { covPct: number, feeBps: number, lock: string | number },
-        ]
+            { covPct: number; feeBps: number; lock: string | number },
+            { covPct: number; feeBps: number; lock: string | number },
+            { covPct: number; feeBps: number; lock: string | number }
+        ];
 
         // additional configuration
-        [key: string]: any
-    }
+        [key: string]: any;
+    };
     srt: {
-        symbol: string,
-        name: string
-        depositsEnabled: boolean,
-        withdrawalsEnabled: boolean,
+        symbol: string;
+        name: string;
+        depositsEnabled: boolean;
+        withdrawalsEnabled: boolean;
 
         sharesCooldown?: [
-            { covPct: number, feeBps: number, lock: string | number },
-            { covPct: number, feeBps: number, lock: string | number },
-            { covPct: number, feeBps: number, lock: string | number },
-        ]
+            { covPct: number; feeBps: number; lock: string | number },
+            { covPct: number; feeBps: number; lock: string | number },
+            { covPct: number; feeBps: number; lock: string | number }
+        ];
 
         // additional configuration
-        [key: string]: any
-    }
+        [key: string]: any;
+    };
     fees?: {
         retention?: {
             // 1 == 100%
-            jrt: number
-            srt: number
-        },
+            jrt: number;
+            srt: number;
+        };
         // reserveFee: 1 === 100%
-        performanceFee: number
-    }
+        performanceFee: number;
+    };
     riskPremium?: {
-        x: number
-        y: number
-        k: number
-    }
-    minimumJrtSrtRatioBuffer?: number
-    minimumJrtSrtRatio?: number
+        x: number;
+        y: number;
+        k: number;
+    };
+    minimumJrtSrtRatioBuffer?: number;
+    minimumJrtSrtRatio?: number;
     accounts?: {
-        [platform: TEth.Platform]: string | {
-            deployer: string
-            timelockAdmin: string
-            timelockConfig: string
-            safeAdmin: string
-            safeOperator: string
-        }
-    }
+        [platform: TEth.Platform]:
+            | string
+            | {
+                  deployer: string;
+                  timelockAdmin: string;
+                  timelockConfig: string;
+                  safeAdmin: string;
+                  safeOperator: string;
+              };
+    };
     Feed?: {
-        name?: string
-    },
+        name?: string;
+    };
     Contracts?: {
         // Override contract IDs for the platform
         [platform: TEth.Platform | '*']: {
-            AccessControlManager?: string
-            SharesCooldown?: string
-            ERC20Cooldown?: string
-            UnstakeCooldown?: string
-        }
-    },
+            AccessControlManager?: string;
+            SharesCooldown?: string;
+            ERC20Cooldown?: string;
+            UnstakeCooldown?: string;
+        };
+    };
     ContractVersions?: {
         // Discrete accounting is the default (backward compatible with previous versions).
-        accounting?: 'continuous' | 'discrete',
-    },
+        accounting?: 'continuous' | 'discrete';
+    };
 
     // Contracts prefixes (can be overridden for testing)
-    pfx?: string
+    pfx?: string;
 
-    TestHelper?: ITestHelperConstructor
+    TestHelper?: ITestHelperConstructor;
 }
 
-
 export const Tranches: Record<TCDOKey, ICDO> = {
-    'ethena': {
+    ethena: {
         base: 'USDe',
         jrt: {
             symbol: 'jrUSDe',
             name: 'Strata Junior USDe',
             depositsEnabled: true,
             withdrawalsEnabled: true,
-            sUSDeCooldown: '7days'
+            sUSDeCooldown: '7days',
         },
         srt: {
             symbol: 'srUSDe',
             name: 'Strata Senior USDe',
             depositsEnabled: true,
             withdrawalsEnabled: true,
-            sUSDeCooldown: 0
+            sUSDeCooldown: 0,
         },
         Feed: {
-            name: 'Ethena CDO APR Pair'
+            name: 'Ethena CDO APR Pair',
         },
         ContractVersions: {
             accounting: 'continuous',
-        }
+        },
     },
-    'neutrl': {
+    neutrl: {
         base: 'NUSD',
         fees: {
             retention: {
-                jrt: .5, // 1 == 100%
-                srt: .5,
+                jrt: 0.5, // 1 == 100%
+                srt: 0.5,
             },
-            performanceFee: .072 // 1 === 100%
+            performanceFee: 0.072, // 1 === 100%
         },
         minimumJrtSrtRatioBuffer: 0.055,
         minimumJrtSrtRatio: 0.05,
         riskPremium: {
             x: 0.15,
             y: 0.15,
-            k: 0.3
+            k: 0.3,
         },
         jrt: {
             symbol: 'jrNUSD',
@@ -133,10 +135,10 @@ export const Tranches: Record<TCDOKey, ICDO> = {
             withdrawalsEnabled: true,
 
             sharesCooldown: [
-                { covPct: 10, feeBps: 0,   lock: '35days' },
-                { covPct: 20, feeBps: 10,  lock: '10days' },
-                { covPct: 0,  feeBps: 20,  lock: 0 },
-            ]
+                { covPct: 10, feeBps: 0, lock: '35days' },
+                { covPct: 20, feeBps: 10, lock: '10days' },
+                { covPct: 0, feeBps: 20, lock: 0 },
+            ],
         },
         srt: {
             symbol: 'srNUSD',
@@ -145,43 +147,41 @@ export const Tranches: Record<TCDOKey, ICDO> = {
             withdrawalsEnabled: true,
 
             sharesCooldown: [
-                { covPct: 10, feeBps: 0,   lock: 0 },
+                { covPct: 10, feeBps: 0, lock: 0 },
                 { covPct: 20, feeBps: 2.5, lock: 0 },
-                { covPct: 0,  feeBps: 5,   lock: 0 },
-            ]
+                { covPct: 0, feeBps: 5, lock: 0 },
+            ],
         },
-        accounts: {
-
-        },
+        accounts: {},
         Feed: {
-            name: 'Neutrl CDO APR Pair'
+            name: 'Neutrl CDO APR Pair',
         },
         Contracts: {
             '*': {
                 AccessControlManager: 'NeutrlAccessControlManager',
                 ERC20Cooldown: 'NeutrlERC20Cooldown',
                 UnstakeCooldown: 'NeutrlUnstakeCooldown',
-                SharesCooldown: 'NeutrlSharesCooldown'
-            }
+                SharesCooldown: 'NeutrlSharesCooldown',
+            },
         },
         ContractVersions: {
             accounting: 'continuous',
         },
         TestHelper: NeutrlTestHelper,
     },
-    'mhyper': {
+    mhyper: {
         base: 'USDC',
         fees: {
             retention: {
-                jrt: .5, // 1 == 100%
-                srt: .5,
+                jrt: 0.5, // 1 == 100%
+                srt: 0.5,
             },
-            performanceFee: .075 // 1 === 100%
+            performanceFee: 0.075, // 1 === 100%
         },
         riskPremium: {
             x: 0.125,
             y: 0.15,
-            k: 0.3
+            k: 0.3,
         },
         jrt: {
             symbol: 'jrmHYPER',
@@ -189,9 +189,9 @@ export const Tranches: Record<TCDOKey, ICDO> = {
             depositsEnabled: true,
             withdrawalsEnabled: true,
             sharesCooldown: [
-                { covPct: 10, feeBps: 0,   lock: '21days' },
-                { covPct: 20, feeBps: 10,  lock: '7days' },
-                { covPct: 0,  feeBps: 20,  lock: 0 },
+                { covPct: 10, feeBps: 0, lock: '21days' },
+                { covPct: 20, feeBps: 10, lock: '7days' },
+                { covPct: 0, feeBps: 20, lock: 0 },
             ],
         },
         srt: {
@@ -200,29 +200,52 @@ export const Tranches: Record<TCDOKey, ICDO> = {
             depositsEnabled: true,
             withdrawalsEnabled: true,
             sharesCooldown: [
-                { covPct: 10, feeBps: 0,   lock: 0 },
+                { covPct: 10, feeBps: 0, lock: 0 },
                 { covPct: 20, feeBps: 2.5, lock: 0 },
-                { covPct: 0,  feeBps: 5,   lock: 0 },
-            ]
+                { covPct: 0, feeBps: 5, lock: 0 },
+            ],
         },
         Feed: {
-            name: 'mHyper CDO APR Pair'
+            name: 'mHyper CDO APR Pair',
         },
         ContractVersions: {
             accounting: 'discrete',
         },
         TestHelper: MidasTestHelper,
     },
-}
+    mm1usd: {
+        base: 'USDC',
+        jrt: {
+            symbol: 'jrmM1USD',
+            name: 'Strata Junior mM1USD',
+            depositsEnabled: true,
+            withdrawalsEnabled: true,
+        },
+        srt: {
+            symbol: 'srmM1USD',
+            name: 'Strata Senior mM1USD',
+            depositsEnabled: true,
+            withdrawalsEnabled: true,
+        },
+        Feed: {
+            name: 'mM1USD CDO APR Pair',
+        },
+        ContractVersions: {
+            accounting: 'discrete',
+        },
+        TestHelper: MM1UsdTestHelper,
+    },
+};
 
 export const ContractsIDMapping = {
-    'jrUSDe': 'USDeJrt',
-    'srUSDe': 'USDeSrt',
-    'USDe': 'USDeCDO',
-}
+    jrUSDe: 'USDeJrt',
+    srUSDe: 'USDeSrt',
+    USDe: 'USDeCDO',
+};
 
 export const ContractsPrefixMapping = {
-    'ethena': 'USDe',
-    'neutrl': 'Neutrl',
-    'mhyper': 'MHyper',
-} as Record<TCDOKey, string>
+    ethena: 'USDe',
+    neutrl: 'Neutrl',
+    mhyper: 'MHyper',
+    mm1usd: 'MM1USD',
+} as Record<TCDOKey, string>;

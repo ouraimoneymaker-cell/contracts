@@ -50,7 +50,7 @@ contract CDOLens is OwnableUpgradeable {
         UD60x18 riskK = accounting.riskK();
 
         UD60x18 tvlRatioSrt = UD60x18.wrap(srtNav == 0 ? 0 : (srtNav * 1e18 / (srtNav + jrtNav)));
-        UD60x18 tvlRatioJrt = UD60x18.wrap(jrtNav == 0 ? 0 : (jrtNav * 1e18 / (srtNav + jrtNav)));
+        UD60x18 tvlRatioJrt = UD60x18.wrap(jrtNav == 0 ? 1 : (jrtNav * 1e18 / (srtNav + jrtNav)));
         UD60x18 risk = calculateRiskPremiumInner(riskX, riskY, riskK, tvlRatioSrt);
 
         int256 aprBase   = int256(round.aprBase);

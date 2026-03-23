@@ -25,7 +25,7 @@ contract MockOracle is IRoundDataOracle {
         uint80 roundId,
         int256 answer,
         uint256 updatedAt
-    ) external {
+    ) public {
         if (updatedAt == 0) {
             updatedAt = block.timestamp;
         }
@@ -39,6 +39,12 @@ contract MockOracle is IRoundDataOracle {
         if (roundId > latestRound) {
             latestRound = roundId;
         }
+    }
+
+    function setRoundData(
+        int256 answer
+    ) external {
+        setRoundData(latestRound + 1, answer, block.timestamp);
     }
 
     function latestRoundData()

@@ -1,5 +1,7 @@
+import { ITestHelperConstructor } from '@s/strategies/interfaces/ITestHelper';
+import { MidasTestHelper } from '@s/strategies/midas/MidasTestHelper';
+import { NeutrlTestHelper } from '@s/strategies/neutrl/NeutrlTestHelper';
 import { TEth } from 'dequanto/models/TEth';
-import { $date } from 'dequanto/utils/$date';
 
 export type TCDOKey = 'ethena' | 'neutrl' | 'mhyper'
 export interface ICDO {
@@ -79,6 +81,8 @@ export interface ICDO {
 
     // Contracts prefixes (can be overridden for testing)
     pfx?: string
+
+    TestHelper?: ITestHelperConstructor
 }
 
 
@@ -105,6 +109,7 @@ export const Tranches: Record<TCDOKey, ICDO> = {
         ContractVersions: {
             accounting: 'continuous',
         },
+        TestHelper: MidasTestHelper,
     },
     'neutrl': {
         base: 'NUSD',
@@ -163,6 +168,7 @@ export const Tranches: Record<TCDOKey, ICDO> = {
         ContractVersions: {
             accounting: 'continuous',
         },
+        TestHelper: NeutrlTestHelper,
     },
     'mhyper': {
         base: 'USDC',
@@ -184,6 +190,7 @@ export const Tranches: Record<TCDOKey, ICDO> = {
         ContractVersions: {
             accounting: 'discrete',
         },
+        TestHelper: MidasTestHelper,
     },
 }
 

@@ -161,6 +161,7 @@ export class EthenaDeployments extends DeploymentsBase<{
     ): Promise<{ strategy: SUSDeStrategy; }> {
         const { sUSDe } = await this.ensureUnderlying();
         const { contract: strategy } = await this.ds.ensureWithProxy(SUSDeStrategy, {
+            id: this.getContractId('SUSDeStrategy'),
             arguments: [
                 sUSDe.address
             ],

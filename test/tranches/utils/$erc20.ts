@@ -6,6 +6,9 @@ import { $require } from 'dequanto/utils/$require';
 import { $acc } from './$acc';
 import { $hh } from './$hh';
 import { l } from 'dequanto/utils/$logger';
+import alot from 'alot';
+import { $hex } from 'dequanto/utils/$hex';
+import { File } from 'atma-io';
 
 export namespace $erc20 {
 
@@ -62,6 +65,51 @@ export namespace $erc20 {
 
     export async function decimals(erc20: ERC20): Promise<number> {
         return Tools.decimals(erc20);
+    }
+
+    export async function setBalanceAny (erc20: ERC20, account: $acc.Address, amount: bigint | number) {
+        const client = erc20.client;
+        $require.eq(client.platform, 'hardhat');
+        const address = $acc.toAddress(account);
+        const rpc = await client.getRpc();
+
+        const req = await (erc20.$data() as any).balanceOf(address);
+        const balanceTrace = await rpc.request({
+            method: 'debug_traceCall',
+            params: [
+                req,
+                'latest',
+                {
+                    disableMemory: true,
+                    disableStack: true,
+                    disableStorage: false,
+                }
+            ]
+        }) as {
+            returnValue: TEth.Hex
+            failed: boolean
+            structLogs: {
+                "op": "RETURN",
+                "pc": 1698,
+                "storage": Record<string, TEth.Hex>
+            }[]
+        };
+
+        $require.True(balanceTrace.failed === false, `erc20 balance retrieval failed for ${await erc20.symbol()}`);
+        let returnOp = alot(balanceTrace.structLogs.reverse()).find(x => x.op === 'RETURN');
+        $require.notNull(returnOp, `RETURN opcode not found`);
+        $require.notNull(returnOp.storage, `Storage not found`);
+
+        let returnValue = $hex.raw(balanceTrace.returnValue);
+        let slots = alot.fromObject(returnOp.storage).filter(x => x.value === returnValue).toArray();
+        $require.gt(slots.length, 0, `Slot not found`);
+        let SLOT = $hex.ensure(slots[slots.length - 1].key);
+
+        let balance = typeof amount === 'number'
+            ? await $bigint.toWei(amount, await Tools.decimals(erc20))
+            : amount;
+
+        await client.debug.setStorageAt(erc20.address, SLOT, $bigint.toHex(balance));
     }
 
     class Tools {

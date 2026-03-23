@@ -120,7 +120,7 @@ export class NeutrlDeployments extends DeploymentsBase<{
     async ensureUnstakeImplemenetations(): Promise<{ token: TEth.Address; impl: IBeaconProxy }[]> {
         let { sNUSD } = await this.ensureUnderlying();
         const { contractBeaconProxy: sNUSDCooldownRequestImpl } = await this.ds.ensureWithBeacon(SNUSDCooldownRequestImpl, {
-            id: 'SNUSDCooldownRequestBeacon',
+            id: this.getContractId('SNUSDCooldownRequestBeacon'),
             arguments: [sNUSD.address],
             initialize: [$address.ZERO, $address.ZERO]
         });
@@ -137,6 +137,7 @@ export class NeutrlDeployments extends DeploymentsBase<{
     ): Promise<{ strategy: SNUSDStrategy; }> {
         const { sNUSD } = await this.ensureUnderlying();
         const { contract: strategy } = await this.ds.ensureWithProxy(SNUSDStrategy, {
+            id: this.getContractId('SNUSDStrategy'),
             arguments: [
                 sNUSD.address
             ],
@@ -164,6 +165,7 @@ export class NeutrlDeployments extends DeploymentsBase<{
 
         const NUSD_ROUTER = '0xa052883ebEe7354FC2Aa0f9c727E657FdeCa744a';
         let { contract: swapAdapter } = await this.ds.ensure(SNUSDSwapAdapter, {
+            id: this.getContractId('SNUSDSwapAdapter'),
             arguments: [
                 Addresses.eth.NUSD,
                 NUSD_ROUTER

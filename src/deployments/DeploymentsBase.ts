@@ -38,6 +38,7 @@ import { $exitMode } from '@s/utils/$exitMode';
 import { SUSDeStrategy } from '@0xc/hardhat/sUSDeStrategy/sUSDeStrategy';
 import { $number } from 'dequanto/utils/$number';
 import { DiscreteAccounting } from '@0xc/hardhat/DiscreteAccounting/DiscreteAccounting';
+import { ERC20 } from 'dequanto/prebuilt/openzeppelin/ERC20';
 
 
 export interface ICdoDeploymentsBase {
@@ -60,6 +61,13 @@ export type TDeploymentContracts<T extends ICdoDeploymentsBase = any> = {
     depositor: TrancheDepositor
     configManager: TwoStepConfigManager
 } & T['Tokens']
+
+export interface ICdoDeploymentsCommon extends ICdoDeploymentsBase {
+    Stratagy: Constructor<IStrategy>
+    Tokens: {
+        base: ERC20
+    }
+}
 
 export abstract class DeploymentsBase<T extends ICdoDeploymentsBase = any> {
 
@@ -727,11 +735,14 @@ export abstract class DeploymentsBase<T extends ICdoDeploymentsBase = any> {
         return { lens: cdoLens }
     }
 
-    private getContractId(name: keyof ICDO['Contracts']['']) {
+    protected getContractId(name: keyof ICDO['Contracts'][''] | string) {
+        if (this.pfx) {
+            return `${this.pfx}${name}`;
+        }
         const Contracts = this.cdoInfo.Contracts;
         const id = Contracts?.[this.client.network]?.[name]
             ?? Contracts?.['*']?.[name]
-            ?? `${this.pfx}${name}`;
+            ?? `${name}`;
         return id;
     }
 

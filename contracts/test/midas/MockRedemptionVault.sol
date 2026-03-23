@@ -16,6 +16,20 @@ import {
  * @dev Mock Midas RedemptionVault that accepts redeemInstant and redeemRequest
  */
 contract MockRedemptionVault {
+
+    /**
+    * @dev Midas
+    * @param dataFeed data feed token/USD address
+    * @param fee fee by token, 1% = 100
+    * @param allowance token allowance (decimals 18)
+    */
+    struct TokenConfig {
+        address dataFeed;
+        uint256 fee;
+        uint256 allowance;
+        bool stable;
+    }
+
     MockMToken public mToken;
     MockBaseAsset public baseAsset;
 
@@ -24,6 +38,17 @@ contract MockRedemptionVault {
 
     /// @dev Controls whether redeemInstant succeeds or reverts
     bool public instantEnabled;
+
+    /**
+     * @dev Midas
+     * @dev fee for initial operations 1% = 100
+     */
+    uint256 public instantFee;
+
+    /**
+     * @notice mapping, token address to token config
+     */
+    mapping(address => TokenConfig) public tokensConfig;
 
     /// @dev Mock rate: 1.05e18 (mToken price in base18)
     uint256 public mTokenRate = 1_050000000000000000;
@@ -36,6 +61,13 @@ contract MockRedemptionVault {
         mToken = _mToken;
         baseAsset = _baseAsset;
         instantEnabled = false;
+    }
+
+    function currentRequestId () external view returns (uint256) {
+        if (nextRequestId == 0) {
+            return 0;
+        }
+        return nextRequestId - 1;
     }
 
     function setInstantEnabled(bool _enabled) external {
@@ -103,7 +135,7 @@ contract MockRedemptionVault {
     // Admin function to fulfill a redeem request — sends baseAsset to the original sender (proxy)
     function fulfillRequest(
         uint256 requestId
-    ) external {
+    ) public {
         Request storage req = _requests[requestId];
         require(req.status == RequestStatus.Pending, "Not pending");
         req.status = RequestStatus.Processed;
@@ -112,6 +144,10 @@ contract MockRedemptionVault {
 
         // Mint baseAsset and send to the original sender (the proxy contract)
         baseAsset.mint(req.sender, baseAssetAmount);
+    }
+
+    function approveRequest (uint256 requestId, uint256 newMTokenRate) external {
+        fulfillRequest(requestId);
     }
 
     function getMTokenRate () internal view returns (uint256) {

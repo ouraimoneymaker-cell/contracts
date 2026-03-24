@@ -3,9 +3,7 @@ pragma solidity ^0.8.28;
 
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
-import {
-    IERC20Metadata
-} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
+import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import {
     SafeERC20
 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
@@ -34,13 +32,6 @@ contract MidasStrategy is Strategy {
     // Chainlink-style oracle for mToken price (e.g. 0x43881B05C3BE68B2d33eb70aDdF9F666C5005f68)
     IRoundDataOracle public immutable oracle;
 
-    IERC20 public immutable baseAsset;
-
-    /// @notice Pre-computed scale factor: 10^(18 + mTokenDecimals - baseAssetDecimals)
-    /// For USDC (6 decimals): 10^(18 + 18 - 6) = 10^30
-    uint256 public immutable RATE_SCALE;
-
-    uint8 public immutable baseAssetDecimals;
 
     // Additional supported tokens to deposit, beyond the base asset and mToken
     mapping(address token => bool isSupported) public depositTokensDict;
@@ -72,16 +63,11 @@ contract MidasStrategy is Strategy {
         IDepositVault depositVault_,
         IRedemptionVault redemptionVault_,
         IRoundDataOracle oracle_
-    ) {
-        baseAsset = baseAsset_;
+    ) Strategy(address(baseAsset_), address(mToken_)) {
         mToken = mToken_;
         depositVault = depositVault_;
         redemptionVault = redemptionVault_;
         oracle = oracle_;
-
-        uint8 baseDecimals = IERC20Metadata(address(baseAsset_)).decimals();
-        baseAssetDecimals = baseDecimals;
-        RATE_SCALE = 10 ** (18 + 18 - baseDecimals);
     }
 
     function initialize(
@@ -144,7 +130,7 @@ contract MidasStrategy is Strategy {
             tokenAmount
         );
 
-        if (token == address(baseAsset) || depositTokensDict[token] == true) {
+        if (token == baseAsset || depositTokensDict[token] == true) {
             SafeERC20.forceApprove(
                 IERC20(token),
                 address(depositVault),
@@ -152,7 +138,7 @@ contract MidasStrategy is Strategy {
             );
 
             // Scale tokenAmount to base18 — Midas expects all amounts in 18 decimals
-            uint8 tokenDec = token == address(baseAsset)
+            uint8 tokenDec = token == baseAsset
                 ? baseAssetDecimals
                 : depositTokenDecimals[token];
             uint256 amountBase18 = tokenAmount * 10 ** (18 - tokenDec);
@@ -270,7 +256,7 @@ contract MidasStrategy is Strategy {
             );
             return shares;
         }
-        if (token == address(baseAsset)) {
+        if (token == baseAsset) {
             unstakeCooldown.transfer(mToken, sender, receiver, shares);
             return baseAssets;
         }
@@ -296,7 +282,7 @@ contract MidasStrategy is Strategy {
             erc20Cooldown.transfer(mToken, receiver, receiver, tokenAmount, 0);
             return;
         }
-        if (token == address(baseAsset)) {
+        if (token == baseAsset) {
             // tokenAmount is in baseAssets, convert to MTokens (Rounding.Floor/in favor of protocol) and trigger unstaking
             uint256 shares = convertToTokens(
                 address(mToken),
@@ -362,9 +348,9 @@ contract MidasStrategy is Strategy {
     ) public view returns (uint256) {
         if (token == address(mToken)) {
             uint256 rate = getOracleRate();
-            return Math.mulDiv(tokenAmount, rate, RATE_SCALE, rounding);
+            return Math.mulDiv(tokenAmount, rate, 10 ** (18 + shareTokenDecimals - baseAssetDecimals), rounding);
         }
-        if (token == address(baseAsset)) {
+        if (token == baseAsset) {
             return tokenAmount;
         }
         if (depositTokensDict[token]) {
@@ -396,9 +382,9 @@ contract MidasStrategy is Strategy {
     ) public view returns (uint256) {
         if (token == address(mToken)) {
             uint256 rate = getOracleRate();
-            return Math.mulDiv(baseAssets, RATE_SCALE, rate, rounding);
+            return Math.mulDiv(baseAssets, 10 ** (18 + shareTokenDecimals - baseAssetDecimals), rate, rounding);
         }
-        if (token == address(baseAsset)) {
+        if (token == baseAsset) {
             return baseAssets;
         }
         if (depositTokensDict[token]) {
@@ -446,7 +432,7 @@ contract MidasStrategy is Strategy {
     function getSupportedTokens() external view returns (IERC20[] memory) {
         IERC20[] memory tokens = new IERC20[](2 + depositTokens.length);
         tokens[0] = IERC20(address(mToken));
-        tokens[1] = baseAsset;
+        tokens[1] = IERC20(baseAsset);
         for (uint256 i = 0; i < depositTokens.length; i++) {
             tokens[2 + i] = IERC20(depositTokens[i]);
         }
@@ -492,5 +478,13 @@ contract MidasStrategy is Strategy {
         require(bps_ <= 1000, "SlippageTooHigh");
         maxDepositSlippageBps = bps_;
         emit MaxDepositSlippageBpsChanged(bps_);
+    }
+
+    function supportsToken(address token) external override view returns (bool) {
+        return token == address(mToken) || token == baseAsset || depositTokensDict[token];
+    }
+
+    function getRate() external view override returns (uint256) {
+        return getOracleRate();
     }
 }

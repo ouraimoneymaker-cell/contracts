@@ -26,7 +26,7 @@ contract sNUSDStrategy is Strategy {
     event CooldownsChanged(uint256 jrt, uint256 srt);
 
 
-    constructor(IERC4626 sNUSD_) {
+    constructor(IERC4626 sNUSD_) Strategy(sNUSD_.asset(), address(sNUSD_)) {
         sNUSD = sNUSD_;
         NUSD = IERC20(sNUSD_.asset());
     }
@@ -236,5 +236,9 @@ contract sNUSDStrategy is Strategy {
         bool isDisabled = sNUSDCooldownJrt_ == 0 && sNUSDCooldownSrt_ == 0;
         erc20Cooldown.setCooldownDisabled(sNUSD, isDisabled);
         emit CooldownsChanged(sNUSDCooldownJrt_, sNUSDCooldownSrt_);
+    }
+
+    function supportsToken(address token) external view returns (bool) {
+        return token == address(sNUSD) || token == address(NUSD);
     }
 }

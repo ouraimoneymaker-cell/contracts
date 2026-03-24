@@ -156,6 +156,14 @@ contract MockRedemptionVault {
         fulfillRequest(requestId);
     }
 
+    // Admin function to reject a redeem request — returns the held mToken to the original sender (proxy)
+    function rejectRequest(uint256 requestId) external {
+        Request storage req = _requests[requestId];
+        require(req.status == RequestStatus.Pending, "Not pending");
+        req.status = RequestStatus.Canceled;
+        IERC20(address(mToken)).transfer(req.sender, req.amountMToken);
+    }
+
     function getMTokenRate () internal view returns (uint256) {
         if (address(oracle) != address(0)) {
             (, int256 rate, , , ) = oracle.latestRoundData();

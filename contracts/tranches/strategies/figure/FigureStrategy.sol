@@ -50,7 +50,7 @@ contract FigureStrategy is Strategy {
         IStakingVault stakingVault_,
         IYieldVault yieldVault_,
         IERC20 usdc_
-    ) {
+    ) Strategy(address(usdc_), address(stakingVault_)) {
         stakingVault = stakingVault_;
         yieldVault = yieldVault_;
         usdc = usdc_;
@@ -392,5 +392,9 @@ contract FigureStrategy is Strategy {
         bool isDisabled = primeCooldownJrt_ == 0 && primeCooldownSrt_ == 0;
         erc20Cooldown.setCooldownDisabled(stakingVault, isDisabled);
         emit CooldownsChanged(primeCooldownJrt_, primeCooldownSrt_);
+    }
+
+    function supportsToken(address token) external override view returns (bool) {
+        return token == address(stakingVault) || token == address(yieldVault) || token == address(usdc);
     }
 }

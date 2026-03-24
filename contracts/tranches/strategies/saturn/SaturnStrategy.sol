@@ -62,7 +62,7 @@ contract SaturnStrategy is Strategy {
     error TokenDepositPaused(address tranche, address token);
     error TokenWithdrawalPaused(address tranche, address token);
 
-    constructor (IsUSDat sUSDat_) {
+    constructor (IsUSDat sUSDat_) Strategy(sUSDat_.asset(), address(sUSDat_)) {
         sUSDat = sUSDat_;
         USDat = IERC20(sUSDat_.asset());
     }
@@ -366,5 +366,9 @@ contract SaturnStrategy is Strategy {
             return 0;
         }
         return sUSDat.depositFeeBps();
+    }
+
+    function supportsToken(address token) external view returns (bool) {
+        return token == address(sUSDat) || token == address(USDat);
     }
 }

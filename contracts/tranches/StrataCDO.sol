@@ -425,9 +425,10 @@ contract StrataCDO is IErrors, IStrataCDO, IStrataCDOSetters, AccessControlled {
         }
     }
 
+    /// @dev Returns price per share scaled to 18 decimals regardless of base asset decimals
     function calculatePricePerShare (uint256 assets, uint256 supply, uint256 assetsDecimals) internal pure returns (uint256) {
         return supply == 0
-            ? 10 ** assetsDecimals
+            ? 1e18
             : Math.mulDiv(assets, 10**(18 - assetsDecimals) * 1e18, supply, Math.Rounding.Floor);
     }
 }

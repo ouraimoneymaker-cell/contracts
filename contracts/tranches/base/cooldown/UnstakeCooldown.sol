@@ -120,6 +120,7 @@ contract UnstakeCooldown is IUnstakeCooldown, CooldownBase {
 
         // Emergency exit: check the underlying protocol if the cooldown is still active
         bool isCooldownActive = imp.isCooldownActive();
+        bool anyFinalized = false;
         uint256 len = requests.length;
         for (uint256 i; i < len; ) {
             TRequest memory req = requests[i];
@@ -137,6 +138,7 @@ contract UnstakeCooldown is IUnstakeCooldown, CooldownBase {
                 if (i < len - 1) {
                     requests[i] = requests[len - 1];
                 }
+                anyFinalized = true;
                 requests.pop();
                 unchecked { len--; }
             } catch {
@@ -145,7 +147,7 @@ contract UnstakeCooldown is IUnstakeCooldown, CooldownBase {
                 unchecked { i++; }
             }
         }
-        if (claimed == 0) {
+        if (anyFinalized == false) {
             revert NothingToFinalize();
         }
 

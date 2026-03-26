@@ -23,12 +23,15 @@ import {RequestStatus} from "./interfaces/IManageableVault.sol";
  * It handles the cooldown request, finalization, and asset transfer for unstaking Midas tokens.
  *
  * Flow:
- * 1. `request()` — tries instant redemption first via `redeemInstant` (wrapped in try/catch).
- *    If instant fails (e.g. daily limit exceeded), falls back to `redeemRequest`.
- *    Midas creates a Request struct and holds the mTokens.
+ * 1. `request()` - calls `redeemRequest` on the Midas RedemptionVault.
+ *    Midas creates a Request struct and holds the mTokens in the vault.
  * 2. Midas admin approves the request off-chain, which transfers the base asset (e.g. USDC)
  *    from the `requestRedeemer` to this proxy contract.
- * 3. `finalize()` — transfers the received base asset to the receiver.
+ * 3. `finalize()` - transfers the received base asset to the receiver.
+ *
+ * Note: For instant redemption (bypassing cooldown), users should redeem Tranche tokens
+ * to mToken first, then manually call Midas `redeemInstant` to get the base asset immediately,
+ * paying the Midas instant redemption fee.
  */
 contract MidasCooldownRequestImpl is IUnstakeHandler, Initializable {
     IMToken public immutable mToken;
@@ -124,12 +127,16 @@ contract MidasCooldownRequestImpl is IUnstakeHandler, Initializable {
         require (req.status != RequestStatus.Pending, "RequestPending");
 
         amount = baseAsset.balanceOf(address(this));
-        SafeERC20.safeTransfer(baseAsset, receiver, amount);
+        if (amount > 0) {
+            SafeERC20.safeTransfer(baseAsset, receiver, amount);
+        }
 
         if (req.status == RequestStatus.Canceled) {
             // If the request was canceled, return any mToken balance to the receiver (just in case)
-            amount = mToken.balanceOf(address(this));
-            SafeERC20.safeTransfer(mToken, receiver, amount);
+            uint256 shares = mToken.balanceOf(address(this));
+            if (shares > 0) {
+                SafeERC20.safeTransfer(mToken, receiver, shares);
+            }
         }
 
         pending = false;
@@ -163,9 +170,6 @@ contract MidasCooldownRequestImpl is IUnstakeHandler, Initializable {
     /**
      * @notice Midas redemptions go through the cooldown flow.
      * @dev Returns true so that the cooldown flow is always used.
-     *      The instant path is handled inside `request()` via try/catch —
-     *      if redeemInstant succeeds, `request()` returns block.timestamp,
-     *      which UnstakeCooldown treats as an instant transfer (no TRequest stored).
      */
     function isCooldownActive() public pure returns (bool) {
         return true;

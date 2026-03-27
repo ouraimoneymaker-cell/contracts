@@ -99,8 +99,14 @@ export abstract class DeploymentsBase<T extends ICdoDeploymentsBase = any> {
         this.accounts = params.accounts;
         this.pfx = $require.notNull(params.cdoInfo?.pfx ?? ContractsPrefixMapping[params.cdo], `No contract prefix for ${params.cdo} found`);
 
+        let directoryPfx = '';
+        if (params.cdo !== 'ethena' && params.cdo !== 'neutrl') {
+            // @TODO split current ethena and neutrl deployments into subfolders
+            directoryPfx = params.cdo + '/';
+        }
+
         this.ds = new Deployments(params.client, params.deployer, {
-            directory: './deployments/',
+            directory: `./deployments/${directoryPfx}`,
             whenBytecodeChanged: params.deployments ?? (this.isTestnet() ? null : 'throw'),
             fork: params.client.forked?.platform
         });

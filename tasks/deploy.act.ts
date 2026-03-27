@@ -3,7 +3,6 @@ import { PlatformFactory } from './PlatformFactory';
 import { BatchAgent } from 'dequanto/txs/agents/BatchAgent';
 import { TxWriter } from 'dequanto/txs/TxWriter';
 import { TimelockService } from 'dequanto/services/TimelockService/TimelockService';
-import { TimelockHandler } from '@s/deployments/TimelockHandler';
 import { StrataMasterChef } from '@0xc/hardhat/StrataMasterChef/StrataMasterChef';
 import { l } from 'dequanto/utils/$logger';
 import { $contract } from 'dequanto/utils/$contract';
@@ -11,9 +10,23 @@ import alot from 'alot';
 import { $address } from 'dequanto/utils/$address';
 import { Addresses } from '@s/constants';
 import { TAddress } from 'dequanto/models/TAddress';
+import { $require } from 'dequanto/utils/$require';
+import { TCDOKey, Tranches } from '@s/platforms/Tranches';
 
 UAction.create({
-    async 'ensure all contracts are deployed or redeploy on bytecode change'() {
+
+    // npx atma act tasks/deploy.act.ts -q "deploy" --chain hoodi --cdo mhyper
+    async 'deploy'() {
+        const config = await PlatformFactory.ConfigLoader.fetch();
+        const cdo = config.cdo as TCDOKey;
+        $require.oneOf(cdo, Object.keys(Tranches));
+        const { tranches, deployer, client } = await PlatformFactory.init({
+            cdo
+        });
+
+        await tranches.ensureDeployment({ initialDeposit: true });
+    },
+    async 'update and configure'() {
         const { tranches, deployer, client } = await PlatformFactory.init({
             deployments: 'redeploy',
             cdo: 'ethena'
@@ -22,7 +35,7 @@ UAction.create({
         const batch = TxWriter.DEFAULTS.agent = new BatchAgent();
 
         l`Execute deployment + configuration`;
-        await tranches.ensureDeployment();
+        await tranches.ensureDeployment({});
 
         TxWriter.DEFAULTS.agent = null;
 

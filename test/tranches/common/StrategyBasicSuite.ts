@@ -16,6 +16,7 @@ import { ITestHelper } from '@s/strategies/interfaces/ITestHelper';
 import { l } from 'dequanto/utils/$logger';
 import { $bigfloat } from 'dequanto/utils/$bigfloat';
 import { $date } from 'dequanto/utils/$date';
+import { CDOLens } from '@0xc/hardhat/CDOLens/CDOLens';
 
 
 export class StrategyBasicSuite<T extends DeploymentsBase> {
@@ -24,7 +25,7 @@ export class StrategyBasicSuite<T extends DeploymentsBase> {
         Strategy: IStrategy
     }>>
 
-    private contracts: Awaited<ReturnType<typeof this.test.deploy>>
+    private contracts: Awaited<ReturnType<typeof this.test.deploy>> & { lens: CDOLens }
     private baseDecimals: number
 
     constructor(test_: $hh.Test<DeploymentsBase>, private helper: ITestHelper) {
@@ -40,7 +41,13 @@ export class StrategyBasicSuite<T extends DeploymentsBase> {
     }
 
     async createTests() {
-        this.contracts = await this.test.deploy({ initialDeposit: false });
+        const contracts = await this.test.deploy({ initialDeposit: false });
+        const { lens } = await this.test.factory.ensureLenses();
+        this.contracts = {
+            ...contracts,
+            lens
+        };
+
         const {
             jrtVault,
             srtVault,

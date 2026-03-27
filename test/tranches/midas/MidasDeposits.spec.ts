@@ -31,6 +31,7 @@ UTest.create({
         await feed.$receipt().setRoundStaleAfter(deployer, BigInt($date.parseTimespan('5years', { get:'s' })));
         await oracle.$receipt().setRoundData(deployer, 1n, BigInt(1e8), BigInt($date.toUnixTimestamp()));
         await setAPRs(0, 0);
+        await accounting.$receipt().setReserveBps(deployer, 0n);
         await test.snapshot('midas');
     },
 

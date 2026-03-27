@@ -4,11 +4,17 @@ import { StrategyBasicSuite } from './StrategyBasicSuite';
 import { $hh } from '../utils/$hh';
 import { TCDOKey, Tranches } from '@s/platforms/Tranches';
 import { $require } from 'dequanto/utils/$require';
+import { PlatformFactory } from '@tasks/PlatformFactory';
 
-const STRATS = ['neutrl', 'mhyper']; // Object.keys(Tranches);
+
+const config = await PlatformFactory.ConfigLoader.fetch();
+const STRATS = Object
+    .keys(Tranches)
+    .filter(key => Tranches[key].TestHelper != null && (!config.ref || key === config.ref));
+
+$require.notEmpty(STRATS, `No strategies to test`);
 
 // Run basic tests for each strategy in the forked environment
-
 UTest.create({
     $config: {
         timeout: 60_000

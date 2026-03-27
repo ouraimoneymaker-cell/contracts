@@ -19,6 +19,7 @@ const {
     feed,
     redemptionVault,
     unstakeCooldown,
+    cdo,
 } = await test.deploy({ initialDeposit: false });
 
 const { deployer, client } = test;
@@ -57,23 +58,27 @@ UTest.create({
 
         await redemptionVault.$receipt().setInstantEnabled(deployer, false);
         await redemptionVault.$receipt().setOracle(deployer, oracle.address);
+
+        const exitMode = await cdo.calculateExitMode(jrtVault.address, deployer.address);
         await $erc4626.redeem(jrtVault, deployer, 3.1);
         await $erc20.eqBalance(USDC, deployer, 6.9);
 
         let balance = await unstakeCooldown.balanceOf(mHYPER.address, deployer.address);
-        $require.eq(balance.pending, BigInt(3.1e6));
+
+        let assetsExpected = BigInt(3.1e6) * (BigInt(1e18) - exitMode.fee) / BigInt(1e18);
+        $require.eq(balance.pending, assetsExpected);
 
         await test.mine('3days');
 
         balance = await unstakeCooldown.balanceOf(mHYPER.address, deployer.address);
-        $require.eq(balance.claimable, BigInt(3.1e6));
+        $require.eq(balance.claimable, assetsExpected);
 
         let { error } = await $promise.caught(unstakeCooldown.$receipt().finalize(deployer, mHYPER.address, deployer.address));
         $require.match(/NothingToFinalize/, error?.message);
 
         await redemptionVault.$receipt().fulfillRequest(deployer, 0n);
         await unstakeCooldown.$receipt().finalize(deployer, mHYPER.address, deployer.address);
-        await $erc20.eqBalance(USDC, deployer, 10);
+        await $erc20.eqBalance(USDC, deployer, BigInt(6.9e6) + assetsExpected);
     },
 
 });

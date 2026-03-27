@@ -21,6 +21,10 @@ contract MockOracle is IRoundDataOracle {
     mapping(uint80 => RoundData) public rounds;
     uint80 public latestRound;
 
+    constructor ()  {
+        setRoundData(1, 1e8, 0);
+    }
+
     function setRoundData(
         uint80 roundId,
         int256 answer,

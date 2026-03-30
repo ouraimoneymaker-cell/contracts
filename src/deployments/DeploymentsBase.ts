@@ -638,13 +638,13 @@ export abstract class DeploymentsBase<T extends ICdoDeploymentsBase = any> {
         if (this.owner.type === 'safe') {
             throw new Error(`Mainnet deployment not ready`);
         }
-        const AMOUNT = 20n * 10n ** 18n;
+        const AMOUNT = $bigint.toWei(20, await base.decimals());
         let balance = await base.balanceOf(this.owner.address);
         if (balance < AMOUNT) {
             if (this.client.network === 'hardhat' || this.client.network === 'hoodi') {
                 await base.$receipt().mint(this.owner, this.owner.address, AMOUNT * 100n);
             } else {
-                throw new Error(`Not enough balance for initial deposit. ${this.owner.address}`);
+                throw new Error(`Not enough balance (${base.address}) for initial deposit. ${this.owner.address}`);
             }
         }
 
@@ -668,7 +668,7 @@ export abstract class DeploymentsBase<T extends ICdoDeploymentsBase = any> {
         let { jrtVault, srtVault, cdo } = tranches;
 
 
-        const AMOUNT = 40n * 10n ** 18n;
+        const AMOUNT = $bigint.toWei(40, await base.decimals());
         let balance = await base.balanceOf(this.owner.address);
         if (balance < AMOUNT) {
             throw new Error(`Not enough balance for initial deposit.`);

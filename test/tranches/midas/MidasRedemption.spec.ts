@@ -8,7 +8,9 @@ import { $bigint } from 'dequanto/utils/$bigint';
 import { $erc4626 } from '../utils/$erc4626';
 import { $promise } from 'dequanto/utils/$promise';
 
-const test = await $hh.create('mhyper');
+const test = await $hh.create('mhyper', {
+    cdoInfo: { pfx: 'HhMidas' }
+});
 
 const {
     mHYPER,

@@ -21,7 +21,8 @@ UAction.create({
         const cdo = config.cdo as TCDOKey;
         $require.oneOf(cdo, Object.keys(Tranches));
         const { tranches, deployer, client } = await PlatformFactory.init({
-            cdo
+            cdo,
+            accounts: 'operator'
         });
 
         await tranches.ensureDeployment({ initialDeposit: true });

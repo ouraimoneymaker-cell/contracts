@@ -138,6 +138,13 @@ export namespace PlatformFactory {
             timelockConfig = safeOperator;
         }
 
+        if (group === 'operator') {
+            safeAdmin = safeOperator;
+            safeOperator = safeOperator;
+            timelockAdmin = safeOperator;
+            timelockConfig = safeOperator;
+        }
+
         return {
             deployer,
             safe: {

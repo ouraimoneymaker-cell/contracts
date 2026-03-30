@@ -13,14 +13,14 @@ module.exports = {
                         'contracts/test/',
                         'contracts/lens/',
                         'contracts/oz/',
-                        'contracts/Proxies.sol'
-                    ]
+                        'contracts/Proxies.sol',
+                    ],
                 });
                 if (noCompile) {
                     await coverage.attachToHardhatVM();
                 } else {
                     await coverage.compile({
-                        contracts: './coverage/contracts/'
+                        contracts: './coverage/contracts/',
                     });
                 }
 
@@ -38,8 +38,7 @@ module.exports = {
     },
     suites: {
         node: {
-            tests: 'test/tranches/**.spec.ts'
-        }
+            tests: 'test/tranches/**.spec.ts',
+        },
     }
 };
-

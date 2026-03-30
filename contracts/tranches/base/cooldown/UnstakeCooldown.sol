@@ -120,6 +120,7 @@ contract UnstakeCooldown is IUnstakeCooldown, CooldownBase {
 
         // Emergency exit: check the underlying protocol if the cooldown is still active
         bool isCooldownActive = imp.isCooldownActive();
+        bool anyFinalized = false;
         uint256 len = requests.length;
         for (uint256 i; i < len; ) {
             TRequest memory req = requests[i];
@@ -129,17 +130,24 @@ contract UnstakeCooldown is IUnstakeCooldown, CooldownBase {
                 continue;
             }
 
-            claimed += req.proxy.finalize();
-            // Return proxy to the pool (reuse later)
-            proxies.push(req.proxy);
+            try req.proxy.finalize() returns (uint256 amount) {
+                claimed += amount;
+                // Return proxy to the pool (reuse later)
+                proxies.push(req.proxy);
 
-            if (i < len - 1) {
-                requests[i] = requests[len - 1];
+                if (i < len - 1) {
+                    requests[i] = requests[len - 1];
+                }
+                anyFinalized = true;
+                requests.pop();
+                unchecked { len--; }
+            } catch {
+                // Implementation not ready (e.g. Midas assets not yet airdropped)
+                // Skip this request — it stays in the array for retry
+                unchecked { i++; }
             }
-            requests.pop();
-            unchecked { len--; }
         }
-        if (claimed == 0) {
+        if (anyFinalized == false) {
             revert NothingToFinalize();
         }
 

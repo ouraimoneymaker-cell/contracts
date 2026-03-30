@@ -38,6 +38,7 @@ import { $exitMode } from '@s/utils/$exitMode';
 import { SUSDeStrategy } from '@0xc/hardhat/sUSDeStrategy/sUSDeStrategy';
 import { $number } from 'dequanto/utils/$number';
 import { DiscreteAccounting } from '@0xc/hardhat/DiscreteAccounting/DiscreteAccounting';
+import { ERC20 } from 'dequanto/prebuilt/openzeppelin/ERC20';
 
 
 export interface ICdoDeploymentsBase {
@@ -60,6 +61,13 @@ export type TDeploymentContracts<T extends ICdoDeploymentsBase = any> = {
     depositor: TrancheDepositor
     configManager: TwoStepConfigManager
 } & T['Tokens']
+
+export interface ICdoDeploymentsCommon extends ICdoDeploymentsBase {
+    Stratagy: Constructor<IStrategy>
+    Tokens: {
+        base: ERC20
+    }
+}
 
 export abstract class DeploymentsBase<T extends ICdoDeploymentsBase = any> {
 
@@ -89,10 +97,16 @@ export abstract class DeploymentsBase<T extends ICdoDeploymentsBase = any> {
         this.client = params.client;
         this.platform = Platforms[params.client.network];
         this.accounts = params.accounts;
-        this.pfx = $require.notNull(ContractsPrefixMapping[params.cdo], `No contract prefix for ${params.cdo} found`);
+        this.pfx = $require.notNull(params.cdoInfo?.pfx ?? ContractsPrefixMapping[params.cdo], `No contract prefix for ${params.cdo} found`);
+
+        let directoryPfx = '';
+        if (params.cdo !== 'ethena' && params.cdo !== 'neutrl') {
+            // @TODO split current ethena and neutrl deployments into subfolders
+            directoryPfx = params.cdo + '/';
+        }
 
         this.ds = new Deployments(params.client, params.deployer, {
-            directory: './deployments/',
+            directory: `./deployments/${directoryPfx}`,
             whenBytecodeChanged: params.deployments ?? (this.isTestnet() ? null : 'throw'),
             fork: params.client.forked?.platform
         });
@@ -391,14 +405,14 @@ export abstract class DeploymentsBase<T extends ICdoDeploymentsBase = any> {
 
         const { provider } = await this.ensureFeedProvider();
 
-        const CURRENT_PROVIDER = provider.address;
+        const CURRENT_PROVIDER = provider?.address ?? $address.ZERO;
         const stalePeriodAfter = $date.parseTimespan(this.platform.Feed.stalePeriodAfter, { get: 's' });
         const { contract: feed } = await this.ds.ensureWithProxy(AprPairFeed, {
             id: `${this.pfx}AprFeeds`,
             initialize: [
                 this.owner.address,
                 acm.address,
-                provider.address,
+                CURRENT_PROVIDER,
                 BigInt(stalePeriodAfter),
                 this.cdoInfo.Feed.name ?? "Ethena CDO APR Pair"
             ]
@@ -423,9 +437,10 @@ export abstract class DeploymentsBase<T extends ICdoDeploymentsBase = any> {
 
     async ensureStrataCdo() {
         const acm = await this.ensureACM();
+         const { base } = await this.ensureUnderlying();
         const { contract: cdo } = await this.ds.ensureWithProxy(StrataCDO, {
             id: `${this.pfx}CDO`,
-            arguments: [],
+            arguments: [ $require.Address(base.address) ],
             initialize: [
                 this.owner.address,
                 acm.address,
@@ -492,9 +507,14 @@ export abstract class DeploymentsBase<T extends ICdoDeploymentsBase = any> {
     async ensureAccounting(cdo: TEth.Address) {
         const acm = await this.ensureACM();
         const { feed } = await this.ensureFeeds();
+        const { base } = await this.ensureUnderlying();
+        const decimals = await base.decimals();
         const Contract = this.cdoInfo.ContractVersions?.accounting === 'continuous'
             ? Accounting
             : DiscreteAccounting;
+        const args = this.cdoInfo.ContractVersions?.accounting === 'continuous'
+            ? []
+            : [ decimals ];
 
         const { contract: accounting } = await this.ds.ensureWithProxy(Contract as typeof Accounting, {
             id: `${this.pfx}Accounting`,
@@ -503,7 +523,8 @@ export abstract class DeploymentsBase<T extends ICdoDeploymentsBase = any> {
                 acm.address,
                 cdo,
                 feed.address,
-            ]
+            ],
+            arguments: args,
         });
         return accounting;
     }
@@ -617,13 +638,13 @@ export abstract class DeploymentsBase<T extends ICdoDeploymentsBase = any> {
         if (this.owner.type === 'safe') {
             throw new Error(`Mainnet deployment not ready`);
         }
-        const AMOUNT = 20n * 10n ** 18n;
+        const AMOUNT = $bigint.toWei(20, await base.decimals());
         let balance = await base.balanceOf(this.owner.address);
         if (balance < AMOUNT) {
             if (this.client.network === 'hardhat' || this.client.network === 'hoodi') {
                 await base.$receipt().mint(this.owner, this.owner.address, AMOUNT * 100n);
             } else {
-                throw new Error(`Not enough balance for initial deposit. ${this.owner.address}`);
+                throw new Error(`Not enough balance (${base.address}) for initial deposit. ${this.owner.address}`);
             }
         }
 
@@ -647,7 +668,7 @@ export abstract class DeploymentsBase<T extends ICdoDeploymentsBase = any> {
         let { jrtVault, srtVault, cdo } = tranches;
 
 
-        const AMOUNT = 40n * 10n ** 18n;
+        const AMOUNT = $bigint.toWei(40, await base.decimals());
         let balance = await base.balanceOf(this.owner.address);
         if (balance < AMOUNT) {
             throw new Error(`Not enough balance for initial deposit.`);
@@ -686,7 +707,9 @@ export abstract class DeploymentsBase<T extends ICdoDeploymentsBase = any> {
         let { base } = await this.ensureUnderlying();
         let { cdo, jrtVault } = await this.ensureCDO();
         let { contract: depositor } = await this.ds.ensureWithProxy(TrancheDepositor, {
-            id: 'TrancheDepositorV3',
+            id: this.isTestnet()
+                ? `${this.pfx}TrancheDepositor`
+                : `TrancheDepositorV3`,
             initialize: [
                 this.owner.address,
                 acm.address
@@ -694,7 +717,6 @@ export abstract class DeploymentsBase<T extends ICdoDeploymentsBase = any> {
         });
 
         await this.ensureRole($contract.keccak256('DEPOSITOR_CONFIG_ROLE'), this.owner.address);
-
         let status = await depositor.tranches(jrtVault.address, base.address);
         if (status == false) {
             await depositor.$receipt().addCdo(this.owner, cdo.address);
@@ -719,11 +741,14 @@ export abstract class DeploymentsBase<T extends ICdoDeploymentsBase = any> {
         return { lens: cdoLens }
     }
 
-    private getContractId(name: keyof ICDO['Contracts']['']) {
+    protected getContractId(name: keyof ICDO['Contracts'][''] | string) {
+        if (this.pfx) {
+            return `${this.pfx}${name}`;
+        }
         const Contracts = this.cdoInfo.Contracts;
         const id = Contracts?.[this.client.network]?.[name]
             ?? Contracts?.['*']?.[name]
-            ?? void 0;
+            ?? `${name}`;
         return id;
     }
 

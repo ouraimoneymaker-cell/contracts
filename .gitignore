@@ -40,3 +40,4 @@ config/*
 
 
 deployments/deployments-hardhat*
+deployments/*/deployments-hardhat*

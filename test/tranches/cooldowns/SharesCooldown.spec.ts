@@ -292,10 +292,10 @@ UAction.create({
                 await $erc20.eqBalance(sUSDe, bob, 0);
 
                 await $hh.test.mine(`8days`);
-                $hh.test.snapshot('finalize');
+                await $hh.test.snapshot('finalize');
             },
             async $teardown () {
-                $hh.test.reset('finalize');
+                await $hh.test.reset('finalize');
             },
             async 'alice finalizes all requests' () {
                 await sharesCooldown.$receipt().finalize(alice,  jrtVault.address, bob.address);

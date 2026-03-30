@@ -37,8 +37,9 @@ export namespace PlatformFactory {
         platform?: TEth.Platform
         deployments?: 'throw' | 'redeploy',
         cdo: TKey
-        accounts?: TKey | 'operator'
+        accounts?: TKey | 'operator' | 'deployer'
         cdoInfo?: Partial<ICDO>
+        initialDeposit?: boolean
     }) {
         const hh = new HardhatProvider();
         const config = await ConfigLoader.fetch();
@@ -54,9 +55,7 @@ export namespace PlatformFactory {
             });
         }
 
-        const CtorDeployments = params.cdo === 'neutrl'
-            ? NeutrlDeployments
-            : EthenaDeployments;
+        const CtorDeployments =  DeploymentsTypes.Tranches[params.cdo];
 
         const depl = new CtorDeployments({
             client,
@@ -75,7 +74,7 @@ export namespace PlatformFactory {
         }
     }
 
-    async function getAccounts(client: Web3Client, group: 'ethena' | 'neutrl' | 'operator') {
+    async function getAccounts(client: Web3Client, group: TCDOKey | 'operator' | 'deployer') {
         const { platform, network } = client;
         const hh = new HardhatProvider();
 
@@ -93,15 +92,13 @@ export namespace PlatformFactory {
         let safeAdmin = await ChainAccountService.get(accounts.safeAdmin);
         let safeOperator = await ChainAccountService.get(accounts.safeOperator);
 
-        if (network === 'hardhat') {
+        if (network === 'hardhat' || (platform === 'hardhat' && group === 'deployer')) {
             deployer = hh.deployer(0);
             timelockAdmin = deployer;
             timelockConfig = deployer;
             safeAdmin = deployer;
             safeOperator = deployer;
-        }
-
-        if (platform === 'hardhat' && client.forked?.platform) {
+        } else if (platform === 'hardhat' && client.forked?.platform) {
             // Impersonate safe and timelock accounts in forked networks
             deployer = {
                 name: 'impersonated',
@@ -135,6 +132,13 @@ export namespace PlatformFactory {
 
         } else if (platform !== 'eth' || group === 'operator') {
 
+            safeAdmin = safeOperator;
+            safeOperator = safeOperator;
+            timelockAdmin = safeOperator;
+            timelockConfig = safeOperator;
+        }
+
+        if (group === 'operator') {
             safeAdmin = safeOperator;
             safeOperator = safeOperator;
             timelockAdmin = safeOperator;

@@ -1,7 +1,9 @@
+import { ITestHelperConstructor } from '@s/strategies/interfaces/ITestHelper';
+import { MidasTestHelper } from '@s/strategies/midas/MidasTestHelper';
+import { NeutrlTestHelper } from '@s/strategies/neutrl/NeutrlTestHelper';
 import { TEth } from 'dequanto/models/TEth';
-import { $date } from 'dequanto/utils/$date';
 
-export type TCDOKey = 'ethena' | 'neutrl'
+export type TCDOKey = 'ethena' | 'neutrl' | 'mhyper'
 export interface ICDO {
     // token symbol
     base: string;
@@ -52,7 +54,7 @@ export interface ICDO {
     minimumJrtSrtRatioBuffer?: number
     minimumJrtSrtRatio?: number
     accounts?: {
-        [platform: TEth.Platform]: {
+        [platform: TEth.Platform]: string | {
             deployer: string
             timelockAdmin: string
             timelockConfig: string
@@ -75,7 +77,12 @@ export interface ICDO {
     ContractVersions?: {
         // Discrete accounting is the default (backward compatible with previous versions).
         accounting?: 'continuous' | 'discrete',
-    }
+    },
+
+    // Contracts prefixes (can be overridden for testing)
+    pfx?: string
+
+    TestHelper?: ITestHelperConstructor
 }
 
 
@@ -101,7 +108,7 @@ export const Tranches: Record<TCDOKey, ICDO> = {
         },
         ContractVersions: {
             accounting: 'continuous',
-        },
+        }
     },
     'neutrl': {
         base: 'NUSD',
@@ -160,7 +167,52 @@ export const Tranches: Record<TCDOKey, ICDO> = {
         ContractVersions: {
             accounting: 'continuous',
         },
-    }
+        TestHelper: NeutrlTestHelper,
+    },
+    'mhyper': {
+        base: 'USDC',
+        fees: {
+            retention: {
+                jrt: .5, // 1 == 100%
+                srt: .5,
+            },
+            performanceFee: .075 // 1 === 100%
+        },
+        riskPremium: {
+            x: 0.125,
+            y: 0.15,
+            k: 0.3
+        },
+        jrt: {
+            symbol: 'jrmHYPER',
+            name: 'Strata Junior mHYPER',
+            depositsEnabled: true,
+            withdrawalsEnabled: true,
+            sharesCooldown: [
+                { covPct: 10, feeBps: 0,   lock: '21days' },
+                { covPct: 20, feeBps: 10,  lock: '7days' },
+                { covPct: 0,  feeBps: 20,  lock: 0 },
+            ],
+        },
+        srt: {
+            symbol: 'srmHYPER',
+            name: 'Strata Senior mHYPER',
+            depositsEnabled: true,
+            withdrawalsEnabled: true,
+            sharesCooldown: [
+                { covPct: 10, feeBps: 0,   lock: 0 },
+                { covPct: 20, feeBps: 2.5, lock: 0 },
+                { covPct: 0,  feeBps: 5,   lock: 0 },
+            ]
+        },
+        Feed: {
+            name: 'mHyper CDO APR Pair'
+        },
+        ContractVersions: {
+            accounting: 'discrete',
+        },
+        TestHelper: MidasTestHelper,
+    },
 }
 
 export const ContractsIDMapping = {
@@ -172,4 +224,5 @@ export const ContractsIDMapping = {
 export const ContractsPrefixMapping = {
     'ethena': 'USDe',
     'neutrl': 'Neutrl',
+    'mhyper': 'MHyper',
 } as Record<TCDOKey, string>

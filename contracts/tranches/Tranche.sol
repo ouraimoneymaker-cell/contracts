@@ -409,4 +409,18 @@ contract Tranche is ITranche, CDOComponent, ERC4626Upgradeable, ERC20PermitUpgra
             }));
         }
     }
+
+    function _decimalsOffset() internal view override returns (uint8) {
+        ERC4626Storage storage $ = _getERC4626StorageInner();
+        return 18 - $._underlyingDecimals;
+    }
+
+    // Reuse the internal storage from OpenZeppelin's ERC4626Upgradeable
+    // keccak256(abi.encode(uint256(keccak256("openzeppelin.storage.ERC4626")) - 1)) & ~bytes32(uint256(0xff))
+    bytes32 private constant ERC4626StorageLocation = 0x0773e532dfede91f04b12a73d3d2acd361424f41f76b4fb79f090161e36b4e00;
+    function _getERC4626StorageInner() private pure returns (ERC4626Storage storage $) {
+        assembly {
+            $.slot := ERC4626StorageLocation
+        }
+    }
 }

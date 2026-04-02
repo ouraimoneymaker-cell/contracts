@@ -28,9 +28,12 @@ UAction.create({
         await tranches.ensureDeployment({ initialDeposit: true });
     },
     async 'update and configure'() {
+        const config = await PlatformFactory.ConfigLoader.fetch();
+        const cdo = config.cdo as TCDOKey;
+        $require.oneOf(cdo, Object.keys(Tranches));
         const { tranches, deployer, client } = await PlatformFactory.init({
-            deployments: 'redeploy',
-            cdo: 'ethena'
+            deployments: 'throw',
+            cdo
         });
 
         const batch = TxWriter.DEFAULTS.agent = new BatchAgent();

@@ -72,6 +72,8 @@ export interface ICdoDeploymentsCommon extends ICdoDeploymentsBase {
 export abstract class DeploymentsBase<T extends ICdoDeploymentsBase = any> {
 
     ds: Deployments
+    common: Deployments
+
     platform: IPlatform
     owner: TEth.IAccount
     deployer: TEth.EoAccount
@@ -107,6 +109,11 @@ export abstract class DeploymentsBase<T extends ICdoDeploymentsBase = any> {
 
         this.ds = new Deployments(params.client, params.deployer, {
             directory: `./deployments/${directoryPfx}`,
+            whenBytecodeChanged: params.deployments ?? (this.isTestnet() ? null : 'throw'),
+            fork: params.client.forked?.platform
+        });
+        this.common = new Deployments(params.client, params.deployer, {
+            directory: `./deployments`,
             whenBytecodeChanged: params.deployments ?? (this.isTestnet() ? null : 'throw'),
             fork: params.client.forked?.platform
         });
@@ -152,37 +159,52 @@ export abstract class DeploymentsBase<T extends ICdoDeploymentsBase = any> {
 
     abstract configureDepositor(depositor: TrancheDepositor);
 
+    protected configureAprFeed<T = any>(feed: AprPairFeed) {}
+
 
     async get<T extends ContractBase>(Ctor: Constructor<T>, params?: { id?: 'jrUSDe' | 'srUSDe' | string, cdo?: 'USDe' }) {
-        let all = await this.ds.store.getDeployments();
+        let { error, contract } = await this.getInner(this.ds, Ctor, params);
+        if (contract) {
+            return contract;
+        }
+        let fromCommon = await this.getInner(this.common, Ctor, params);
+        if (fromCommon.contract) {
+            return fromCommon.contract;
+        }
+        throw new Error(error);
+    }
+    private async getInner<T extends ContractBase>(ds: Deployments, Ctor: Constructor<T>, params?: { id?, cdo? }): Promise<{error?: string, contract?: T }> {
+        let all = await ds.store.getDeployments();
 
         if (params?.id != null) {
             let id = ContractsIDMapping[params.id] ?? ContractsIDMapping[this.pfx + params.id]  ?? params.id;
-            let contract = await this.ds.getIfExists<T>(Ctor, { id })
-                ?? await this.ds.getIfExists<T>(Ctor, { id: `${this.pfx}${id}` })
+            let contract = await ds.getIfExists<T>(Ctor, { id })
+                ?? await ds.getIfExists<T>(Ctor, { id: `${this.pfx}${id}` });
             if (contract) {
-                return contract;
+                return { contract };
             }
             throw new Error(`No ${Ctor.name} found for id ${id} and ${this.pfx} in deployments`);
         }
 
         let byName = all.filter(d => d.name === Ctor.name);
-        $require.gt(byName.length, 0, `${Ctor.name} not found in deployments`);
+        if (byName.length === 0) {
+            return { error: `${Ctor.name} not found in deployments` }
+        }
 
         if (byName.length === 1) {
-            return await this.ds.get(Ctor, { id: byName[0].id });
+            return { contract: await ds.get(Ctor, { id: byName[0].id }) };
         }
         let cdo = params?.cdo ?? this.pfx;
         let byCdo = byName.filter(x => x.id.toLowerCase().includes(cdo.toLowerCase()));
         if (byCdo.length === 1) {
-            return await this.ds.get(Ctor, { id: byCdo[0].id });
+            return { contract: await ds.get(Ctor, { id: byCdo[0].id }) };
         }
 
         if (byCdo.length === 0) {
-            throw new Error(`No ${Ctor.name} found for CDO ${cdo} in deployments`);
+            return { error: `No ${Ctor.name} found for CDO ${cdo} in deployments` };
         }
         if (byCdo.length > 1) {
-            throw new Error(`Multiple ${Ctor.name} found for CDO ${cdo}: ${byCdo.map(x => x.id).join(', ')}`);
+            return { error: `Multiple ${Ctor.name} found for CDO ${cdo}: ${byCdo.map(x => x.id).join(', ')}` };
         }
     }
 
@@ -605,6 +627,8 @@ export abstract class DeploymentsBase<T extends ICdoDeploymentsBase = any> {
         await this._configureRiskPremium(contracts);
         await this._configureMinumumJrtSrtRatios(contracts);
 
+        await this.configureAprFeed(feed)
+
 
         await this.setTrancheActions(cdo, jrtVault, info, 'jrt');
         await this.setTrancheActions(cdo, srtVault, info, 'srt');
@@ -706,7 +730,7 @@ export abstract class DeploymentsBase<T extends ICdoDeploymentsBase = any> {
         let acm = await this.ensureACM();
         let { base } = await this.ensureUnderlying();
         let { cdo, jrtVault } = await this.ensureCDO();
-        let { contract: depositor } = await this.ds.ensureWithProxy(TrancheDepositor, {
+        let { contract: depositor } = await this.common.ensureWithProxy(TrancheDepositor, {
             id: this.isTestnet()
                 ? `${this.pfx}TrancheDepositor`
                 : `TrancheDepositorV3`,
@@ -733,7 +757,7 @@ export abstract class DeploymentsBase<T extends ICdoDeploymentsBase = any> {
     }
 
     async ensureLenses() {
-        let { contract: cdoLens } = await this.ds.ensureWithProxy(CDOLens, {
+        let { contract: cdoLens } = await this.common.ensureWithProxy(CDOLens, {
             initialize: [
                 this.deployer.address
             ]

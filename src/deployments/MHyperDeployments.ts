@@ -23,6 +23,7 @@ import { AaveOracleAprPairProvider } from '@0xc/hardhat/AaveOracleAprPairProvide
 import { MockERC20 } from '@0xc/hardhat/MockERC20/MockERC20';
 import { MidasCooldownRequestImpl } from '@0xc/hardhat/MidasCooldownRequestImpl/MidasCooldownRequestImpl';
 import { MockUSDe } from '@0xc/hardhat/MockUSDe/MockUSDe';
+import { AprPairFeed } from '@0xc/hardhat/AprPairFeed/AprPairFeed';
 
 
 type TUnderlyingContracts = {
@@ -76,6 +77,7 @@ export class MHyperDeployments extends DeploymentsBase<{
                 oracle.address,
             ]
         });
+
         return {
             provider
         };
@@ -200,5 +202,19 @@ export class MHyperDeployments extends DeploymentsBase<{
         }
 
         return depositor;
+    }
+
+    protected override async configureAprFeed (feed: AprPairFeed) {
+        const { provider } = await this.ensureFeedProvider();
+
+        const spread = 0.03e12;
+        await this.ds.configure(provider, {
+            title: `Update spread`,
+            value: spread,
+            current: provider.spread(),
+            updater: async () => {
+                await provider.$receipt().setSpread(this.owner, spread);
+            }
+        });
     }
 }

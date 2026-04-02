@@ -188,7 +188,7 @@ export class StrategyBasicSuite<T extends DeploymentsBase> {
         this.eqBigInt(
             await strategy.totalAssets() - navTotalBefore
             , amountAssetsRecalc
-            , { up: navTotalVestingTolerance }
+            , { up: navTotalVestingTolerance || 1n }
             , `Strategy did not receive expected assets, on deposit ${symbolToken} into ${symbolTranche}`
         );
         this.eqBigInt(
@@ -362,15 +362,15 @@ export class StrategyBasicSuite<T extends DeploymentsBase> {
     }
 
     private eqBigInt(fact: bigint, expected: bigint, tolerance: bigint | { up?: bigint; down?: bigint }, message: string) {
-        const maxDelta = typeof tolerance === 'bigint' ? tolerance : (tolerance.up ?? 1n);
-        const minDelta = typeof tolerance === 'bigint' ? tolerance : (tolerance.down ?? 1n);
+        const maxDelta = typeof tolerance === 'bigint' ? $bigint.abs(tolerance) : (tolerance.up ?? 1n);
+        const minDelta = typeof tolerance === 'bigint' ? $bigint.abs(tolerance) * -1n : (tolerance.down ?? -1n);
 
         const diff = fact - expected;
         const msg = `${message}; \n\tFact:     ${fact}, \n\tExpected: ${expected}, \n\tDiff:     ${diff}, \n\tMaxDelta: -${minDelta}:+${maxDelta}`;
         if (fact >= expected) {
             $require.lte(diff, maxDelta, msg);
         } else {
-            $require.lte(diff * -1n, minDelta, msg);
+            $require.gte(diff, minDelta, msg);
         }
 
     }

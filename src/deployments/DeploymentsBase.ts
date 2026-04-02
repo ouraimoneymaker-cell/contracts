@@ -39,6 +39,7 @@ import { SUSDeStrategy } from '@0xc/hardhat/sUSDeStrategy/sUSDeStrategy';
 import { $number } from 'dequanto/utils/$number';
 import { DiscreteAccounting } from '@0xc/hardhat/DiscreteAccounting/DiscreteAccounting';
 import { ERC20 } from 'dequanto/prebuilt/openzeppelin/ERC20';
+import { KyberSwapAdapter } from '@0xc/hardhat/KyberSwapAdapter/KyberSwapAdapter';
 
 
 export interface ICdoDeploymentsBase {
@@ -957,4 +958,9 @@ export abstract class DeploymentsBase<T extends ICdoDeploymentsBase = any> {
         COOLDOWN_WORKER_ROLE: $contract.keccak256("COOLDOWN_WORKER_ROLE"),
         PROPOSER_CONFIG_ROLE: $contract.keccak256("PROPOSER_CONFIG_ROLE"),
     };
+
+    public async ensureKyberSwapAdapter () {
+        let { contract: swapper } = await this.common.ensure(KyberSwapAdapter);
+        return swapper;
+    }
 }

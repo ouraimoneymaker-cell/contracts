@@ -23,7 +23,7 @@ UTest.create({
         await test.snapshot();
     },
     async $after() {
-        await test.reset();
+        await test.wipe();
     },
     async 'integrational test: swap eth to usdc'() {
 

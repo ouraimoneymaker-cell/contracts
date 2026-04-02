@@ -61,7 +61,7 @@ export class MHyperDeployments extends DeploymentsBase<{
         let network = this.ds.client.network;
         let aavePool = Addresses[network]?.AavePool;
         if (aavePool == null) {
-            // Not found Aave Pool, remove NULL for manula update (@TODO create a mock one if needed)
+            // Aave Pool not found, return NULL for manual update (@TODO create a mock one if needed)
             return { provider: null };
         }
 
@@ -206,6 +206,9 @@ export class MHyperDeployments extends DeploymentsBase<{
 
     protected override async configureAprFeed (feed: AprPairFeed) {
         const { provider } = await this.ensureFeedProvider();
+        if (provider == null) {
+            return;
+        }
 
         const spread = 0.03e12;
         await this.ds.configure(provider, {

@@ -960,7 +960,7 @@ export abstract class DeploymentsBase<T extends ICdoDeploymentsBase = any> {
     };
 
     public async ensureKyberSwapAdapter () {
-        let { contract: swapper } = await this.ds.ensure(KyberSwapAdapter);
+        let { contract: swapper } = await this.common.ensure(KyberSwapAdapter);
         return swapper;
     }
 }

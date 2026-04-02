@@ -16,19 +16,23 @@ import { $sig } from 'dequanto/utils/$sig';
 import { $promise } from 'dequanto/utils/$promise';
 import { $require } from 'dequanto/utils/$require';
 
-await $hh.test.deploy();
+
+const test = await $hh.create('ethena', {});
 
 UAction.create({
     async $before () {
-
+        await test.deploy();
     },
     async $teardown () {
-        await $hh.test.reset();
+        await test.reset();
+    },
+    async $after () {
+        await test.wipe();
     },
 
     async 'deposit Meta: USDe/sUSDe' () {
-        let { jrtVault, srtVault, USDe, sUSDe} = $hh.test.tranches;
-        let { depositor, deployer } = $hh.test;
+        let { jrtVault, srtVault, USDe, sUSDe} = test.tranches;
+        let { depositor, deployer } = test;
 
         let amount = $bigint.toWei(42);
         await $erc20.mint(USDe, deployer, deployer, amount * 4n);
@@ -51,8 +55,8 @@ UAction.create({
         await $erc20.eqBalance(srtVault, deployer, amount * 2n);
     },
     async 'deposit via ERC4626 withdrawal' () {
-        let { jrtVault, srtVault,  USDe, sUSDe, pUSDe, acm } = $hh.test.tranches;
-        let { depositor, deployer } = $hh.test;
+        let { jrtVault, srtVault,  USDe, sUSDe, pUSDe, acm } = test.tranches;
+        let { depositor, deployer } = test;
 
         let amount = $bigint.toWei(42);
         await $erc20.mint(USDe, deployer, deployer, amount * 2n);
@@ -67,8 +71,8 @@ UAction.create({
         await $erc20.eqBalance(srtVault, deployer, amount);
     },
     async 'deposit with Permit' () {
-        let { jrtVault, srtVault, USDe, sUSDe} = $hh.test.tranches;
-        let { depositor, deployer } = $hh.test;
+        let { jrtVault, srtVault, USDe, sUSDe} = test.tranches;
+        let { depositor, deployer } = test;
 
         let amount = $bigint.toWei(42);
         await $erc20.mint(USDe, deployer, deployer, amount * 4n);
@@ -133,8 +137,8 @@ UAction.create({
         }
     },
     async 'revert on minShares' () {
-        let { jrtVault, srtVault,  USDe, sUSDe, pUSDe, acm } = $hh.test.tranches;
-        let { depositor, deployer } = $hh.test;
+        let { jrtVault, srtVault,  USDe, sUSDe, pUSDe, acm } = test.tranches;
+        let { depositor, deployer } = test;
 
         let amount = $bigint.toWei(42);
         await $erc20.mint(USDe, deployer, deployer, amount * 2n);
@@ -147,9 +151,9 @@ UAction.create({
         $require.match(/MintedSharesBelowMin/, error?.message);
     },
     async 'deposit with wrong permit, but existing allowance' () {
-        let { jrtVault, srtVault, USDe, sUSDe} = $hh.test.tranches;
-        let { depositor } = $hh.test;
-        let alice = await $hh.test.createAccount('permit-alice');
+        let { jrtVault, srtVault, USDe, sUSDe} = test.tranches;
+        let { depositor } = test;
+        let alice = await test.createAccount('permit-alice');
 
         let amount = $bigint.toWei(42);
         await $erc20.mint(USDe, alice, alice, amount * 4n);
@@ -218,7 +222,7 @@ namespace $helper {
             domain: {
                 name: (await erc20Permit.eip712Domain()).name,
                 version: '1',
-                chainId: $hh.test.client.chainId,
+                chainId: test.client.chainId,
                 verifyingContract: erc20Permit.address,
             },
             message: {

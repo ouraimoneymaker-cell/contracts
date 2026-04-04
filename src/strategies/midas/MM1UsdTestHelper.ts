@@ -4,6 +4,7 @@ import { $date } from 'dequanto/utils/$date';
 import { $bigint } from 'dequanto/utils/$bigint';
 import { TEth } from 'dequanto/models/TEth';
 import { type $hh } from 'test/tranches/utils/$hh';
+import { $erc20 } from '@test/tranches/utils/$erc20';
 
 const SECONDS_PER_YEAR = 365 * 24 * 60 * 60;
 
@@ -19,9 +20,8 @@ export class MM1UsdTestHelper implements ITestHelper {
     }
 
     async getStrategyTokensIn() {
-        const { strategy } = this.test.tranches;
-        const tokens = await strategy.getSupportedTokens();
-        return tokens.map((address) => ({ address }));
+        const { mM1USD } = await this.test.factory.ensureUnderlying();
+        return [ mM1USD ]
     }
 
     async getStrategyTokensOut() {
@@ -47,7 +47,7 @@ export class MM1UsdTestHelper implements ITestHelper {
             let gainFactor = (apr * BigInt(dt)) / BigInt(SECONDS_PER_YEAR);
             let nextPrice = (round.answer * (10n ** 12n + gainFactor)) / 10n ** 12n;
             let updater = {
-                address: `0xd1E01471F3e1002d4eEC1b39b7DBD7aff952A99F`,
+                address: `0x9e104D8Bd58759CF0C8d45f32C846df82916E69e`,
                 type: 'impersonated',
             } as TEth.IAccount;
 
@@ -66,12 +66,15 @@ export class MM1UsdTestHelper implements ITestHelper {
     }
 
     async finalizeUnderlyingUnstake() {
-        const { redemptionVault } = await this.test.factory.ensureUnderlying();
+        const { base, redemptionVault } = await this.test.factory.ensureUnderlying();
         const latestRequestId = (await redemptionVault.currentRequestId()) - 1n;
         const account = {
             address: '0x2ACB4BdCbEf02f81BF713b696Ac26390d7f79A12',
             type: 'impersonated',
         } as TEth.IAccount;
+
+        const requestRedeemer = await redemptionVault.requestRedeemer();
+        await $erc20.setBalanceAny(base as any, requestRedeemer, BigInt(1_000e6));
 
         const req = await redemptionVault.redeemRequests(latestRequestId);
         await redemptionVault.$receipt().approveRequest(account, latestRequestId, req.mTokenRate);

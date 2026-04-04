@@ -57,6 +57,12 @@ contract MockRedemptionVault {
 
     MockOracle public oracle;
 
+    /**
+     * @notice address is designated for standard redemptions, allowing tokens to be pulled from this address
+     */
+    address public requestRedeemer;
+
+
     constructor(MockMToken _mToken, MockBaseAsset _baseAsset) {
         mToken = _mToken;
         baseAsset = _baseAsset;

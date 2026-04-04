@@ -48,7 +48,7 @@ export const Eth: IPlatform = {
 
     mm1usd: {
         oracle: '0xad316aA927c0970C2e8f0B903211D0bd19A10702',
-        depositVault: '0x5E154946561AEa4E750AAc6DeaD23D37e00E47f6',
-        redemptionVault: '0x4Fd4DD7171D14e5bD93025ec35374d2b9b4321b0',
+        depositVault: '0x0f7e323103b29e1b18d521de957ed0c4c0a8189e',
+        redemptionVault: '0x70ba3211f2584bf1c8a2acdf0a00dba559ce1ffa',
     },
 };

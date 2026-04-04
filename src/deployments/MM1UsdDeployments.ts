@@ -31,8 +31,6 @@ type TUnderlyingContracts = {
     redemptionVault: MockRedemptionVault;
 
     USDC: MockERC20;
-    DAI: MockERC20;
-    USDS: MockERC20;
 };
 
 export class MM1UsdDeployments extends DeploymentsBase<{
@@ -88,17 +86,10 @@ export class MM1UsdDeployments extends DeploymentsBase<{
                 id: 'USDC',
                 arguments: ['USDC', 6],
             });
-            const DAI = await this.ds.ensureContract(MockERC20, {
-                id: 'DAI',
-                arguments: ['DAI', 18],
-            });
-            const USDS = await this.ds.ensureContract(MockERC20, {
-                id: 'USDS',
-                arguments: ['USDS', 18],
-            });
 
             const mM1USD = await this.ds.ensureContract(MockMToken, {
                 id: 'MockMM1USD',
+                arguments: [],
             });
             const midasDepositVault = await this.ds.ensureContract(MockDepositVault, {
                 id: 'MockMM1USDDepositVault',
@@ -110,13 +101,12 @@ export class MM1UsdDeployments extends DeploymentsBase<{
             });
             const oracle = await this.ds.ensureContract(MockOracle, {
                 id: 'MockMM1USDOracle',
+                arguments: [],
             });
 
             return {
                 base: USDC as any,
                 USDC,
-                DAI,
-                USDS,
                 mM1USD,
                 oracle,
                 depositVault: midasDepositVault,
@@ -135,11 +125,7 @@ export class MM1UsdDeployments extends DeploymentsBase<{
         return {
             base: create(MockERC20, 'USDC') as any,
             mM1USD: create(MockMToken, 'mM1USD'),
-
             USDC: create(MockERC20, 'USDC'),
-            DAI: create(MockERC20, 'DAI'),
-            USDS: create(MockERC20, 'USDS'),
-
             oracle: create(MockOracle, mm1usd.oracle),
             depositVault: create(MockDepositVault, mm1usd.depositVault),
             redemptionVault: create(MockRedemptionVault, mm1usd.redemptionVault),
@@ -165,7 +151,7 @@ export class MM1UsdDeployments extends DeploymentsBase<{
         erc20Cooldown: ERC20Cooldown,
         unstakeCooldown: UnstakeCooldown
     ): Promise<{ strategy: MidasStrategy }> {
-        const { USDC, DAI, USDS, mM1USD, depositVault, redemptionVault, oracle } = await this.ensureUnderlying();
+        const { USDC, mM1USD, depositVault, redemptionVault, oracle } = await this.ensureUnderlying();
         const { contract: strategy } = await this.ds.ensureWithProxy(MidasStrategy, {
             arguments: [USDC.address, mM1USD.address, depositVault.address, redemptionVault.address, oracle.address],
             initialize: [
@@ -174,7 +160,7 @@ export class MM1UsdDeployments extends DeploymentsBase<{
                 cdo.address,
                 erc20Cooldown.address,
                 unstakeCooldown.address,
-                [DAI.address, USDS.address],
+                [],
             ],
         });
         return { strategy };

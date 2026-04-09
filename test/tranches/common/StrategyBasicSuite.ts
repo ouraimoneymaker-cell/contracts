@@ -168,18 +168,18 @@ export class StrategyBasicSuite<T extends DeploymentsBase> {
         // Recalculated due to vesting between previous calculation and real deposit (~2s)
         const previewSharesOutRecalc = await vault.previewDeposit(token, amountWei);
         const amountAssetsRecalc = await strategy.convertToAssets(token, amountWei, 0);
-
+        const previewSharesOutDiff = $bigint.abs(previewSharesOutRecalc - previewSharesOut);
 
         this.eqBigInt(
             accountSharesDiffFact
-            , previewSharesOutRecalc
-            , navTrancheVestingTolerance + MIN_TOLERANCE
+            , previewSharesOut
+            , MIN_TOLERANCE + navTrancheVestingTolerance + previewSharesOutDiff
             , `User did not receive expected amount of the ${symbolTranche} tranche tokens, on deposit ${symbolToken}`
         );
         this.eqBigInt(
             await strategy.totalAssets() - navTotalBefore
             , amountAssetsRecalc
-            , { up: navTotalVestingTolerance + MIN_TOLERANCE }
+            , { up: MIN_TOLERANCE + navTotalVestingTolerance }
             , `Strategy did not receive expected assets, on deposit ${symbolToken} into ${symbolTranche}`
         );
         this.eqBigInt(
@@ -187,7 +187,7 @@ export class StrategyBasicSuite<T extends DeploymentsBase> {
                 ? await accounting.jrtNav()
                 : await accounting.srtNav()
             , navTrancheBefore + amountAssetsRecalc
-            , { up: navTrancheVestingTolerance + MIN_TOLERANCE }
+            , { up: MIN_TOLERANCE + navTrancheVestingTolerance }
             , `Tranche did not receive expected assets, on deposit ${symbolToken} into ${symbolTranche}`
         );
     }

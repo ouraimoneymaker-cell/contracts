@@ -1,17 +1,20 @@
-import { EthenaDeployments } from './EthenaDeployments'
+import { EthenaDeployments } from './EthenaDeployments';
 import { MHyperDeployments } from './MHyperDeployments';
-import { NeutrlDeployments } from './NeutrlDeployments'
+import { MM1UsdDeployments } from './MM1UsdDeployments';
+import { NeutrlDeployments } from './NeutrlDeployments';
 
 export namespace DeploymentsTypes {
     export type CDOs = {
-        'ethena': EthenaDeployments,
-        'neutrl': NeutrlDeployments,
-        'mhyper': MHyperDeployments,
+        ethena: EthenaDeployments;
+        neutrl: NeutrlDeployments;
+        mhyper: MHyperDeployments;
+        mm1usd: MM1UsdDeployments;
     };
 
     export const Tranches = {
-        'ethena': EthenaDeployments,
-        'neutrl': NeutrlDeployments,
-        'mhyper': MHyperDeployments,
+        ethena: EthenaDeployments,
+        neutrl: NeutrlDeployments,
+        mhyper: MHyperDeployments,
+        mm1usd: MM1UsdDeployments,
     };
 }

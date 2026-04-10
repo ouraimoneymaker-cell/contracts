@@ -21,15 +21,17 @@ UTest.create({
     },
 
     ...alot(STRATS).toDictionary(key => key, key => {
+
         const test = $hh.create(key as TCDOKey, {
-            forked: 24672000,
+            forked: 24808600,
             cdoInfo: {
                 pfx: `HHBasicSuite${key}`
             }
         });
 
         $require.notNull(new Tranches[key].TestHelper, `${key} has no TestHelper`);
-        const suite = new StrategyBasicSuite(test, new Tranches[key].TestHelper(test));
+        const helper = new Tranches[key].TestHelper(test)
+        const suite = new StrategyBasicSuite(test, helper);
         return async function factory () {
             return suite.createTests()
         }

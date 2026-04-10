@@ -162,6 +162,11 @@ export abstract class DeploymentsBase<T extends ICdoDeploymentsBase = any> {
 
     protected configureAprFeed<T = any>(feed: AprPairFeed) {}
 
+    protected async getDepositToken (): Promise<ERC20> {
+        let { base } = await this.ensureUnderlying();
+        return base;
+    }
+
 
     async get<T extends ContractBase>(Ctor: Constructor<T>, params?: { id?: 'jrUSDe' | 'srUSDe' | string, cdo?: 'USDe' }) {
         let { error, contract } = await this.getInner(this.ds, Ctor, params);
@@ -657,19 +662,19 @@ export abstract class DeploymentsBase<T extends ICdoDeploymentsBase = any> {
     }
 
     private async initialDeposit(tranches: { jrtVault: Tranche, srtVault: Tranche, cdo: StrataCDO }) {
-        let { base } = await this.ensureUnderlying();
+        let erc20 = await this.getDepositToken();
         let { jrtVault, srtVault, cdo } = tranches;
 
         if (this.owner.type === 'safe') {
             throw new Error(`Mainnet deployment not ready`);
         }
-        const AMOUNT = $bigint.toWei(20, await base.decimals());
-        let balance = await base.balanceOf(this.owner.address);
+        const AMOUNT = $bigint.toWei(20, await erc20.decimals());
+        let balance = await erc20.balanceOf(this.owner.address);
         if (balance < AMOUNT) {
             if (this.client.network === 'hardhat' || this.client.network === 'hoodi') {
-                await base.$receipt().mint(this.owner, this.owner.address, AMOUNT * 100n);
+                await (erc20.$receipt() as any).mint(this.owner, this.owner.address, AMOUNT * 100n);
             } else {
-                throw new Error(`Not enough balance (${base.address}) for initial deposit. ${this.owner.address}`);
+                throw new Error(`Not enough balance (${erc20.address}) for initial deposit. ${this.owner.address}`);
             }
         }
 
@@ -679,8 +684,8 @@ export abstract class DeploymentsBase<T extends ICdoDeploymentsBase = any> {
             true,
             false,
         );
-        await $erc4626.deposit(jrtVault as any, this.owner, AMOUNT / 2n);
-        await $erc4626.deposit(srtVault as any, this.owner, AMOUNT / 2n);
+        await $erc4626.depositMeta(jrtVault as any, erc20, this.owner, AMOUNT / 2n);
+        await $erc4626.depositMeta(srtVault as any, erc20, this.owner, AMOUNT / 2n);
         await cdo.$receipt().setActionStates(
             this.owner,
             $address.ZERO,
@@ -689,12 +694,12 @@ export abstract class DeploymentsBase<T extends ICdoDeploymentsBase = any> {
         );
     }
     private async initialDepositAtomic(tranches: { jrtVault: Tranche, srtVault: Tranche, cdo: StrataCDO }) {
-        let { base } = await this.ensureUnderlying();
+        let erc20 = await this.getDepositToken();
         let { jrtVault, srtVault, cdo } = tranches;
 
 
-        const AMOUNT = $bigint.toWei(40, await base.decimals());
-        let balance = await base.balanceOf(this.owner.address);
+        const AMOUNT = $bigint.toWei(40, await erc20.decimals());
+        let balance = await erc20.balanceOf(this.owner.address);
         if (balance < AMOUNT) {
             throw new Error(`Not enough balance for initial deposit.`);
         }
@@ -705,14 +710,13 @@ export abstract class DeploymentsBase<T extends ICdoDeploymentsBase = any> {
         let actions = [
             await cdo.$data().setActionStates(this.owner, $address.ZERO, true, false),
 
-            await base.$data().approve(this.owner, jrtVault.address, AMOUNT_JRT),
-            await jrtVault.$data().deposit(this.owner, AMOUNT_JRT, this.owner.address),
+            await erc20.$data().approve(this.owner, jrtVault.address, AMOUNT_JRT),
+            await jrtVault.$data().deposit(this.owner, erc20.address, AMOUNT_JRT, this.owner.address),
 
-            await base.$data().approve(this.owner, srtVault.address, AMOUNT_SRT),
-            await srtVault.$data().deposit(this.owner, AMOUNT_SRT, this.owner.address),
+            await erc20.$data().approve(this.owner, srtVault.address, AMOUNT_SRT),
+            await srtVault.$data().deposit(this.owner, erc20.address, AMOUNT_SRT, this.owner.address),
 
             await cdo.$data().setActionStates(this.owner, $address.ZERO, false, false),
-
         ];
 
         $require.match(/safe/i, this.owner.name);

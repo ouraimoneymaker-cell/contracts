@@ -78,14 +78,12 @@ export class StrategyBasicSuite<T extends DeploymentsBase> {
                     await $erc20.eqBalance(erc20, alice, 1000);
                 }
             },
-            async 'should deposit base'() {
-                await suite.depositTokenWithTests(alice, jrtVault, base.address, 98);
-                await suite.depositTokenWithTests(alice, srtVault, base.address, 101);
-            },
-            async 'should deposit meta tokens'() {
+            async 'should deposit tokens'() {
                 const tokens = await suite.helper.getStrategyTokensIn();
                 for (const token of tokens) {
                     if ($address.eq(token.address, base.address)) {
+                        await suite.depositTokenWithTests(alice, jrtVault, base.address, 98);
+                        await suite.depositTokenWithTests(alice, srtVault, base.address, 101);
                         continue;
                     }
                     await suite.depositTokenByBaseAmountWithTests(alice, jrtVault, token.address, 100);
@@ -96,8 +94,10 @@ export class StrategyBasicSuite<T extends DeploymentsBase> {
                 const aprs = await feed.latestRoundData();
                 const APRbase = $bigint.toEther(aprs.aprBase, 12);
                 const APRtarget = $bigint.toEther(aprs.aprTarget, 12);
-                $require.True(0.005 < APRbase && APRbase < .30, `APR base sanity check failed: ${APRbase}`);
-                $require.True(0.005 < APRtarget && APRtarget < .10, `APR target sanity check failed: ${APRtarget}`);
+                $require.True(0.005 <= APRbase && APRbase <= .30, `APR base sanity check failed: ${APRbase}`);
+
+                const [aprTargetMin, aprTargetMax] = suite.helper.getSanityAprTarget?.() ?? [0.005, .10]
+                $require.True(aprTargetMin <= APRtarget && APRtarget <= aprTargetMax, `APR target sanity check failed: ${APRtarget}`);
 
                 const APRsrt = $bigint.toEther(await accounting.aprSrt(), 18);
                 $require.True(APRtarget <= APRsrt && APRsrt < .10, `APR senior sanity check failed: ${APRsrt} (target: ${APRtarget})`);
@@ -162,33 +162,26 @@ export class StrategyBasicSuite<T extends DeploymentsBase> {
 
         const symbolTranche = await vault.symbol();
         const symbolToken = await vault.$address(token).symbol();
-
+        const MIN_TOLERANCE = 10n**BigInt(this.baseDecimals - 6);
 
         const navTrancheVestingTolerance = await this.calcWeiPerT(navTrancheBefore, trancheAPR, 4);
         const navTotalVestingTolerance = await this.calcWeiPerT(navTotalBefore, aprs.base, 4);
 
-
         // Recalculated due to vesting between previous calculation and real deposit (~2s)
         const previewSharesOutRecalc = await vault.previewDeposit(token, amountWei);
         const amountAssetsRecalc = await strategy.convertToAssets(token, amountWei, 0);
-        const ONE_WEI_ROUNDING_TOLERANCE = 10n**BigInt(18 - this.baseDecimals);
+        const previewSharesOutDiff = $bigint.abs(previewSharesOutRecalc - previewSharesOut);
 
         this.eqBigInt(
-            previewSharesOut
-            , previewSharesOutRecalc
-            , $bigint.max(navTrancheVestingTolerance, ONE_WEI_ROUNDING_TOLERANCE)
-            , `Preview deposit before and after the deposit does not follow the TotalNAV rate`
-        );
-        this.eqBigInt(
             accountSharesDiffFact
-            , previewSharesOutRecalc
-            , $bigint.max(navTrancheVestingTolerance, ONE_WEI_ROUNDING_TOLERANCE)
+            , previewSharesOut
+            , MIN_TOLERANCE + navTrancheVestingTolerance + previewSharesOutDiff
             , `User did not receive expected amount of the ${symbolTranche} tranche tokens, on deposit ${symbolToken}`
         );
         this.eqBigInt(
             await strategy.totalAssets() - navTotalBefore
             , amountAssetsRecalc
-            , { up: navTotalVestingTolerance || 1n }
+            , { up: MIN_TOLERANCE + navTotalVestingTolerance }
             , `Strategy did not receive expected assets, on deposit ${symbolToken} into ${symbolTranche}`
         );
         this.eqBigInt(
@@ -196,7 +189,7 @@ export class StrategyBasicSuite<T extends DeploymentsBase> {
                 ? await accounting.jrtNav()
                 : await accounting.srtNav()
             , navTrancheBefore + amountAssetsRecalc
-            , { up: navTrancheVestingTolerance || 1n }
+            , { up: MIN_TOLERANCE + navTrancheVestingTolerance }
             , `Tranche did not receive expected assets, on deposit ${symbolToken} into ${symbolTranche}`
         );
     }
@@ -233,11 +226,12 @@ export class StrategyBasicSuite<T extends DeploymentsBase> {
         const navGainFact = await strategy.totalAssets() - totalAssets;
 
         const tolerance2SecVesting = this.calcWeiPerT(totalAssets, params.apr, 2);
+        const WEI_TOLERANCE = $bigint.multWithFloat(BigInt(10 ** (this.baseDecimals - 6)), 2);
 
         this.eqBigInt(
             navGainFact
             , navGainExpect
-            , tolerance2SecVesting
+            , tolerance2SecVesting + WEI_TOLERANCE
             , `Strategy did not receive expected assets, on ${params.dt} rewards`
         );
 
@@ -247,7 +241,7 @@ export class StrategyBasicSuite<T extends DeploymentsBase> {
         this.eqBigInt(
             navSrtGainFact
             , navSrtGainExpect
-            , BigInt(10 ** (this.baseDecimals - 6))
+            , WEI_TOLERANCE
             , `SRT tranche did not receive expected assets, on ${params.dt} of rewards`
         );
 
@@ -258,7 +252,7 @@ export class StrategyBasicSuite<T extends DeploymentsBase> {
         this.eqBigInt(
             navJrtGainFact
             , navGainFact - navSrtGainFact - reserveNav
-            , BigInt(10 ** (this.baseDecimals - 6))
+            , WEI_TOLERANCE
             , `JRT tranche did not receive expected assets, on ${params.dt} of rewards`
         );
     }

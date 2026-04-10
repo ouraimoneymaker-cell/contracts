@@ -94,8 +94,10 @@ export class StrategyBasicSuite<T extends DeploymentsBase> {
                 const aprs = await feed.latestRoundData();
                 const APRbase = $bigint.toEther(aprs.aprBase, 12);
                 const APRtarget = $bigint.toEther(aprs.aprTarget, 12);
-                $require.True(0.005 < APRbase && APRbase < .30, `APR base sanity check failed: ${APRbase}`);
-                $require.True(0.005 < APRtarget && APRtarget < .10, `APR target sanity check failed: ${APRtarget}`);
+                $require.True(0.005 <= APRbase && APRbase <= .30, `APR base sanity check failed: ${APRbase}`);
+
+                const [aprTargetMin, aprTargetMax] = suite.helper.getSanityAprTarget?.() ?? [0.005, .10]
+                $require.True(aprTargetMin <= APRtarget && APRtarget <= aprTargetMax, `APR target sanity check failed: ${APRtarget}`);
 
                 const APRsrt = $bigint.toEther(await accounting.aprSrt(), 18);
                 $require.True(APRtarget <= APRsrt && APRsrt < .10, `APR senior sanity check failed: ${APRsrt} (target: ${APRtarget})`);

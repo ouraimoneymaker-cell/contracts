@@ -233,8 +233,8 @@ export const Tranches: Record<TCDOKey, ICDO> = {
             depositsEnabled: true,
             withdrawalsEnabled: true,
             sharesCooldown: [
-                { covPct: 10, feeBps: 0, lock: '21days' },
-                { covPct: 20, feeBps: 10, lock: '7days' },
+                { covPct: 10, feeBps: 0, lock: '28days' },
+                { covPct: 20, feeBps: 10, lock: '14days' },
                 { covPct: 0, feeBps: 20, lock: 0 },
             ],
         },

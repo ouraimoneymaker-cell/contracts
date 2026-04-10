@@ -23,6 +23,8 @@ import { AaveOracleAprPairProvider } from '@0xc/hardhat/AaveOracleAprPairProvide
 import { MockERC20 } from '@0xc/hardhat/MockERC20/MockERC20';
 import { MidasCooldownRequestImpl } from '@0xc/hardhat/MidasCooldownRequestImpl/MidasCooldownRequestImpl';
 import { MockUSDe } from '@0xc/hardhat/MockUSDe/MockUSDe';
+import { ConstantOracleAprPairProvider } from '@0xc/hardhat/ConstantOracleAprPairProvider/ConstantOracleAprPairProvider';
+import { ERC20 } from 'dequanto/prebuilt/openzeppelin/ERC20';
 
 type TUnderlyingContracts = {
     mM1USD: MockMToken;
@@ -60,12 +62,9 @@ export class MM1UsdDeployments extends DeploymentsBase<{
             return { provider: null };
         }
 
-        const { contract: provider } = await this.ds.ensure(AaveOracleAprPairProvider, {
-            id: `${this.pfx}AaveOracleAprPairProvider`,
+        const { contract: provider } = await this.ds.ensure(ConstantOracleAprPairProvider, {
+            id: this.getContractId(`ConstantOracleAprPairProvider`),
             arguments: [
-                acm.address,
-                aavePool,
-                [$require.Address(Addresses[network].USDC), $require.Address(Addresses[network].USDT)],
                 oracle.address,
             ],
         });
@@ -177,5 +176,10 @@ export class MM1UsdDeployments extends DeploymentsBase<{
         }
 
         return depositor;
+    }
+
+    async getDepositToken (): Promise<ERC20> {
+        let { mM1USD } = await this.ensureUnderlying();
+        return mM1USD as any as ERC20;
     }
 }

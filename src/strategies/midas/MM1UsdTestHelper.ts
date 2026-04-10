@@ -79,4 +79,8 @@ export class MM1UsdTestHelper implements ITestHelper {
         const req = await redemptionVault.redeemRequests(latestRequestId);
         await redemptionVault.$receipt().approveRequest(account, latestRequestId, req.mTokenRate);
     }
+
+    getSanityAprTarget () {
+        return [0, 0.1] as [number, number];
+    }
 }

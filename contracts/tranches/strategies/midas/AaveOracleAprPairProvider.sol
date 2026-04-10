@@ -22,9 +22,9 @@ contract AaveOracleAprPairProvider is IStrategyAprPairProvider {
     uint256 constant BOUND_MIN = 0;
     uint256 constant BOUND_MAX = .4e12;
 
-    IAccessControlManager public acm;
-    IAavePool public aave;
-    IRoundDataOracle public oracle;
+    IAccessControlManager immutable public acm;
+    IAavePool immutable public aave;
+    IRoundDataOracle immutable public oracle;
     address[] public benchmarkTokens;
 
     /// @notice Risk premium spread added on top of the Aave weighted average target APR

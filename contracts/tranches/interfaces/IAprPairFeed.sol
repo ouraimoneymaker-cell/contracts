@@ -25,3 +25,6 @@ interface IAprPairFeedListener {
 interface IStrategyAprPairProvider {
     function getAprPair () external view returns (int64 aprTarget, int64 aprBase, uint64 timestamp);
 }
+interface IAprProvider {
+    function getApr () external view returns (int64 apr, uint64 timestamp);
+}

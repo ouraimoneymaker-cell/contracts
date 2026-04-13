@@ -1,10 +1,11 @@
 import { ITestHelperConstructor } from '@s/strategies/interfaces/ITestHelper';
 import { MidasTestHelper } from '@s/strategies/midas/MidasTestHelper';
 import { MM1UsdTestHelper } from '@s/strategies/midas/MM1UsdTestHelper';
+import { MROXTestHelper } from '@s/strategies/midas/MROXTestHelper';
 import { NeutrlTestHelper } from '@s/strategies/neutrl/NeutrlTestHelper';
 import { TEth } from 'dequanto/models/TEth';
 
-export type TCDOKey = 'ethena' | 'neutrl' | 'mhyper' | 'mm1usd';
+export type TCDOKey = 'ethena' | 'neutrl' | 'mhyper' | 'mm1usd' | 'mrox';
 export interface ICDO {
     // token symbol
     base: string;
@@ -257,6 +258,50 @@ export const Tranches: Record<TCDOKey, ICDO> = {
         },
         TestHelper: MM1UsdTestHelper,
     },
+    mrox: {
+        base: 'USDC',
+        fees: {
+            retention: {
+                jrt: 0.5, // 1 == 100%
+                srt: 0.5,
+            },
+            performanceFee: 0.075, // 1 === 100%
+        },
+        riskPremium: {
+            x: 0.125,
+            y: 0.15,
+            k: 0.3,
+        },
+        jrt: {
+            symbol: 'jrmROX',
+            name: 'Strata Junior mROX',
+            depositsEnabled: true,
+            withdrawalsEnabled: true,
+            sharesCooldown: [
+                { covPct: 10, feeBps: 0, lock: '21days' },
+                { covPct: 20, feeBps: 10, lock: '7days' },
+                { covPct: 0, feeBps: 20, lock: 0 },
+            ],
+        },
+        srt: {
+            symbol: 'srmROX',
+            name: 'Strata Senior mROX',
+            depositsEnabled: true,
+            withdrawalsEnabled: true,
+            sharesCooldown: [
+                { covPct: 10, feeBps: 0, lock: 0 },
+                { covPct: 20, feeBps: 2.5, lock: 0 },
+                { covPct: 0, feeBps: 5, lock: 0 },
+            ],
+        },
+        Feed: {
+            name: 'mROX CDO APR Pair',
+        },
+        ContractVersions: {
+            accounting: 'discrete',
+        },
+        TestHelper: MROXTestHelper,
+    },
 };
 
 export const ContractsIDMapping = {
@@ -270,4 +315,5 @@ export const ContractsPrefixMapping = {
     neutrl: 'Neutrl',
     mhyper: 'MHyper',
     mm1usd: 'MM1USD',
+    mrox: 'MROX',
 } as Record<TCDOKey, string>;

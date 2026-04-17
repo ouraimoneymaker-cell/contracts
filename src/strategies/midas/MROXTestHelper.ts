@@ -47,7 +47,7 @@ export class MROXTestHelper implements ITestHelper {
             let gainFactor = (apr * BigInt(dt)) / BigInt(SECONDS_PER_YEAR);
             let nextPrice = (round.answer * (10n ** 12n + gainFactor)) / 10n ** 12n;
             let updater = {
-                address: `0xd1E01471F3e1002d4eEC1b39b7DBD7aff952A99F`,
+                address: `0x3e7FcC64544A4582095d0b0e6cC19bf80CC21d2C`,
                 type: 'impersonated',
             } as TEth.IAccount;
 

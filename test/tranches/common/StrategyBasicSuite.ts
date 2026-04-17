@@ -108,8 +108,14 @@ export class StrategyBasicSuite<T extends DeploymentsBase> {
                 });
             },
             async 'should redeem tokens'() {
-                const tokens = await suite.helper.getStrategyTokensOut()
+                const tokens = await suite.helper.getStrategyTokensOut();
+                await suite.test.snapshot('beforeRedeem');
                 for (const token of tokens) {
+                    await suite.redeemTokenByBaseAmountWithTests(alice, srtVault, token, 23);
+
+                    // Need to reset as redemption mines block forward to finalize the cooldown
+                    // this can make some price oracles unhealthy.
+                    await suite.test.reset('beforeRedeem');
                     await suite.redeemTokenByBaseAmountWithTests(alice, jrtVault, token, 27);
                 }
             },
@@ -181,7 +187,7 @@ export class StrategyBasicSuite<T extends DeploymentsBase> {
         this.eqBigInt(
             await strategy.totalAssets() - navTotalBefore
             , amountAssetsRecalc
-            , { up: MIN_TOLERANCE + navTotalVestingTolerance }
+            , MIN_TOLERANCE + navTotalVestingTolerance
             , `Strategy did not receive expected assets, on deposit ${symbolToken} into ${symbolTranche}`
         );
         this.eqBigInt(
@@ -189,7 +195,7 @@ export class StrategyBasicSuite<T extends DeploymentsBase> {
                 ? await accounting.jrtNav()
                 : await accounting.srtNav()
             , navTrancheBefore + amountAssetsRecalc
-            , { up: MIN_TOLERANCE + navTrancheVestingTolerance }
+            , MIN_TOLERANCE + navTrancheVestingTolerance
             , `Tranche did not receive expected assets, on deposit ${symbolToken} into ${symbolTranche}`
         );
     }
@@ -278,7 +284,7 @@ export class StrategyBasicSuite<T extends DeploymentsBase> {
             exitMode,
             balanceBefore,
             tokensMain,
-            tokenOutFee,
+            tokenOutUnderlyingFee,
             apr,
         ] = await Promise.all([
             vault.previewRedeem(tokenOut.address, shares),
@@ -302,12 +308,12 @@ export class StrategyBasicSuite<T extends DeploymentsBase> {
 
         const finalizedLogs = unstakeCooldown.extractLogsFinalized(tx.receipt);
         if (finalizedLogs.length > 0) {
-            l`Unstake request has been finalized INSTANTLY`
+            l`Unstake request has been finalized INSTANTLY yellow<${tokenOut.address}>`
             const amountOutFact = await tokenOutErc20.balanceOf(acc.address) - balanceBefore;
 
-            const amountOutExpectedDeductingFee = tokenOutFee === 0 || tokenOut.cooldown !== 'unstake'
+            const amountOutExpectedDeductingFee = tokenOutUnderlyingFee === 0 || tokenOut.cooldown !== 'unstake'
                 ? amountOutExpected
-                : amountOutExpected - $bigint.multWithFloat(amountOutExpected, tokenOutFee);
+                : amountOutExpected - $bigint.multWithFloat(amountOutExpected, tokenOutUnderlyingFee);
 
             this.eqBigInt(
                 amountOutFact

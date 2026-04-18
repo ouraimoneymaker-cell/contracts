@@ -34,6 +34,14 @@ const Tokens = {
     },
     mROX: {
         address: '0x67E1F506B148d0Fc95a4E3fFb49068ceB6855c05',
+    },
+    // Saturn
+    USDat: {
+        address: '0x23238f20b894f29041f48D88eE91131C395AAa71', // sUSDat.asset() — verified on-chain
+        decimals: 6,
+    },
+    sUSDat: {
+        address: '0xD166337499E176bbC38a1FBd113Ab144e5bd2Df7',
         decimals: 18,
     },
 } as Record<string, Partial<IToken>>;
@@ -60,5 +68,9 @@ export const Eth: IPlatform = {
         oracle: '0x7fF56C3a31476c231e74E4F64e9d9718572B54Aa',
         depositVault: '0x511d88E64d843Ee11Bf039a3EB837393001aEDE7',
         redemptionVault: '0xc33dAdA688f224c514682Ec6Ba940888d43C4b29',
+    },
+    saturn: {
+        // Resolve from sUSDat on-chain: sUSDat.getWithdrawalQueue(), sUSDat.getStrcOracle()
+        sUSDat: '0xD166337499E176bbC38a1FBd113Ab144e5bd2Df7',
     },
 };

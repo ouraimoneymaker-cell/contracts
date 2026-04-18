@@ -92,7 +92,7 @@ contract MockStakedUSDat is ERC4626 {
         return 12;
     }
 
-    function decimals() public pure override(ERC4626, ERC20) returns (uint8) {
+    function decimals() public pure override returns (uint8) {
         return 18;
     }
 

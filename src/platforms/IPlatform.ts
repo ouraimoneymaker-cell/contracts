@@ -42,6 +42,10 @@ export interface IPlatform {
         depositVault: TEth.Address;
         redemptionVault: TEth.Address;
     };
+
+    saturn?: {
+        sUSDat: TEth.Address;
+    };
 }
 
 export interface IPlatformAccounts {

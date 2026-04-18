@@ -617,7 +617,7 @@ contract DiscreteAccounting is IAccounting, CDOComponent {
         riskY = riskY_;
         riskK = riskK_;
         UD60x18 risk = calculateRiskPremiumInner(riskX_, riskY_, riskK_, UD60x18.wrap(1e18));
-        require(risk.unwrap() < PERCENTAGE_100, ">=100%");
+        require(risk.unwrap() <= PERCENTAGE_100, ">100%");
         emit RiskParametersChanged(riskX_, riskY_, riskK_);
         updateAprSrt(aprTarget, aprBase);
     }

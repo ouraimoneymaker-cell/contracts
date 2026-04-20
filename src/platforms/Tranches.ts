@@ -6,11 +6,7 @@ import { NeutrlTestHelper } from '@s/strategies/neutrl/NeutrlTestHelper';
 import { SaturnTestHelper } from '@s/strategies/saturn/SaturnTestHelper';
 import { TEth } from 'dequanto/models/TEth';
 
-<<<<<<< HEAD
-export type TCDOKey = 'ethena' | 'neutrl' | 'mhyper' | 'mm1usd' | 'mrox';
-=======
-export type TCDOKey = 'ethena' | 'neutrl' | 'mhyper' | 'mm1usd' | 'saturn';
->>>>>>> 942332e (feat(Saturn): add TypeScript deployment, config, and test helper)
+export type TCDOKey = 'ethena' | 'neutrl' | 'mhyper' | 'mm1usd' | 'mrox' | 'saturn';
 export interface ICDO {
     // token symbol
     base: string;

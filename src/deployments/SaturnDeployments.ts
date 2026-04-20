@@ -68,7 +68,8 @@ export class SaturnDeployments extends DeploymentsBase<{
         if (network === 'hardhat') {
             // MockUSDe serves as USDat (both 6 decimals, mintable)
             let USDat = await this.ds.ensureContract(MockUSDe, {
-                id: 'MockUSDat'
+                id: 'MockUSDat',
+                arguments: [],
             });
             let sUSDat = await this.ds.ensureContract(MockStakedUSDat, {
                 arguments: [
@@ -96,15 +97,18 @@ export class SaturnDeployments extends DeploymentsBase<{
 
     async ensureUnstakeImplemenetations(): Promise<{ token: TEth.Address; impl: IBeaconProxy }[]> {
         let { sUSDat } = await this.ensureUnderlying();
-        const { contractBeaconProxy: saturnCooldownRequestImpl } = await this.ds.ensureWithBeacon(SaturnCooldownRequestImpl, {
-            id: this.getContractId('SaturnCooldownRequestBeacon'),
-            arguments: [sUSDat.address],
-            initialize: [$address.ZERO, $address.ZERO]
-        });
+        const { contractBeaconProxy: saturnCooldownRequestImpl } = await this.ds.ensureWithBeacon(
+            SaturnCooldownRequestImpl,
+            {
+                id: this.getContractId('SaturnCooldownRequestBeacon'),
+                arguments: [sUSDat.address],
+                initialize: [$address.ZERO, $address.ZERO],
+            }
+        );
 
         return [
-            { token: sUSDat.address, impl: saturnCooldownRequestImpl }
-        ]
+            { token: sUSDat.address, impl: saturnCooldownRequestImpl },
+        ];
     }
 
     protected async ensureStrategy(
@@ -117,17 +121,17 @@ export class SaturnDeployments extends DeploymentsBase<{
         const { contract: strategy } = await this.ds.ensureWithProxy(SaturnStrategy, {
             id: this.getContractId('SaturnStrategy'),
             arguments: [
-                sUSDat.address
+                sUSDat.address,
             ],
             initialize: [
                 this.owner.address,
                 acm.address,
                 cdo.address,
                 erc20Cooldown.address,
-                unstakeCooldown.address
-            ]
+                unstakeCooldown.address,
+            ],
         });
-        return { strategy }
+        return { strategy };
     }
 
     async configureCooldowns(strategy: IStrategy): Promise<void> {

@@ -31,11 +31,11 @@ export class SaturnTestHelper implements ITestHelper {
     async getStrategyTokensOut() {
         const { base, sUSDat } = await this.test.factory.ensureUnderlying();
         return [
+            sUSDat,
             {
                 ...base,
                 cooldown: 'unstake' as const
             },
-            sUSDat
         ];
     }
 

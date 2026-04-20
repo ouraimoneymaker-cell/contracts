@@ -143,15 +143,15 @@ UAction.create({
         const { provider } = test.tranches;
         const saturnProvider = new SaturnAprPairProvider(provider.address, provider.client);
 
-        // Should reject APR > 200%
-        const tooHigh = $bigint.toWei(2.01, 12);
+        // Should reject APR > 40% (BOUND_MAX = .4e12)
+        const tooHigh = $bigint.toWei(0.41, 12);
         let reverted = false;
         try {
             await saturnProvider.$receipt().setAprTarget(deployer, tooHigh);
         } catch (e) {
             reverted = true;
         }
-        $require.eq(reverted, true, 'Should revert for APR > 200%');
+        $require.eq(reverted, true, 'Should revert for APR > 40%');
     },
 
     // ============================================================

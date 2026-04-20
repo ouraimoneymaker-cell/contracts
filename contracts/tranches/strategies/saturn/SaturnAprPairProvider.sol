@@ -105,7 +105,11 @@ contract SaturnAprPairProvider is IStrategyAprPairProvider {
         uint256 total = sUSDat.totalAssets();
         if (total == 0 || unvestedStrc == 0) return 0;
 
-        // Convert unvested STRC to USD value using the STRC oracle
+        // Convert unvested STRC to USD value using the STRC oracle.
+        // IMPORTANT: The result (unvestedUsd) must be in the same decimal scale as
+        // sUSDat.totalAssets() (USDat, 6 decimals) for the APR ratio to be correct.
+        // This requires: strcDecimals + priceDecimals - priceDecimals == assetDecimals.
+        // Verify against the real sUSDat contract before mainnet deployment.
         (uint256 strcPrice, uint8 priceDecimals) = strcOracle.getPrice();
         if (strcPrice == 0) return 0;
 

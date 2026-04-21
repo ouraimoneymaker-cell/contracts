@@ -70,6 +70,20 @@ export interface ICdoDeploymentsCommon extends ICdoDeploymentsBase {
     }
 }
 
+export interface IDeploymentsBaseParams {
+    cdo?: TCDOKey
+    client: Web3Client
+    deployer: TEth.EoAccount
+    owner?: TEth.IAccount
+    accounts?: IPlatformAccounts
+    deployments?: 'throw' | 'redeploy'
+    initialDeposit?: boolean
+    cdoInfo?: Partial<ICDO>
+
+    // Relevant for forked tests: when true, all contracts being redeployed, otherwise will reuse existing contracts
+    isTest?: boolean
+}
+
 export abstract class DeploymentsBase<T extends ICdoDeploymentsBase = any> {
 
     ds: Deployments
@@ -85,16 +99,7 @@ export abstract class DeploymentsBase<T extends ICdoDeploymentsBase = any> {
 
     protected pfx: string;
 
-    constructor(private params: {
-        cdo: TCDOKey
-        client: Web3Client
-        deployer: TEth.EoAccount
-        owner?: TEth.IAccount
-        accounts?: IPlatformAccounts
-        deployments?: 'throw' | 'redeploy'
-        initialDeposit?: boolean
-        cdoInfo?: Partial<ICDO>
-    }) {
+    constructor(public params: IDeploymentsBaseParams) {
         this.deployer = params.deployer;
         this.owner = params.owner ?? params.deployer;
         this.client = params.client;
@@ -109,12 +114,12 @@ export abstract class DeploymentsBase<T extends ICdoDeploymentsBase = any> {
         }
 
         this.ds = new Deployments(params.client, params.deployer, {
-            directory: `./deployments/${directoryPfx}`,
+            directory: `./deployments/${params.isTest ? 'test/' : ''}${directoryPfx}`,
             whenBytecodeChanged: params.deployments ?? (this.isTestnet() ? null : 'throw'),
             fork: params.client.forked?.platform
         });
         this.common = new Deployments(params.client, params.deployer, {
-            directory: `./deployments`,
+            directory: `./deployments${params.isTest ? 'test/' : ''}`,
             whenBytecodeChanged: params.deployments ?? (this.isTestnet() ? null : 'throw'),
             fork: params.client.forked?.platform
         });
@@ -177,9 +182,13 @@ export abstract class DeploymentsBase<T extends ICdoDeploymentsBase = any> {
         if (fromCommon.contract) {
             return fromCommon.contract;
         }
+        let fromSimilar = await this.getInner(this.ds, Ctor, { sfx: true, ...(params ?? {}) });
+        if (fromSimilar.contract) {
+            return fromSimilar.contract;
+        }
         throw new Error(error);
     }
-    private async getInner<T extends ContractBase>(ds: Deployments, Ctor: Constructor<T>, params?: { id?, cdo? }): Promise<{error?: string, contract?: T }> {
+    private async getInner<T extends ContractBase>(ds: Deployments, Ctor: Constructor<T>, params?: { id?, cdo?, sfx? }): Promise<{error?: string, contract?: T }> {
         let all = await ds.store.getDeployments();
 
         if (params?.id != null) {
@@ -192,7 +201,8 @@ export abstract class DeploymentsBase<T extends ICdoDeploymentsBase = any> {
             throw new Error(`No ${Ctor.name} found for id ${id} and ${this.pfx} in deployments`);
         }
 
-        let byName = all.filter(d => d.name === Ctor.name);
+
+        let byName = all.filter(d => params?.sfx ? d.name.endsWith(Ctor.name) : d.name === Ctor.name);
         if (byName.length === 0) {
             return { error: `${Ctor.name} not found in deployments` }
         }
@@ -247,7 +257,6 @@ export abstract class DeploymentsBase<T extends ICdoDeploymentsBase = any> {
 
     async ensureRole(role: TEth.Hex, account: TEth.Address) {
         let acm = await this.ensureACM();
-        console.log(`>> EnsureRole`, acm.address, 'Account', account, 'Role', role);
         let has = await acm.hasRole(role, account);
         if (has === false) {
             await acm.$receipt().grantRole(this.owner, role, account);

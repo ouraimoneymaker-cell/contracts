@@ -49,8 +49,15 @@ export namespace $hh {
         forked?: number | 'latest'
         cdoInfo?: Partial<ICDO>
         accounts?: TCDOKey | 'operator' | 'deployer'
+        // Relevant for forked tests: when true, all contracts being redeployed, otherwise will reuse existing contracts
+        fresh?: boolean
     }) {
         return new Test<DeploymentsTypes.CDOs[T]>(cdo, params)
+    }
+
+    export async function init<T extends TCDOKey>(...args: Parameters<typeof create<T>>) {
+        const test = create(...args);
+        return await test.init();
     }
 
     export async function reset (client: Web3Client) {
@@ -80,6 +87,7 @@ export namespace $hh {
             forked?: number | 'latest'
             cdoInfo?: Partial<ICDO>
             accounts?: TCDOKey | 'operator' | 'deployer'
+            fresh?: boolean
         }) {
             // Override default CDO infos for tests
             this.params ??= {};
@@ -115,6 +123,7 @@ export namespace $hh {
                 cdoInfo: this.params?.cdoInfo,
                 accounts: this.params?.accounts,
                 initialDeposit: opts?.initialDeposit,
+                isTest: this.params?.fresh,
                 ...(opts ?? {}),
             });
 

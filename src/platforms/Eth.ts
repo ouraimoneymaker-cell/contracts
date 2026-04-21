@@ -32,6 +32,10 @@ const Tokens = {
         address: '0xCc5C22C7A6BCC25e66726AeF011dDE74289ED203',
         decimals: 18,
     },
+    mROX: {
+        address: '0x67E1F506B148d0Fc95a4E3fFb49068ceB6855c05',
+        decimals: 18,
+    },
 } as Record<string, Partial<IToken>>;
 
 export const Eth: IPlatform = {
@@ -50,5 +54,11 @@ export const Eth: IPlatform = {
         oracle: '0xad316aA927c0970C2e8f0B903211D0bd19A10702',
         depositVault: '0x0f7e323103b29e1b18d521de957ed0c4c0a8189e',
         redemptionVault: '0x70ba3211f2584bf1c8a2acdf0a00dba559ce1ffa',
+    },
+
+    mrox: {
+        oracle: '0x7fF56C3a31476c231e74E4F64e9d9718572B54Aa',
+        depositVault: '0x511d88E64d843Ee11Bf039a3EB837393001aEDE7',
+        redemptionVault: '0xc33dAdA688f224c514682Ec6Ba940888d43C4b29',
     },
 };

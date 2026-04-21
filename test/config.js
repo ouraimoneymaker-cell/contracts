@@ -2,10 +2,14 @@ const hh = require('hardhat');
 const { coverage } = require('@0xweb/hardhat');
 const enableCoverage = app.config.$get('coverage');
 const noCompile = app.config.$get('no-compile');
+const { UTest } = require('atma-utest');
 
 module.exports = {
     $config: {
         async $before () {
+            // increase to 1min per test suite
+            UTest.cfg({ timeout: 60_000 });
+
             if (enableCoverage) {
                 await coverage.instrumentFiles({
                     source: './contracts/',

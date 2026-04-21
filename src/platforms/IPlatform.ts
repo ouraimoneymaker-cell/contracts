@@ -36,6 +36,12 @@ export interface IPlatform {
         depositVault: TEth.Address;
         redemptionVault: TEth.Address;
     };
+
+    mrox?: {
+        oracle: TEth.Address;
+        depositVault: TEth.Address;
+        redemptionVault: TEth.Address;
+    };
 }
 
 export interface IPlatformAccounts {

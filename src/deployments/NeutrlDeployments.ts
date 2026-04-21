@@ -20,7 +20,7 @@ import { MockStakedUSDe } from '@0xc/hardhat/MockStakedUSDe/MockStakedUSDe';
 import { MockUSDe } from '@0xc/hardhat/MockUSDe/MockUSDe';
 import { TrancheDepositor } from '@0xc/hardhat/TrancheDepositor/TrancheDepositor';
 import { SNUSDSwapAdapter } from '@0xc/hardhat/sNUSDSwapAdapter/sNUSDSwapAdapter';
-import { DeploymentsBase } from './DeploymentsBase';
+import { DeploymentsBase, IDeploymentsBaseParams } from './DeploymentsBase';
 import { IStrategy } from '@0xc/hardhat/IStrategy/IStrategy';
 import { SUSDeAprPairProvider } from '@0xc/hardhat/sUSDeAprPairProvider/sUSDeAprPairProvider';
 import { IBeaconProxy } from 'dequanto/contracts/deploy/proxy/ProxyDeployment';
@@ -38,13 +38,7 @@ export class NeutrlDeployments extends DeploymentsBase<{
     Strategy: SNUSDStrategy
 }> {
 
-    constructor(params: {
-        client: Web3Client
-        deployer: TEth.EoAccount
-        owner?: TEth.IAccount
-        accounts?: IPlatformAccounts
-        deployments?: 'throw' | 'redeploy'
-    }) {
+    constructor(params: IDeploymentsBaseParams) {
         super({
             cdo: 'neutrl',
             ...params

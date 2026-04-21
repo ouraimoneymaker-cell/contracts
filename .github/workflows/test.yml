@@ -5,6 +5,7 @@ on:
 
 env:
   RPC_ETH: ${{ secrets.RPC_ETH }}
+  ETHERSCAN_KEY: ${{ secrets.ETHERSCAN_KEY }}
 
 jobs:
   compile-test:

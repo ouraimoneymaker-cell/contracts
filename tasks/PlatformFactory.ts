@@ -40,6 +40,7 @@ export namespace PlatformFactory {
         accounts?: TKey | 'operator' | 'deployer'
         cdoInfo?: Partial<ICDO>
         initialDeposit?: boolean
+        isTest?: boolean
     }) {
         const hh = new HardhatProvider();
         const config = await ConfigLoader.fetch();
@@ -65,6 +66,7 @@ export namespace PlatformFactory {
             accounts,
             initialDeposit: params?.initialDeposit,
             cdoInfo: params?.cdoInfo,
+            isTest: params?.isTest,
         });
         return {
             tranches: depl as any as DeploymentsTypes.CDOs[TKey],

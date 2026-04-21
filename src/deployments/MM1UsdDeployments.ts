@@ -11,7 +11,7 @@ import { $address } from 'dequanto/utils/$address';
 import { Constructor } from 'dequanto/utils/types';
 import { Addresses } from '@s/constants';
 import { TrancheDepositor } from '@0xc/hardhat/TrancheDepositor/TrancheDepositor';
-import { DeploymentsBase } from './DeploymentsBase';
+import { DeploymentsBase, IDeploymentsBaseParams } from './DeploymentsBase';
 import { IStrategy } from '@0xc/hardhat/IStrategy/IStrategy';
 import { IBeaconProxy } from 'dequanto/contracts/deploy/proxy/ProxyDeployment';
 import { MockMToken } from '@0xc/hardhat/MockMToken/MockMToken';
@@ -39,13 +39,7 @@ export class MM1UsdDeployments extends DeploymentsBase<{
     Tokens: TUnderlyingContracts;
     Strategy: MidasStrategy;
 }> {
-    constructor(params: {
-        client: Web3Client;
-        deployer: TEth.EoAccount;
-        owner?: TEth.IAccount;
-        accounts?: IPlatformAccounts;
-        deployments?: 'throw' | 'redeploy';
-    }) {
+    constructor(params: IDeploymentsBaseParams) {
         super({
             cdo: 'mm1usd',
             ...params,

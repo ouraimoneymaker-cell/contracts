@@ -130,12 +130,12 @@ UAction.create({
         const saturnProvider = new SaturnAprPairProvider(provider.address, provider.client);
 
         // Set aprTarget to 8.05% (70% of 11.5% dividend rate)
-        const targetAPR = $bigint.toWei(0.0805, 12); // 12 decimal precision
+        const targetAPR = 0.0805e12; // 12 decimal precision
         await saturnProvider.$receipt().setAprTarget(deployer, targetAPR);
 
         // Verify
-        const [aprTarget, aprBase] = await saturnProvider.getAprPair();
-        $require.eq(aprTarget, targetAPR, 'aprTarget should be set to 8.05%');
+        const {aprTarget_} = await saturnProvider.getAprPair();
+        $require.eq(aprTarget_, targetAPR, 'aprTarget should be set to 8.05%');
     },
 
     async 'SaturnStrategy::APR provider bounds check'() {
@@ -144,7 +144,7 @@ UAction.create({
         const saturnProvider = new SaturnAprPairProvider(provider.address, provider.client);
 
         // Should reject APR > 40% (BOUND_MAX = .4e12)
-        const tooHigh = $bigint.toWei(0.41, 12);
+        const tooHigh = 0.41e12;
         let reverted = false;
         try {
             await saturnProvider.$receipt().setAprTarget(deployer, tooHigh);
@@ -236,7 +236,9 @@ UAction.create({
                 await $tranche.deposit(jrtVault, deployer, base, AMOUNT);
                 let { tx } = await $erc4626.withdrawMeta(jrtVault, base, deployer, AMOUNT);
                 const feeAccrued = accounting.extractLogsFeeAccrued(tx.receipt)[0].params;
-                $require.eq(feeAccrued.amountToReserve, feeAccrued.amountToTranche, `Saturn 50% retention`);
+                // At uneven amounts, amountToTranche === amountToReserve + 1wei
+                const diff = $bigint.abs(feeAccrued.amountToReserve - feeAccrued.amountToTranche)
+                $require.lte(diff, 1n, `Saturn 50% retention, ${feeAccrued.amountToReserve} ${feeAccrued.amountToTranche}`);
 
                 const totalFeeFact = $bigint.toEther(feeAccrued.amountToReserve + feeAccrued.amountToTranche);
                 const feeRatio = Tranches.saturn.jrt.sharesCooldown[2].feeBps / 10000;
@@ -248,7 +250,8 @@ UAction.create({
                 await $tranche.deposit(srtVault, deployer, base, AMOUNT);
                 let { tx } = await $erc4626.withdrawMeta(srtVault, base, deployer, AMOUNT);
                 const feeAccrued = accounting.extractLogsFeeAccrued(tx.receipt)[0].params;
-                $require.eq(feeAccrued.amountToReserve, feeAccrued.amountToTranche, `Saturn 50% retention`);
+                const diff = $bigint.abs(feeAccrued.amountToReserve - feeAccrued.amountToTranche)
+                $require.lte(diff, 1n, `Saturn 50% retention, ${feeAccrued.amountToReserve} ${feeAccrued.amountToTranche}`);
 
                 const totalFeeFact = $bigint.toEther(feeAccrued.amountToReserve + feeAccrued.amountToTranche);
                 const feeRatio = Tranches.saturn.srt.sharesCooldown[2].feeBps / 10000;

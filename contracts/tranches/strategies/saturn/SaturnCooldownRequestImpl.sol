@@ -8,6 +8,9 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {
     SafeERC20
 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {
+    IERC721Receiver
+} from "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
 import {IUnstakeHandler} from "../../interfaces/cooldown/IUnstakeHandler.sol";
 import {IsUSDat} from "./IsUSDat.sol";
 
@@ -31,7 +34,7 @@ import {IsUSDat} from "./IsUSDat.sol";
  *
  * Note: Saturn's withdrawal queue has no fixed SLA. Processing typically takes ~7 days.
  */
-contract SaturnCooldownRequestImpl is IUnstakeHandler, Initializable {
+contract SaturnCooldownRequestImpl is IUnstakeHandler, Initializable, IERC721Receiver  {
     IsUSDat public immutable sUSDat;
     IERC20 public immutable USDat;
 
@@ -40,6 +43,8 @@ contract SaturnCooldownRequestImpl is IUnstakeHandler, Initializable {
     address public receiver;
     uint256 public requestedAt;
     uint256 public requestedAmount;
+    uint256 public requestId;
+
 
     bool public pending;
 
@@ -78,7 +83,7 @@ contract SaturnCooldownRequestImpl is IUnstakeHandler, Initializable {
         // requestRedeem internally transfers shares from this contract to the WithdrawalQueue.
         // No approval needed — sUSDat uses internal _transfer.
         // minUsdatReceived = 0 (no slippage protection at this stage)
-        sUSDat.requestRedeem(shares, 0);
+        requestId = sUSDat.requestRedeem(shares, 0);
 
         requestedAt = block.timestamp;
         receiver = receiver_;
@@ -141,5 +146,19 @@ contract SaturnCooldownRequestImpl is IUnstakeHandler, Initializable {
      */
     function isCooldownActive() public pure returns (bool) {
         return true;
+    }
+
+    /**
+     * @notice Saturn's redemption request is handled via an NFT. The WithdrawalQueue validates
+     *         that the receiver can accept the NFT when the receiver's code.length > 0, which is
+     *         the case for this contract.
+     */
+    function onERC721Received(
+        address operator,
+        address from,
+        uint256 tokenId,
+        bytes calldata data
+    ) external override returns (bytes4) {
+        return IERC721Receiver.onERC721Received.selector;
     }
 }

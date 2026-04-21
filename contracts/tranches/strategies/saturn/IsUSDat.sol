@@ -52,3 +52,30 @@ interface IsUSDat is IERC4626 {
     /// @notice Returns the address of the STRC price oracle
     function getStrcOracle() external view returns (address);
 }
+
+interface ISaturnWithdrawalQueueERC721 {
+
+     /**
+     * @notice The lifecycle status of a withdrawal request.
+     */
+    enum RequestStatus {
+        NULL,
+        Requested,
+        InProgress,
+        Processed,
+        Claimed
+    }
+    struct Request {
+        uint256 shares;
+        uint256 usdatOwed;
+        uint256 timestamp;
+        uint256 minUsdatReceived;
+        RequestStatus status;
+    }
+
+    function lockRequests(uint256[] calldata tokenIds) external;
+
+    function processRequests(uint256[] calldata tokenIds,uint256 totalUsdatReceived,uint256 totalStrcSold,uint256 executionPrice) external;
+
+    function requests(uint256 id) external view returns (Request memory);
+}

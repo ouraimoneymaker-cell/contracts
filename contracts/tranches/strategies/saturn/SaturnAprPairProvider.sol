@@ -52,10 +52,11 @@ contract SaturnAprPairProvider is IStrategyAprPairProvider {
         _;
     }
 
-    constructor(IAccessControlManager acm_, IsUSDat sUSDat_) {
+    constructor(IAccessControlManager acm_, IsUSDat sUSDat_, int64 aprTarget_) {
         acm = acm_;
         sUSDat = sUSDat_;
         strcOracle = IStrcPriceOracle(sUSDat_.getStrcOracle());
+        aprTarget = aprTarget_;
     }
 
     function getAprPair()

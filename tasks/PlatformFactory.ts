@@ -127,6 +127,7 @@ export namespace PlatformFactory {
                 type: 'impersonated',
                 address: timelockConfig.address,
             };
+            await client.debug.setBalance(deployer.address,         BigInt(1e18));
             await client.debug.setBalance(timelockAdmin.address,    BigInt(1e18));
             await client.debug.setBalance(timelockConfig.address,   BigInt(1e18));
             await client.debug.setBalance(safeAdmin.address,        BigInt(1e18));

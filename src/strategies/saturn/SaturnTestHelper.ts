@@ -7,13 +7,19 @@ import { SaturnDeployments } from '@s/deployments/SaturnDeployments';
 import { ERC20 } from 'dequanto/prebuilt/openzeppelin/ERC20';
 import { $erc20 } from '@test/tranches/utils/$erc20';
 import { $bigfloat } from 'dequanto/utils/$bigfloat';
+import { ISaturnWithdrawalQueueERC721 } from '@0xc/hardhat/ISaturnWithdrawalQueueERC721/ISaturnWithdrawalQueueERC721';
+import { Eth } from '@s/platforms/Eth';
+import { SaturnCooldownRequestImpl } from '@0xc/hardhat/SaturnCooldownRequestImpl/SaturnCooldownRequestImpl';
+import { IStrcPriceOracle } from '@0xc/hardhat/IStrcPriceOracle/IStrcPriceOracle';
 
 const SECONDS_PER_YEAR = 365 * 24 * 60 * 60;
 
 export class SaturnTestHelper implements ITestHelper {
-    constructor (public test: $hh.Test<SaturnDeployments>) {
 
-    }
+    static forked = 24925000;
+
+    constructor (public test: $hh.Test<SaturnDeployments>) {}
+
     async getStrategyTokensMain() {
         const { base, sUSDat } = await this.test.factory.ensureUnderlying();
         return {
@@ -80,13 +86,42 @@ export class SaturnTestHelper implements ITestHelper {
     }
 
     async getUnderlyingUnstakePeriod () {
-        return '7days';
+        // finalize by saturn earlier (otherwise strc oracle is stale after 7days)
+        return '1h';
     }
 
-    async finalizeUnderlyingUnstake () {
+    async finalizeUnderlyingUnstake (acc: TEth.Address) {
         // Saturn's WithdrawalQueueERC721 requires off-chain processing.
-        // In tests, use MockStakedUSDat.processAllPending() to mark requests as processed.
         const { sUSDat } = await this.test.factory.ensureUnderlying();
-        await (sUSDat as any).$receipt().processAllPending(this.test.factory.owner);
+        const SaturnWithdrawProcessor = {
+            address: `0x09D6E34cE24D54890fF0BC6a090b5f880F8C729f`,
+            type: 'impersonated'
+        } as TEth.IAccount;
+
+        const { unstakeCooldown } = this.test.tranches;
+        const req = await unstakeCooldown.activeRequests(Eth.saturn.sUSDat, acc, 0n);
+        const proxy = new SaturnCooldownRequestImpl(req.proxy, this.test.client);
+        const id = await proxy.requestId();
+        const requestedAmount = await proxy.requestedAmount();
+
+        const oracleAddr = await sUSDat.getStrcOracle();
+        const oracle = new IStrcPriceOracle(oracleAddr, this.test.client);
+        const priceData = await oracle.getPrice();
+        const price = priceData.price;
+        const shares = requestedAmount * 10n**8n / price;
+
+        const queue = new ISaturnWithdrawalQueueERC721('0x4Bc9FEC04F0F95e9b42a3EF18F3C96fB57923D2e', this.test.client);
+
+        await queue.$receipt().lockRequests(SaturnWithdrawProcessor, [
+            id
+        ]);
+        await queue.$receipt().processRequests(SaturnWithdrawProcessor, [
+            id
+        ], requestedAmount, shares, price);
+
+        // Move forward 7 days to finalize our unstake request
+        await this.test.mine('7days');
+
     }
+
 }

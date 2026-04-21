@@ -41,7 +41,7 @@ export interface ITestHelper {
 
     // Finalizes an unstake request when the underlying protocol requires a prior step.
     // Example: Midas must approve the request first.
-    finalizeUnderlyingUnstake(): Promise<void>
+    finalizeUnderlyingUnstake(account: TEth.Address): Promise<void>
 
 
     getSanityAprTarget?(): [min: number, max: number]

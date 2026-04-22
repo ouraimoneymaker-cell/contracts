@@ -22,7 +22,7 @@ UAction.create({
         await test.snapshot('saturn-config');
     },
     async $after() {
-        await test.reset();
+        await test.wipe();
     },
     async $teardown() {
         await test.reset('saturn-config')
@@ -113,7 +113,7 @@ UAction.create({
 
         // After deposit, strategy totalAssets should be ~99.9% of deposited amount
         // due to sUSDat's 0.1% deposit fee
-        const totalAssets = $bigint.toEther(await strategy.totalAssets());
+        const totalAssets = $bigint.toEther(await strategy.totalAssets(), 6);
         const expectedPostFee = AMOUNT * 0.999; // 0.1% fee
 
         // Allow small rounding tolerance
@@ -181,7 +181,7 @@ UAction.create({
         // Trigger accounting update with a small deposit
         await $tranche.deposit(jrtVault, deployer, base, 1);
 
-        const feeAccrued = $bigint.toEther(await accounting.reserveNav());
+        const feeAccrued = $bigint.toEther(await accounting.reserveNav(), 6);
         // Expected: 30 days of 10% APR on ~9990 (after deposit fee)
         // ~9990 * 0.10 * 30/365 * 7.5% fee ≈ ~6.15
         $require.gt(feeAccrued, 0, 'Performance fee should accrue');
@@ -202,9 +202,14 @@ UAction.create({
         await $tranche.deposit(jrtVault, deployer, base, 10_000);
         await $tranche.deposit(srtVault, deployer, base, 10_000);
 
+        // Check Saturn' exit fee
+        const fee = await strategy.depositFeeBps();
+        $require.eq(await jrtVault.totalAssets(), BigInt(10_000e6 * (1 - Number(fee) / 10000)));
+        $require.eq(await srtVault.totalAssets(), BigInt(10_000e6 * (1 - Number(fee) / 10000)));
+
         // Record pre-drop NAV
         const navBefore = await cdo.totalAssetsUnlocked();
-        const totalBefore = $bigint.toEther(navBefore.jrtNav + navBefore.srtNav);
+        const totalBefore = $bigint.toEther(navBefore.jrtNav + navBefore.srtNav, 6);
 
         // Simulate STRC price drop by reducing sUSDat balance
         // This simulates what happens when totalAssets() returns less
@@ -214,7 +219,7 @@ UAction.create({
         await $erc20.setBalanceAny(sUSDat as any, strategy.address, shares);
 
         // Verify totalAssets dropped
-        const totalAssetsAfter = $bigint.toEther(await strategy.totalAssets());
+        const totalAssetsAfter = $bigint.toEther(await strategy.totalAssets(), 6);
         $test.eqDiff(totalAssetsAfter, totalBefore * 0.9, totalBefore * 0.02, 'Total assets should drop ~10%');
     },
 
@@ -233,27 +238,29 @@ UAction.create({
         return UAction.create({
             async 'from Junior'() {
                 const AMOUNT = 1000;
-                await $tranche.deposit(jrtVault, deployer, base, AMOUNT);
-                let { tx } = await $erc4626.withdrawMeta(jrtVault, base, deployer, AMOUNT);
+                const AMOUNT_WEI = $bigint.toWei(AMOUNT, 6);
+                await $tranche.deposit(jrtVault, deployer, base, AMOUNT_WEI);
+                let { tx } = await $erc4626.withdrawMeta(jrtVault, base, deployer, AMOUNT_WEI);
                 const feeAccrued = accounting.extractLogsFeeAccrued(tx.receipt)[0].params;
                 // At uneven amounts, amountToTranche === amountToReserve + 1wei
                 const diff = $bigint.abs(feeAccrued.amountToReserve - feeAccrued.amountToTranche)
                 $require.lte(diff, 1n, `Saturn 50% retention, ${feeAccrued.amountToReserve} ${feeAccrued.amountToTranche}`);
 
-                const totalFeeFact = $bigint.toEther(feeAccrued.amountToReserve + feeAccrued.amountToTranche);
+                const totalFeeFact = $bigint.toEther(feeAccrued.amountToReserve + feeAccrued.amountToTranche, 6);
                 const feeRatio = Tranches.saturn.jrt.sharesCooldown[2].feeBps / 10000;
                 const totalFeeCalc = AMOUNT * feeRatio / (1 - feeRatio);
                 $test.eqDiff(totalFeeFact, totalFeeCalc, .0001);
             },
             async 'from Senior'() {
                 const AMOUNT = 500;
-                await $tranche.deposit(srtVault, deployer, base, AMOUNT);
-                let { tx } = await $erc4626.withdrawMeta(srtVault, base, deployer, AMOUNT);
+                const AMOUNT_WEI = $bigint.toWei(AMOUNT, 6);
+                await $tranche.deposit(srtVault, deployer, base, AMOUNT_WEI);
+                let { tx } = await $erc4626.withdrawMeta(srtVault, base, deployer, AMOUNT_WEI);
                 const feeAccrued = accounting.extractLogsFeeAccrued(tx.receipt)[0].params;
                 const diff = $bigint.abs(feeAccrued.amountToReserve - feeAccrued.amountToTranche)
                 $require.lte(diff, 1n, `Saturn 50% retention, ${feeAccrued.amountToReserve} ${feeAccrued.amountToTranche}`);
 
-                const totalFeeFact = $bigint.toEther(feeAccrued.amountToReserve + feeAccrued.amountToTranche);
+                const totalFeeFact = $bigint.toEther(feeAccrued.amountToReserve + feeAccrued.amountToTranche, 6);
                 const feeRatio = Tranches.saturn.srt.sharesCooldown[2].feeBps / 10000;
                 const totalFeeCalc = AMOUNT * feeRatio / (1 - feeRatio);
                 $test.eqDiff(totalFeeFact, totalFeeCalc, .0001);

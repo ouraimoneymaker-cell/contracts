@@ -90,7 +90,8 @@ contract SaturnStrategy is Strategy {
             SafeERC20.forceApprove(USDat, address(sUSDat), tokenAmount);
             uint256 sharesReceived = sUSDat.deposit(tokenAmount, address(this));
             // Return actual base value after sUSDat's deposit fee
-            return sUSDat.previewRedeem(sharesReceived);
+            uint256 baseAssetsNet = sUSDat.convertToAssets(sharesReceived);
+            return baseAssetsNet;
         }
         if (token == address(sUSDat)) {
             // already transferred in ↑
@@ -281,5 +282,16 @@ contract SaturnStrategy is Strategy {
         bool isDisabled = sUSDatCooldownJrt_ == 0 && sUSDatCooldownSrt_ == 0;
         erc20Cooldown.setCooldownDisabled(IERC20(address(sUSDat)), isDisabled);
         emit CooldownsChanged(sUSDatCooldownJrt_, sUSDatCooldownSrt_);
+    }
+
+    /**
+     * @notice Returns the deposit fee percentage for the underlying protocol
+     * @return feeBps The deposit fee in basis points (e.g., 10 = 0.1%)
+     */
+    function depositFeeBps () external view returns (uint256 feeBps) {
+        if (sUSDat.feeRecipient() == address(0)) {
+            return 0;
+        }
+        return sUSDat.depositFeeBps();
     }
 }

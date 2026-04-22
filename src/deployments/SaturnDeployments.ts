@@ -20,6 +20,7 @@ import { DeploymentsBase } from './DeploymentsBase';
 import { IStrategy } from '@0xc/hardhat/IStrategy/IStrategy';
 import { SUSDeAprPairProvider } from '@0xc/hardhat/sUSDeAprPairProvider/sUSDeAprPairProvider';
 import { IBeaconProxy } from 'dequanto/contracts/deploy/proxy/ProxyDeployment';
+import { MockERC20 } from '@0xc/hardhat/MockERC20/MockERC20';
 
 
 type TUnderlyingTokens = {
@@ -67,10 +68,13 @@ export class SaturnDeployments extends DeploymentsBase<{
     }> {
         let network = this.ds.client.network;
         if (network === 'hardhat') {
-            // MockUSDe serves as USDat (both 6 decimals, mintable)
-            let USDat = await this.ds.ensureContract(MockUSDe, {
+            // MockUSDat (6 decimals, mintable)
+            let USDat = await this.ds.ensureContract(MockERC20, {
                 id: 'MockUSDat',
-                arguments: [],
+                arguments: [
+                    'MockUSDat',
+                    6
+                ],
             });
             let sUSDat = await this.ds.ensureContract(MockStakedUSDat, {
                 arguments: [
@@ -79,7 +83,7 @@ export class SaturnDeployments extends DeploymentsBase<{
                 ]
             });
             return {
-                base: USDat,
+                base: USDat as any as MockUSDe,
                 sUSDat,
             };
         }

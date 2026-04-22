@@ -19,6 +19,7 @@ import { IStrataCDO, IStrataCDOSetters } from "./interfaces/IStrataCDO.sol";
 import { TActionState } from "./structs/TActionState.sol";
 import { IAccounting } from "./interfaces/IAccounting.sol";
 import { ISharesCooldown } from "./interfaces/cooldown/ISharesCooldown.sol";
+import { RoundingGuard } from "./utils/RoundingGuard.sol";
 
 
 /// @notice Core CDO contract that orchestrates Tranches, Accounting, and Strategy
@@ -236,9 +237,16 @@ contract StrataCDO is IErrors, IStrataCDO, IStrataCDOSetters, AccessControlled {
         if (tokenAmount == 0 || baseAssets == 0) {
             revert ZeroAmount();
         }
-        strategy.deposit(tranche, token, tokenAmount, baseAssets, /* owner: */ tranche);
-        uint256 jrtAssetsIn = isJrt_ ? baseAssets : 0;
-        uint256 srtAssetsIn = isJrt_ ? 0          : baseAssets;
+        uint256 baseAssetsNet = strategy.deposit(tranche, token, tokenAmount, baseAssets, /* owner: */ tranche);
+
+        // The strategy converts deposited assets to shares and back to assets (assets -> shares -> assets).
+        // This double conversion can introduce minor rounding discrepancies even when the strategy charges no fees.
+        // To prevent artificial loss from rounding errors in fee-free scenarios, we use the original deposit amount
+        // if the calculated amount differs by at most 1 wei.
+        baseAssetsNet = RoundingGuard.preferOriginalWithin1Wei(baseAssets, baseAssetsNet);
+
+        uint256 jrtAssetsIn = isJrt_ ? baseAssetsNet : 0;
+        uint256 srtAssetsIn = isJrt_ ? 0             : baseAssetsNet;
         accounting.updateBalanceFlow(jrtAssetsIn, 0, srtAssetsIn, 0);
         shortfallPauser();
     }

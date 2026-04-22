@@ -5,6 +5,15 @@ import {IERC4626} from "@openzeppelin/contracts/interfaces/IERC4626.sol";
 
 interface IsUSDat is IERC4626 {
 
+    // ============ Fee State ============
+
+    /// @notice Deposit fee in basis points
+    function depositFeeBps () external view returns (uint256);
+
+    /// @notice Address that receives deposit fees
+    function feeRecipient () external view returns (address);
+
+
     // ============ Vesting State ============
 
     /// @notice Amount of STRC currently vesting

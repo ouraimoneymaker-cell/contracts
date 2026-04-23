@@ -8,6 +8,9 @@ import { StrataCDO } from '@0xc/hardhat/StrataCDO/StrataCDO';
 import { $erc4626 } from './$erc4626';
 import { DeploymentsBase } from '@s/deployments/DeploymentsBase';
 import { $hh } from './$hh';
+import { $date } from 'dequanto/utils/$date';
+import { $bigfloat } from 'dequanto/utils/$bigfloat';
+import { CDOLens } from '@0xc/hardhat/CDOLens/CDOLens';
 
 export namespace $tranche {
     export async function deposit(tranche: Tranche, sender: TEth.IAccount, token: $acc.Address, amount: bigint | number | `${number}%`) {
@@ -71,5 +74,25 @@ export namespace $tranche {
             await $erc4626.deposit(jrtVault, deployer, $bigint.toWei(jrtNavEth * scale - jrtNavEth));
             await $erc4626.deposit(srtVault, deployer, $bigint.toWei(srtNavEth * scale - srtNavEth));
         }
+    }
+
+    export async function calcWeiPerT(tranche: Tranche, lens: CDOLens, dt: number | string = 1 /* 1 second */) {
+        const [apr, nav] = await Promise.all([
+            lens.getTrancheAPR(tranche.address),
+            tranche.totalAssets()
+        ]);
+        const seconds = typeof dt === 'number'
+            ? dt
+            : $date.parseTimespan(dt, { get: 's' });
+
+        const WEI_PER_DT = $bigfloat
+            .from(nav)
+            .mul(apr)
+            .mul(seconds)
+            .div(365 * 24 * 3600)
+            .div(10 ** 12)
+            .toBigInt();
+
+        return WEI_PER_DT;
     }
 }

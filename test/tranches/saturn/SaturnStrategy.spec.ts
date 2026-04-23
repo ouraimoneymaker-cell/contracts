@@ -12,6 +12,7 @@ import { Tranches } from '@s/platforms/Tranches';
 import { $erc4626 } from '../utils/$erc4626';
 import { SaturnAprPairProvider } from '@0xc/hardhat/SaturnAprPairProvider/SaturnAprPairProvider';
 import { MockStakedUSDat } from '@0xc/hardhat/MockStakedUSDat/MockStakedUSDat';
+import { MockStrcPriceOracle } from '@0xc/hardhat/MockStrcPriceOracle/MockStrcPriceOracle';
 
 const test = $hh.create('saturn');
 
@@ -194,8 +195,13 @@ UAction.create({
     async 'SaturnStrategy::STRC price drop impact'() {
         const { deployer } = test.factory;
         const { base, sUSDat } = await test.factory.ensureUnderlying();
-        const { jrtVault, srtVault, strategy, cdo } = test.tranches;
+        const { lens } = await test.factory.ensureLenses();
+        const { jrtVault, srtVault, strategy, cdo, accounting } = test.tranches;
         const mockSUSDat = new MockStakedUSDat(sUSDat.address, sUSDat.client);
+
+        const oracle = new MockStrcPriceOracle(await sUSDat.strcOracle(), sUSDat.client);
+        const [price, priceDecimals] = await oracle.getPrice();
+        const priceEth = $bigint.toEther(price, priceDecimals);
 
         // Deposit into both tranches
         await $erc20.mint(base, deployer, deployer.address, 20_000);
@@ -207,20 +213,105 @@ UAction.create({
         $require.eq(await jrtVault.totalAssets(), BigInt(10_000e6 * (1 - Number(fee) / 10000)));
         $require.eq(await srtVault.totalAssets(), BigInt(10_000e6 * (1 - Number(fee) / 10000)));
 
+        const reserveBps = await accounting.reserveBps();
+        const srtGain = await $tranche.calcWeiPerT(srtVault, lens, '1s');
+
+
         // Record pre-drop NAV
-        const navBefore = await cdo.totalAssetsUnlocked();
-        const totalBefore = $bigint.toEther(navBefore.jrtNav + navBefore.srtNav, 6);
+        const totalNavsT0 = await cdo.totalAssetsUnlocked();
+        const totalAssetsT0 = $bigint.toEther(totalNavsT0.jrtNav + totalNavsT0.srtNav, 6);
+
 
         // Simulate STRC price drop by reducing sUSDat balance
         // This simulates what happens when totalAssets() returns less
         const currentBalance = await strategy.totalAssets();
         const droppedBalance = currentBalance * 90n / 100n; // 10% drop
         const shares = await mockSUSDat.convertToShares(droppedBalance);
+
         await $erc20.setBalanceAny(sUSDat as any, strategy.address, shares);
+        // Trigger accounting
+        await accounting.$receipt().onAprChanged(deployer)
 
         // Verify totalAssets dropped
-        const totalAssetsAfter = $bigint.toEther(await strategy.totalAssets(), 6);
-        $test.eqDiff(totalAssetsAfter, totalBefore * 0.9, totalBefore * 0.02, 'Total assets should drop ~10%');
+        const totalAssetsT1 = $bigint.toEther(await strategy.totalAssets(), 6);
+        $test.eqDiff(totalAssetsT1, totalAssetsT0 * 0.9, totalAssetsT0 * 0.02, 'Total assets should drop ~10%');
+
+        const navAfterDrop1 = await cdo.totalAssetsUnlocked();
+        $require.eq(totalNavsT0.srtNav + srtGain, navAfterDrop1.srtNav, 'Sr should remain and receive gain for 1s');
+
+
+        // Increase strcBalance to recover loss
+        increase_strc: {
+            const loss = totalAssetsT0 - totalAssetsT1;
+            const lossInStrc = loss / priceEth;
+
+            const shares = await sUSDat.balanceOf(strategy.address);
+            const totalShares = await sUSDat.totalSupply();
+
+            // lossInStrc is what should be recovered for the strategy;
+            // however, sUSDat totalSupply is larger (increasing the value per share)
+            const totalSrcIn =  $bigint.toWei(lossInStrc, 6) * totalShares / shares
+
+            await sUSDat.storage.$set('strcBalance', totalSrcIn);
+            // Trigger accounting
+            await accounting.$receipt().onAprChanged(deployer);
+
+            $test.eqDiff(await strategy.totalAssets(), totalNavsT0.jrtNav + totalNavsT0.srtNav, 1n, 'Total assets should recover up to 1wei rounding');
+        }
+
+        check_strc_gain: {
+            const gain = totalAssetsT0 - totalAssetsT1;
+            const reserveNav = await accounting.totalReserve();
+            const reserveNavEth = $bigint.toEther(reserveNav, 6);
+            const jrtNav = await jrtVault.totalAssets();
+
+            $test.eqDiff(gain * $bigint.toEther(reserveBps, 18), reserveNavEth, .01, `Invalid reserve nav`);
+
+            // We have recovered the loss;
+            // however, for 2 seconds Junior has paid Senior the APR, and we have collected the reserve fee
+            $test.eqDiff(jrtNav + reserveNav + 2n * srtGain, totalNavsT0.jrtNav, 1n, 'Jrt+Reserve should be equal to first deposit state');
+        }
+
+        decrease_strc_price: {
+            const totalUSDat = await base.balanceOf(sUSDat.address);
+            const totalAssetsT2 = await strategy.totalAssets();
+            const totalNavsT2 = await cdo.totalAssetsUnlocked();
+
+            // 50% price drop equals to 5% strategy loss, as the Strc$ amount held is 10%
+            const priceT1 = price / 2n;
+
+            // mine 2 blocks (2s)
+            await oracle.$receipt().setPrice(deployer, priceT1);
+            // Trigger accounting
+            await accounting.$receipt().onAprChanged(deployer)
+
+
+            // Verify totalAssets dropped
+            const totalAssetsT3 = await strategy.totalAssets()
+            $test.eqDiff(
+                totalAssetsT3 //
+                , $bigint.multWithFloat(totalAssetsT2, .95)
+                , 1n //
+                , 'Total assets should drop ~5%' //
+            );
+
+            // Verify Sr gain after 4s
+            const totalNavsT3 = await cdo.totalAssetsUnlocked();
+            $test.eqDiff(
+                totalNavsT3.srtNav //
+                , totalNavsT0.srtNav + 4n * srtGain
+                , 1n //
+                , 'Sr should remain and receive gain for 4 blocks'
+            );
+
+            // Verify Jr dropped by 5%
+            $test.eqDiff(
+                totalNavsT3.jrtNav //
+                , totalNavsT2.jrtNav - $bigint.multWithFloat(totalAssetsT2, .05) - 2n * srtGain
+                , 1n //
+                , 'Jr should drop after price drop and funding Sr for 2 blocks (2s)'
+            );
+        }
     },
 
     // ============================================================
@@ -243,8 +334,7 @@ UAction.create({
                 let { tx } = await $erc4626.withdrawMeta(jrtVault, base, deployer, AMOUNT_WEI);
                 const feeAccrued = accounting.extractLogsFeeAccrued(tx.receipt)[0].params;
                 // At uneven amounts, amountToTranche === amountToReserve + 1wei
-                const diff = $bigint.abs(feeAccrued.amountToReserve - feeAccrued.amountToTranche)
-                $require.lte(diff, 1n, `Saturn 50% retention, ${feeAccrued.amountToReserve} ${feeAccrued.amountToTranche}`);
+                $test.eqDiff(feeAccrued.amountToReserve, feeAccrued.amountToTranche, 1n, `Saturn 50% retention`);
 
                 const totalFeeFact = $bigint.toEther(feeAccrued.amountToReserve + feeAccrued.amountToTranche, 6);
                 const feeRatio = Tranches.saturn.jrt.sharesCooldown[2].feeBps / 10000;
@@ -257,8 +347,7 @@ UAction.create({
                 await $tranche.deposit(srtVault, deployer, base, AMOUNT_WEI);
                 let { tx } = await $erc4626.withdrawMeta(srtVault, base, deployer, AMOUNT_WEI);
                 const feeAccrued = accounting.extractLogsFeeAccrued(tx.receipt)[0].params;
-                const diff = $bigint.abs(feeAccrued.amountToReserve - feeAccrued.amountToTranche)
-                $require.lte(diff, 1n, `Saturn 50% retention, ${feeAccrued.amountToReserve} ${feeAccrued.amountToTranche}`);
+                $test.eqDiff(feeAccrued.amountToReserve, feeAccrued.amountToTranche, 1n, `Saturn 50% retention`);
 
                 const totalFeeFact = $bigint.toEther(feeAccrued.amountToReserve + feeAccrued.amountToTranche, 6);
                 const feeRatio = Tranches.saturn.srt.sharesCooldown[2].feeBps / 10000;

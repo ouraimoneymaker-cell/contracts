@@ -9,6 +9,7 @@ import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/O
 import { IAprPairFeed } from "../tranches/interfaces/IAprPairFeed.sol";
 import { IStrataCDO } from "../tranches/interfaces/IStrataCDO.sol";
 import { IAccounting } from "../tranches/interfaces/IAccounting.sol";
+import { ITranche } from "../tranches/interfaces/ITranche.sol";
 import { UD60x18, pow, mul } from "@prb/math/src/ud60x18/Math.sol";
 import { UD60x18Ext } from "../tranches/utils/UD60x18Ext.sol";
 
@@ -35,7 +36,7 @@ contract CDOLens is OwnableUpgradeable {
         __Ownable_init_unchained(owner);
     }
 
-    function getAPRs (IStrataCDOApi cdo) external view returns (TAPRs memory) {
+    function getAPRs (IStrataCDOApi cdo) public view returns (TAPRs memory) {
         IAccountingApi accounting = cdo.accounting();
 
         IAprPairFeed feed = accounting.aprPairFeed();
@@ -75,6 +76,13 @@ contract CDOLens is OwnableUpgradeable {
             jrt: int64(aprJrt),
             srt: int64(aprSrt)
         });
+    }
+
+    function getTrancheAPR (ITranche tranche) external view returns (int64) {
+        IStrataCDOApi cdo = IStrataCDOApi(tranche.getCDOAddress());
+        TAPRs memory aprs = getAPRs(cdo);
+        bool isJrt = cdo.isJrt(address(tranche));
+        return isJrt ? aprs.jrt : aprs.srt;
     }
 
 

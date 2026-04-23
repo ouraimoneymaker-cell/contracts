@@ -169,7 +169,7 @@ contract SaturnStrategy is Strategy {
      */
     function totalAssets () public view returns (uint256 baseAssets) {
         uint256 shares = sUSDat.balanceOf(address(this));
-        baseAssets = sUSDat.previewRedeem(shares);
+        baseAssets = sUSDat.convertToAssets(shares);
         return baseAssets;
     }
 

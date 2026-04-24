@@ -14,7 +14,7 @@ import {IStrcPriceOracle} from "./IStrcPriceOracle.sol";
  *
  * Target APR:
  *   - Represents the Senior tranche benchmark: a fixed percentage of the STRC dividend rate.
- *   - Updatable by the feed role (Gelato Keeper reads currentDividend from STRC API
+ *   - Updatable by the feed role (the Keeper reads currentDividend from STRC API
  *     and applies a ratio, e.g. 0.7, to derive the target APR).
  *
  * Base APR:
@@ -37,7 +37,7 @@ contract SaturnAprPairProvider is IStrategyAprPairProvider {
     IStrcPriceOracle public immutable strcOracle;
 
     /// @notice Senior benchmark APR: fixed % of STRC dividend rate
-    /// @dev Updated by Gelato Keeper when Saturn distributes new STRC rewards (~monthly).
+    /// @dev Updated by the Keeper when Saturn distributes new STRC rewards (~monthly).
     ///      Scaled by 1e12 (12 decimal places).
     int64 public aprTarget;
 
@@ -71,7 +71,7 @@ contract SaturnAprPairProvider is IStrategyAprPairProvider {
 
     /**
      * @notice Update the target APR (benchmark for Senior tranche)
-     * @dev Called by Gelato Keeper when Saturn distributes new STRC rewards.
+     * @dev Called by the Keeper when STRC announces the dividends.
      *      Keeper reads currentDividend from STRC API and applies seniorShare ratio.
      *      Example: currentDividend = 11.5%, seniorShare = 70% → aprTarget = 8.05%
      * @param newAprTarget The new target APR, scaled by 1e12
@@ -109,7 +109,7 @@ contract SaturnAprPairProvider is IStrategyAprPairProvider {
         // Convert unvested STRC to USD value using the STRC oracle.
         // IMPORTANT: The result (unvestedUsd) must be in the same decimal scale as
         // sUSDat.totalAssets() (USDat, 6 decimals) for the APR ratio to be correct.
-        // This requires: strcDecimals + priceDecimals - priceDecimals == assetDecimals.
+        // This requires: strcDecimals == assetDecimals.
         // Verify against the real sUSDat contract before mainnet deployment.
         (uint256 strcPrice, uint8 priceDecimals) = strcOracle.getPrice();
         if (strcPrice == 0) return 0;

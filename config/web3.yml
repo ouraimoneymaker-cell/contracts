@@ -49,6 +49,15 @@ accounts:
       - 'eth/deployer'
       - 'eth/strata2'
 
+  - name: safe/eth/worker
+    type: safe
+    address: '0xe0A1F371eA77e18C1eA79126327D0fa1A6B4F943'
+    platform: 'eth'
+    operator: 'eth/worker1'
+    owners:
+      - 'eth/worker1'
+      - 'eth/worker2'
+
   - name: timelock/eth/strata
     address: '0xB2A3CF69C97AFD4dE7882E5fEE120e4efC77B706'
     platform: 'eth'
@@ -69,6 +78,12 @@ accounts:
 
   - name: eth/strata2
     address: '0xd796E125aF489CFfb4A766Df4deD9272E458249C'
+
+  - name: eth/worker1
+    address: '0x6830eb45048dBeB3EFB7204D61ed79CA69a70A9F'
+
+  - name: eth/worker2
+    address: '0x65376a513D3Be34B59D41B5cEe61a29197Fa46dD'
 
   - name: hoodi/deployer
     address: '0xB878F43161E20AD229896c830ff478Db95a2dBb5'

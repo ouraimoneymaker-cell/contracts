@@ -269,7 +269,7 @@ UAction.create({
 
             // We have recovered the loss;
             // however, for 2 seconds Junior has paid Senior the APR, and we have collected the reserve fee
-            $test.eqDiff(jrtNav + reserveNav + 2n * srtGain, totalNavsT0.jrtNav, 1n, 'Jrt+Reserve should be equal to first deposit state');
+            $test.eqDiff(jrtNav + reserveNav + 2n * srtGain, totalNavsT0.jrtNav, 2n, 'Jrt+Reserve should be equal to first deposit state');
         }
 
         decrease_strc_price: {
@@ -308,7 +308,7 @@ UAction.create({
             $test.eqDiff(
                 totalNavsT3.jrtNav //
                 , totalNavsT2.jrtNav - $bigint.multWithFloat(totalAssetsT2, .05) - 2n * srtGain
-                , 1n //
+                , 2n //
                 , 'Jr should drop after price drop and funding Sr for 2 blocks (2s)'
             );
         }

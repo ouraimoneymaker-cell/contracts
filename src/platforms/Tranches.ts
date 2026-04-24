@@ -3,8 +3,8 @@ import { MidasTestHelper } from '@s/strategies/midas/MidasTestHelper';
 import { MM1UsdTestHelper } from '@s/strategies/midas/MM1UsdTestHelper';
 import { MROXTestHelper } from '@s/strategies/midas/MROXTestHelper';
 import { NeutrlTestHelper } from '@s/strategies/neutrl/NeutrlTestHelper';
-import { SaturnTestHelper } from '@s/strategies/saturn/SaturnTestHelper';
 import { TEth } from 'dequanto/models/TEth';
+import { SaturnTranche } from './strats/SaturnTranche';
 
 export type TCDOKey = 'ethena' | 'neutrl' | 'mhyper' | 'mm1usd' | 'mrox' | 'saturn';
 export interface ICDO {
@@ -303,60 +303,7 @@ export const Tranches: Record<TCDOKey, ICDO> = {
         },
         TestHelper: MROXTestHelper,
     },
-    saturn: {
-        base: 'USDat',
-        fees: {
-            retention: {
-                jrt: 0.5, // 1 == 100%
-                srt: 0.5,
-            },
-            performanceFee: 0.075, // 1 === 100%
-        },
-        riskPremium: {
-            x: 1.0, // 100% — cancels aprBase from Senior APR
-            y: 0,
-            k: 0.3,
-        },
-        jrt: {
-            symbol: 'jrUSDat',
-            name: 'Strata Junior USDat',
-            depositsEnabled: true,
-            withdrawalsEnabled: true,
-            sharesCooldown: [
-                { covPct: 10, feeBps: 0, lock: '21days' },
-                { covPct: 20, feeBps: 10, lock: '7days' },
-                { covPct: 0, feeBps: 20, lock: 0 },
-            ],
-            sUSDatCooldown: '7days',
-        },
-        srt: {
-            symbol: 'srUSDat',
-            name: 'Strata Senior USDat',
-            depositsEnabled: true,
-            withdrawalsEnabled: true,
-            sharesCooldown: [
-                { covPct: 10, feeBps: 0, lock: 0 },
-                { covPct: 20, feeBps: 2.5, lock: 0 },
-                { covPct: 0, feeBps: 5, lock: 0 },
-            ],
-            sUSDatCooldown: 0,
-        },
-        Feed: {
-            name: 'Saturn CDO APR Pair',
-        },
-        Contracts: {
-            '*': {
-                AccessControlManager: 'SaturnAccessControlManager',
-                ERC20Cooldown: 'SaturnERC20Cooldown',
-                UnstakeCooldown: 'SaturnUnstakeCooldown',
-                SharesCooldown: 'SaturnSharesCooldown',
-            },
-        },
-        ContractVersions: {
-            accounting: 'continuous',
-        },
-        TestHelper: SaturnTestHelper,
-    },
+    saturn: SaturnTranche
 };
 
 export const ContractsIDMapping = {

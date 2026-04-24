@@ -53,6 +53,7 @@ export interface IPlatformAccounts {
     safe: {
         admin: TEth.IAccount;
         operator: TEth.IAccount;
+        worker: TEth.IAccount;
     };
     timelock: {
         admin: TEth.IAccount;

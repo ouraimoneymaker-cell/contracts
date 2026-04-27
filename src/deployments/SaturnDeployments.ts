@@ -56,6 +56,13 @@ export class SaturnDeployments extends DeploymentsBase<{
                 .075e12
             ]
         });
+
+        if (this.accounts.safe.worker) {
+            await this.ensureRole(
+                this.ROLES.UPDATER_FEED_ROLE,
+                this.accounts.safe.worker.address
+            );
+        }
         return {
             provider: provider as any as InstanceType<typeof SUSDeAprPairProvider>
         };

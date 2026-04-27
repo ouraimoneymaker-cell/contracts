@@ -256,6 +256,8 @@ export abstract class DeploymentsBase<T extends ICdoDeploymentsBase = any> {
     }
 
     async ensureRole(role: TEth.Hex, account: TEth.Address) {
+        $require.Hex(role, 'Role is undefined');
+        $require.AddressNotEmpty(account, 'Account is empty');
         let acm = await this.ensureACM();
         let has = await acm.hasRole(role, account);
         if (has === false) {

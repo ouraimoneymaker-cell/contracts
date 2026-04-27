@@ -119,6 +119,11 @@ export namespace PlatformFactory {
                 type: 'impersonated',
                 address: safeOperator.address,
             };
+            safeWorker = {
+                name: 'impersonated',
+                type: 'impersonated',
+                address: safeWorker.address,
+            };
             timelockAdmin = {
                 name: 'impersonated',
                 type: 'impersonated',
@@ -139,6 +144,7 @@ export namespace PlatformFactory {
 
             safeAdmin = safeOperator;
             safeOperator = safeOperator;
+            safeWorker = safeOperator;
             timelockAdmin = safeOperator;
             timelockConfig = safeOperator;
         }
@@ -146,6 +152,7 @@ export namespace PlatformFactory {
         if (group === 'operator') {
             safeAdmin = safeOperator;
             safeOperator = safeOperator;
+            safeWorker = safeOperator;
             timelockAdmin = safeOperator;
             timelockConfig = safeOperator;
         }

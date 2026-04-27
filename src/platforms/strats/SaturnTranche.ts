@@ -8,7 +8,7 @@ export const SaturnTranche = <ICDO> {
             jrt: 0.5, // 1 == 100%
             srt: 0.5,
         },
-        performanceFee: 0.075, // 1 === 100%
+        performanceFee: 0.05, // 1 === 100%
     },
     minimumJrtSrtRatioBuffer: 0.08,
     minimumJrtSrtRatio: 0.075,

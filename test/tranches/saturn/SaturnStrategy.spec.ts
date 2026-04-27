@@ -108,17 +108,31 @@ UAction.create({
         const { base, sUSDat } = await test.factory.ensureUnderlying();
         const { jrtVault, strategy, cdo } = test.tranches;
 
-        const AMOUNT = 10_000;
+        const AMOUNT = $bigint.toWei(10_000, 6);
         await $erc20.mint(base, deployer, deployer.address, AMOUNT);
         await $tranche.deposit(jrtVault, deployer, base, AMOUNT);
 
         // After deposit, strategy totalAssets should be ~99.9% of deposited amount
         // due to sUSDat's 0.1% deposit fee
-        const totalAssets = $bigint.toEther(await strategy.totalAssets(), 6);
-        const expectedPostFee = AMOUNT * 0.999; // 0.1% fee
+        const totalAssets = await strategy.totalAssets();
+        const expectedPostFee = $bigint.multWithFloat(AMOUNT, 0.999); // 0.1% fee
 
         // Allow small rounding tolerance
-        $test.eqDiff(totalAssets, expectedPostFee, 1, 'Total assets should reflect 0.1% deposit fee');
+        $test.eqDiff(totalAssets, expectedPostFee, 1n, 'Total assets should reflect 0.1% deposit fee');
+
+        no_fee_with_sUSDat_deposit: {
+            // Deposit the sUSDat
+            const sUSDatShares = await sUSDat.previewWithdraw(AMOUNT);
+            await $erc4626.mint(sUSDat as any, deployer, sUSDatShares);
+            await $tranche.deposit(jrtVault, deployer, sUSDat, sUSDatShares);
+
+            const totalAssets = await strategy.totalAssets();
+            const totalAssetsExpected = AMOUNT + expectedPostFee; // 0% fee + 0.1% fee
+            $test.eqDiff(totalAssets, totalAssetsExpected, 1n, 'Total assets should reflect 0.1% deposit fee');
+
+            const pps = await cdo.pricePerShare(jrtVault.address);
+            $require.eq(pps, BigInt(1e18), 'Price per share should remain 1');
+        }
     },
 
     // ============================================================

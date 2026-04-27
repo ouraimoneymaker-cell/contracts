@@ -288,7 +288,10 @@ contract SaturnStrategy is Strategy {
      * @notice Returns the deposit fee percentage for the underlying protocol
      * @return feeBps The deposit fee in basis points (e.g., 10 = 0.1%)
      */
-    function depositFeeBps () external view returns (uint256 feeBps) {
+    function depositFeeBps (address tokenIn) external override view returns (uint256 feeBps) {
+        if (tokenIn == address(sUSDat)) {
+            return 0;
+        }
         if (sUSDat.feeRecipient() == address(0)) {
             return 0;
         }

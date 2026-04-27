@@ -237,12 +237,4 @@ contract sNUSDStrategy is Strategy {
         erc20Cooldown.setCooldownDisabled(sNUSD, isDisabled);
         emit CooldownsChanged(sNUSDCooldownJrt_, sNUSDCooldownSrt_);
     }
-
-    /**
-     * @notice Returns the deposit fee percentage for the underlying protocol
-     * @return feeBps The deposit fee in basis points (e.g., 10 = 0.1%)
-     */
-    function depositFeeBps () external view returns (uint256 feeBps) {
-        return 0;
-    }
 }

@@ -493,12 +493,4 @@ contract MidasStrategy is Strategy {
         maxDepositSlippageBps = bps_;
         emit MaxDepositSlippageBpsChanged(bps_);
     }
-
-    /**
-     * @notice Returns the deposit fee percentage for the underlying protocol
-     * @return feeBps The deposit fee in basis points (e.g., 10 = 0.1%)
-     */
-    function depositFeeBps () external view returns (uint256 feeBps) {
-        return 0;
-    }
 }

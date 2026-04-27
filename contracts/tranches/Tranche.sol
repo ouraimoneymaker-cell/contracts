@@ -115,8 +115,8 @@ contract Tranche is ITranche, CDOComponent, ERC4626Upgradeable, ERC20PermitUpgra
     ///      The tranche itself charges no additional deposit fees.
     ///      Returns the gross assets required to mint the specified shares after the strategy fees are applied.
     function previewMint(uint256 sharesNet) public view override(ERC4626Upgradeable, IERC4626) returns (uint256 assetsGross) {
-        uint256 fee = cdo.strategy().depositFeeBps(asset());
-        assetsGross = quoteMint(sharesNet, fee);
+        uint256 feeBps = cdo.strategy().depositFeeBps(asset());
+        assetsGross = quoteMint(sharesNet, feeBps);
     }
     function quoteMint(uint256 sharesNet, uint256 feeBps) public view returns (uint256 assetsGross) {
         uint256 assetsNet = super.previewMint(sharesNet);
@@ -169,15 +169,19 @@ contract Tranche is ITranche, CDOComponent, ERC4626Upgradeable, ERC20PermitUpgra
 
     /** @dev Overloads {IERC4626-previewDeposit} to calculate the shares for a given Meta Token deposit amount. */
     function previewDeposit(address token, uint256 tokenAmount) public view returns (uint256) {
-        uint256 baseAssets = cdo.strategy().convertToAssets(token, tokenAmount, Math.Rounding.Floor);
-        uint256 shares = previewDeposit(baseAssets);
+        IStrategy strategy = cdo.strategy();
+        uint256 baseAssets = strategy.convertToAssets(token, tokenAmount, Math.Rounding.Floor);
+        uint256 feeBps = strategy.depositFeeBps(token);
+        uint256 shares = quoteDeposit(baseAssets, feeBps);
         return shares;
     }
 
     /** @dev Overloads {IERC4626-previewMint} to return the required Meta Token amount for minting the given number of shares. */
     function previewMint(address token, uint256 shares) public view returns (uint256) {
-        uint256 baseAssets = previewMint(shares);
-        uint256 tokenAssets = cdo.strategy().convertToTokens(token, baseAssets, Math.Rounding.Ceil);
+        IStrategy strategy = cdo.strategy();
+        uint256 feeBps = strategy.depositFeeBps(token);
+        uint256 baseAssets = quoteMint(shares, feeBps);
+        uint256 tokenAssets = strategy.convertToTokens(token, baseAssets, Math.Rounding.Ceil);
         return tokenAssets;
     }
 
@@ -215,8 +219,8 @@ contract Tranche is ITranche, CDOComponent, ERC4626Upgradeable, ERC20PermitUpgra
         // {Optimistic path} Reverts if token is not supported
         IStrategy strategy = cdo.strategy();
         uint256 baseAssets = strategy.convertToAssets(token, tokenAmount, Math.Rounding.Floor);
-        uint256 fee = strategy.depositFeeBps(token);
-        uint256 shares = quoteDeposit(baseAssets, fee);
+        uint256 feeBps = strategy.depositFeeBps(token);
+        uint256 shares = quoteDeposit(baseAssets, feeBps);
         _deposit(token, _msgSender(), receiver, baseAssets, tokenAmount, shares);
         return shares;
     }
@@ -233,8 +237,8 @@ contract Tranche is ITranche, CDOComponent, ERC4626Upgradeable, ERC20PermitUpgra
         cdo.updateAccounting();
 
         IStrategy strategy = cdo.strategy();
-        uint256 fee = strategy.depositFeeBps(token);
-        uint256 baseAssets = quoteMint(shares, fee);
+        uint256 feeBps = strategy.depositFeeBps(token);
+        uint256 baseAssets = quoteMint(shares, feeBps);
         // {Optimistic path} Reverts if token is not supported
         uint256 tokenAssets = strategy.convertToTokens(token, baseAssets, Math.Rounding.Ceil);
         _deposit(token, _msgSender(), receiver, baseAssets, tokenAssets, shares);

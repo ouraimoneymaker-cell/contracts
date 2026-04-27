@@ -122,7 +122,7 @@ UAction.create({
 
         no_fee_with_sUSDat_deposit: {
             // Deposit the sUSDat
-            const sUSDatShares = await sUSDat.previewWithdraw(AMOUNT)
+            const sUSDatShares = await sUSDat.previewWithdraw(AMOUNT);
             await $erc4626.mint(sUSDat as any, deployer, sUSDatShares);
             await $tranche.deposit(jrtVault, deployer, sUSDat, sUSDatShares);
 

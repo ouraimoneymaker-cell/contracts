@@ -280,24 +280,24 @@ export class StrategyBasicSuite<T extends DeploymentsBase> {
 
         const [
             amountOutExpected,
-            totalAssets,
             exitMode,
             balanceBefore,
             tokensMain,
             tokenOutUnderlyingFee,
             apr,
+            decimals,
         ] = await Promise.all([
             vault.previewRedeem(tokenOut.address, shares),
-            vault.totalAssets(),
             cdo.calculateExitMode(vault.address, acc.address),
             tokenOutErc20.balanceOf(acc.address),
             this.helper.getStrategyTokensMain(),
             this.helper.getUnderlyingExitFee(tokenOut.address),
-            this.getApr(isJRT ? 'jrt' : 'srt')
+            this.getApr(isJRT ? 'jrt' : 'srt'),
+            tokenOutErc20.decimals(),
         ]);
 
-        // Vesting tolerance (~2s)
-        const tolerance = this.calcWeiPerT(totalAssets, apr, 2);
+        // Vesting tolerance
+        const tolerance = $bigint.toWei(.0001, decimals);
         const tx = await vault.$receipt().redeem(
             acc
             , tokenOut.address
@@ -330,7 +330,7 @@ export class StrategyBasicSuite<T extends DeploymentsBase> {
 
             const dt = await this.helper.getUnderlyingUnstakePeriod();
             await this.test.mine(dt);
-            await this.helper.finalizeUnderlyingUnstake();
+            await this.helper.finalizeUnderlyingUnstake(acc.address);
 
             const tokenOutErc20 = vault.$address(tokenOut.address);
             const balanceBefore = await tokenOutErc20.balanceOf(acc.address);

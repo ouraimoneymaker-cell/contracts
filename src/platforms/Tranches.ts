@@ -4,8 +4,9 @@ import { MM1UsdTestHelper } from '@s/strategies/midas/MM1UsdTestHelper';
 import { MROXTestHelper } from '@s/strategies/midas/MROXTestHelper';
 import { NeutrlTestHelper } from '@s/strategies/neutrl/NeutrlTestHelper';
 import { TEth } from 'dequanto/models/TEth';
+import { SaturnTranche } from './strats/SaturnTranche';
 
-export type TCDOKey = 'ethena' | 'neutrl' | 'mhyper' | 'mm1usd' | 'mrox';
+export type TCDOKey = 'ethena' | 'neutrl' | 'mhyper' | 'mm1usd' | 'mrox' | 'saturn';
 export interface ICDO {
     // token symbol
     base: string;
@@ -302,6 +303,7 @@ export const Tranches: Record<TCDOKey, ICDO> = {
         },
         TestHelper: MROXTestHelper,
     },
+    saturn: SaturnTranche
 };
 
 export const ContractsIDMapping = {
@@ -316,4 +318,5 @@ export const ContractsPrefixMapping = {
     mhyper: 'MHyper',
     mm1usd: 'MM1USD',
     mrox: 'MROX',
+    saturn: 'Saturn',
 } as Record<TCDOKey, string>;

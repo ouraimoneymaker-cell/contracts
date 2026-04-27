@@ -256,6 +256,8 @@ export abstract class DeploymentsBase<T extends ICdoDeploymentsBase = any> {
     }
 
     async ensureRole(role: TEth.Hex, account: TEth.Address) {
+        $require.Hex(role, 'Role is undefined');
+        $require.AddressNotEmpty(account, 'Account is empty');
         let acm = await this.ensureACM();
         let has = await acm.hasRole(role, account);
         if (has === false) {
@@ -868,7 +870,8 @@ export abstract class DeploymentsBase<T extends ICdoDeploymentsBase = any> {
             },
             updater: async (accounting, value) => {
                 const maxDeposit = await srtVault.maxDeposit($address.ZERO);
-                l`MaxDeposit (Additional) cyan<${$number.humanize($bigint.toEther(maxDeposit))}>`;
+                const decimals = await new ERC20(await srtVault.asset(), srtVault.client).decimals();
+                l`MaxDeposit (Additional) cyan<${$number.humanize($bigint.toEther(maxDeposit, decimals))}>`;
 
                 // MUST: RATIO <= RATIO_BUFFER; so we check what parameter should be updated as first to keep this invariant.
                 if (MINIMUM_JRT_SRT_RATIO_BUFFER >= curMinimumJrtSrtRatio) {
@@ -880,7 +883,7 @@ export abstract class DeploymentsBase<T extends ICdoDeploymentsBase = any> {
                 }
 
                 const maxDepositAfter = await srtVault.maxDeposit($address.ZERO);
-                l`MaxDeposit (Additional) cyan<${$number.humanize($bigint.toEther(maxDepositAfter, 18))}>`;
+                l`MaxDeposit (Additional) cyan<${$number.humanize($bigint.toEther(maxDepositAfter, decimals))}>`;
             }
         });
     }

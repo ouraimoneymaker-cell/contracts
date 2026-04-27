@@ -19,6 +19,9 @@ contract Tranche is ITranche, CDOComponent, ERC4626Upgradeable, ERC20PermitUpgra
     /// @notice Minimum non-zero shares amount to prevent donation attack
     uint256 private constant MIN_SHARES = 0.1 ether;
 
+    /// @notice Basis points denominator
+    uint256 public constant BPS_DENOMINATOR = 10000;
+
     event OnMetaDeposit(address indexed owner, address indexed token, uint256 tokenAssets, uint256 shares);
     event OnMetaWithdraw(address indexed receiver, address indexed token, uint256 tokenAssets, uint256 shares);
     event OnExit(
@@ -92,6 +95,26 @@ contract Tranche is ITranche, CDOComponent, ERC4626Upgradeable, ERC20PermitUpgra
         uint256 assetsProtocolMax = cdo.maxWithdraw(address(this), owner);
         uint256 sharesProtocolMax = convertToShares(assetsProtocolMax);
         sharesGross = Math.min(super.maxRedeem(owner), sharesProtocolMax);
+    }
+
+    /// @inheritdoc IERC4626
+    /// @dev Accounts for the underlying strategy's deposit fees by deducting them from the gross assets before calculating shares.
+    ///      The tranche itself charges no additional deposit fees.
+    ///      Returns the net shares the user will receive after the strategy fees are applied.
+    function previewDeposit(uint256 assetsGross) public view override(ERC4626Upgradeable, IERC4626) returns (uint256 sharesNet) {
+        uint256 depositFeeBps = cdo.strategy().depositFeeBps();
+        uint256 fee = Math.mulDiv(assetsGross, depositFeeBps, BPS_DENOMINATOR, Math.Rounding.Ceil);
+        sharesNet = super.previewDeposit(assetsGross - fee);
+    }
+
+    /// @inheritdoc IERC4626
+    /// @dev Accounts for the underlying strategy's deposit fees when calculating required assets.
+    ///      The tranche itself charges no additional deposit fees.
+    ///      Returns the gross assets required to mint the specified shares after the strategy fees are applied.
+    function previewMint(uint256 sharesNet) public view override(ERC4626Upgradeable, IERC4626) returns (uint256 assetsGross) {
+        uint256 depositFeeBps = cdo.strategy().depositFeeBps();
+        uint256 assetsNet = super.previewMint(sharesNet);
+        assetsGross = Math.mulDiv(assetsNet, BPS_DENOMINATOR, BPS_DENOMINATOR - depositFeeBps, Math.Rounding.Ceil);
     }
 
     /** @dev Extends {IERC4626-previewRedeem} to handle fee calculation. Public and owner-unaware;

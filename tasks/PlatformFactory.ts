@@ -86,6 +86,7 @@ export namespace PlatformFactory {
             timelockConfig: `timelock/${network}/config`,
             safeAdmin: `safe/${network}/strata`,
             safeOperator: `safe/${network}/owner`,
+            safeWorker: `safe/${network}/worker`,
         };
 
         let deployer = await ChainAccountService.get(accounts.deployer);
@@ -93,6 +94,7 @@ export namespace PlatformFactory {
         let timelockConfig = await ChainAccountService.get(accounts.timelockConfig);
         let safeAdmin = await ChainAccountService.get(accounts.safeAdmin);
         let safeOperator = await ChainAccountService.get(accounts.safeOperator);
+        let safeWorker = await ChainAccountService.get(accounts.safeWorker);
 
         if (network === 'hardhat' || (platform === 'hardhat' && group === 'deployer')) {
             deployer = hh.deployer(0);
@@ -117,6 +119,11 @@ export namespace PlatformFactory {
                 type: 'impersonated',
                 address: safeOperator.address,
             };
+            safeWorker = {
+                name: 'impersonated',
+                type: 'impersonated',
+                address: safeWorker.address,
+            };
             timelockAdmin = {
                 name: 'impersonated',
                 type: 'impersonated',
@@ -127,6 +134,7 @@ export namespace PlatformFactory {
                 type: 'impersonated',
                 address: timelockConfig.address,
             };
+            await client.debug.setBalance(deployer.address,         BigInt(1e18));
             await client.debug.setBalance(timelockAdmin.address,    BigInt(1e18));
             await client.debug.setBalance(timelockConfig.address,   BigInt(1e18));
             await client.debug.setBalance(safeAdmin.address,        BigInt(1e18));
@@ -136,6 +144,7 @@ export namespace PlatformFactory {
 
             safeAdmin = safeOperator;
             safeOperator = safeOperator;
+            safeWorker = safeOperator;
             timelockAdmin = safeOperator;
             timelockConfig = safeOperator;
         }
@@ -143,6 +152,7 @@ export namespace PlatformFactory {
         if (group === 'operator') {
             safeAdmin = safeOperator;
             safeOperator = safeOperator;
+            safeWorker = safeOperator;
             timelockAdmin = safeOperator;
             timelockConfig = safeOperator;
         }
@@ -152,6 +162,7 @@ export namespace PlatformFactory {
             safe: {
                 admin: safeAdmin,
                 operator: safeOperator,
+                worker: safeWorker,
             },
             timelock: {
                 admin: timelockAdmin,

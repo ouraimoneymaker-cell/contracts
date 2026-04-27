@@ -42,6 +42,10 @@ export interface IPlatform {
         depositVault: TEth.Address;
         redemptionVault: TEth.Address;
     };
+
+    saturn?: {
+        sUSDat: TEth.Address;
+    };
 }
 
 export interface IPlatformAccounts {
@@ -49,6 +53,7 @@ export interface IPlatformAccounts {
     safe: {
         admin: TEth.IAccount;
         operator: TEth.IAccount;
+        worker: TEth.IAccount;
     };
     timelock: {
         admin: TEth.IAccount;

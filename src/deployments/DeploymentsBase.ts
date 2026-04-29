@@ -38,6 +38,7 @@ import { $exitMode } from '@s/utils/$exitMode';
 import { SUSDeStrategy } from '@0xc/hardhat/sUSDeStrategy/sUSDeStrategy';
 import { $number } from 'dequanto/utils/$number';
 import { DiscreteAccounting } from '@0xc/hardhat/DiscreteAccounting/DiscreteAccounting';
+import { DYSAccounting } from '@0xc/hardhat/DYSAccounting/DYSAccounting';
 import { ERC20 } from 'dequanto/prebuilt/openzeppelin/ERC20';
 import { KyberSwapAdapter } from '@0xc/hardhat/KyberSwapAdapter/KyberSwapAdapter';
 
@@ -568,10 +569,15 @@ export abstract class DeploymentsBase<T extends ICdoDeploymentsBase = any> {
         const { feed } = await this.ensureFeeds();
         const { base } = await this.ensureUnderlying();
         const decimals = await base.decimals();
-        const Contract = this.cdoInfo.ContractVersions?.accounting === 'continuous'
+        const accountingType = this.cdoInfo.ContractVersions?.accounting;
+        const Contract = accountingType === 'continuous'
             ? Accounting
-            : DiscreteAccounting;
-        const args = [ decimals ] as [ bigint ];
+            : accountingType === 'dys'
+                ? DYSAccounting
+                : DiscreteAccounting;
+        const args = accountingType === 'dys'
+            ? [ decimals, false ] as [ bigint, boolean ]
+            : [ decimals ] as [ bigint ];
 
         const { contract: accounting } = await this.ds.ensureWithProxy(Contract as typeof Accounting, {
             id: `${this.pfx}Accounting`,

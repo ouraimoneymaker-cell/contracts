@@ -9,6 +9,9 @@ export interface ITestHelperConstructor {
 
 export interface ITestHelper {
 
+    // Perform any necessary setup for the strategy
+    setup? (): Promise<void>
+
     // Distribute rewards to simulate underlying strategy behavior, such as total asset or price increases.
     distributeRewards (params: {
         assetsBefore?: bigint

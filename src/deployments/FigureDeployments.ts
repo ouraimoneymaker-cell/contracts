@@ -57,7 +57,7 @@ export class FigureDeployments extends DeploymentsBase<{
 
         const { contract: provider } = await this.ds.ensure(ConstantOracleAprPairProvider, {
             id: this.getContractId(`ConstantOracleAprPairProvider`),
-            arguments: [this.platform.figure.prismFeed],
+            arguments: [this.platform.figure.primeFeed],
         });
 
         return { provider };

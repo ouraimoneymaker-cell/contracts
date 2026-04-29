@@ -51,14 +51,8 @@ UAction.create({
         await $testCooldown.eqBalanceOf(erc20Cooldown, USDe, bob, { pending: 50n, nextUnlockAmount: 20n });
 
         // fail to withdraw
-        console.log(await erc20Cooldown.balanceOf(USDe.address, bob.address));
-        try {
-            await $testCooldown.finalize(erc20Cooldown, USDe, bob);
-            throw new Error(`Unreached`)
-        } catch (error) {
-            console.log(error);
-            $require.notEq(error.message, 'Unreached');
-        }
+        const { error } = await $promise.caught($testCooldown.finalize(erc20Cooldown, USDe, bob));
+        $require.notNull(error, `The time not passed, the finalization should fail.`);
 
         // #1: 60s passed, withdraw 1. portion
         await $hh.test.mine(`51s`);

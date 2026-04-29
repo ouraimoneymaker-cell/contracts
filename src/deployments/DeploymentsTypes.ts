@@ -1,6 +1,7 @@
 import { EthenaDeployments } from './EthenaDeployments';
 import { FigureDeployments } from './FigureDeployments';
 import { MHyperDeployments } from './MHyperDeployments';
+import { MKRAlphaDeployments } from './MKRAlphaDeployments';
 import { MM1UsdDeployments } from './MM1UsdDeployments';
 import { MROXDeployments } from './MROXDeployments';
 import { NeutrlDeployments } from './NeutrlDeployments';
@@ -12,6 +13,7 @@ export namespace DeploymentsTypes {
         figure: FigureDeployments;
         neutrl: NeutrlDeployments;
         mhyper: MHyperDeployments;
+        mkralpha: MKRAlphaDeployments;
         mm1usd: MM1UsdDeployments;
         mrox: MROXDeployments;
         saturn: SaturnDeployments;
@@ -22,6 +24,7 @@ export namespace DeploymentsTypes {
         figure: FigureDeployments,
         neutrl: NeutrlDeployments,
         mhyper: MHyperDeployments,
+        mkralpha: MKRAlphaDeployments,
         mm1usd: MM1UsdDeployments,
         mrox: MROXDeployments,
         saturn: SaturnDeployments,

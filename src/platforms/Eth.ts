@@ -35,6 +35,10 @@ const Tokens = {
     mROX: {
         address: '0x67E1F506B148d0Fc95a4E3fFb49068ceB6855c05',
     },
+    mKRALPHA: {
+        address: '0xE70B5Eb021Dc3AF653D61fd792D8f0B60F36c493',
+        decimals: 18,
+    },
     // Saturn
     USDat: {
         address: '0x23238f20b894f29041f48D88eE91131C395AAa71', // sUSDat.asset() — verified on-chain
@@ -69,6 +73,13 @@ export const Eth: IPlatform = {
         depositVault: '0x511d88E64d843Ee11Bf039a3EB837393001aEDE7',
         redemptionVault: '0xc33dAdA688f224c514682Ec6Ba940888d43C4b29',
     },
+
+    mkralpha: {
+        oracle: '0x38092073c5483bA9D844cC6733976957011e8AEe',
+        depositVault: '0x54602a8e47BF82073d75E0AC2aeF67F84fbCb8e4',
+        redemptionVault: '0xc37eDf7d955020D547B45F762027b49947D02550',
+    },
+
     saturn: {
         // Resolve from sUSDat on-chain: sUSDat.getWithdrawalQueue(), sUSDat.getStrcOracle()
         sUSDat: '0xD166337499E176bbC38a1FBd113Ab144e5bd2Df7',
@@ -78,6 +89,6 @@ export const Eth: IPlatform = {
         feedVerifier: '0xdF4ab20fA7752Be52E41e42F1FD667f37964d6a3',
         yieldVault: '0x6aD038cA6C04e885630851278ca0a856Ad9a66Cc',
         stakingVault: '0x19ebb35279a16207ec4ba82799cc64715065f7f6',
-        prismFeed: '0xf17C0EdcAA28371e9c8012D7699bF40ECF0F58d1',
+        primeFeed: '0xf17C0EdcAA28371e9c8012D7699bF40ECF0F58d1',
     },
 };

@@ -77,6 +77,7 @@ export interface IDeploymentsBaseParams {
     owner?: TEth.IAccount
     accounts?: IPlatformAccounts
     deployments?: 'throw' | 'redeploy'
+    whenUpgradeRequired?: 'ignore'
     initialDeposit?: boolean
     cdoInfo?: Partial<ICDO>
 
@@ -116,12 +117,14 @@ export abstract class DeploymentsBase<T extends ICdoDeploymentsBase = any> {
         this.ds = new Deployments(params.client, params.deployer, {
             directory: `./deployments/${params.isTest ? 'test/' : ''}${directoryPfx}`,
             whenBytecodeChanged: params.deployments ?? (this.isTestnet() ? null : 'throw'),
-            fork: params.client.forked?.platform
+            fork: params.client.forked?.platform,
+            whenUpgradeRequired: params.whenUpgradeRequired,
         });
         this.common = new Deployments(params.client, params.deployer, {
             directory: `./deployments${params.isTest ? 'test/' : ''}`,
             whenBytecodeChanged: params.deployments ?? (this.isTestnet() ? null : 'throw'),
-            fork: params.client.forked?.platform
+            fork: params.client.forked?.platform,
+            whenUpgradeRequired: params.whenUpgradeRequired,
         });
 
         let info = JSON.parse(JSON.stringify(Tranches[params.cdo])) as ICDO;
@@ -173,14 +176,20 @@ export abstract class DeploymentsBase<T extends ICdoDeploymentsBase = any> {
     }
 
 
-    async get<T extends ContractBase>(Ctor: Constructor<T>, params?: { id?: 'jrUSDe' | 'srUSDe' | string, cdo?: 'USDe' }) {
+    async get<T extends ContractBase>(Ctor: Constructor<T>, params?: {
+        id?: 'jrUSDe' | 'srUSDe' | string,
+        cdo?: 'USDe',
+        common?: boolean
+    }) {
         let { error, contract } = await this.getInner(this.ds, Ctor, params);
         if (contract) {
             return contract;
         }
-        let fromCommon = await this.getInner(this.common, Ctor, params);
-        if (fromCommon.contract) {
-            return fromCommon.contract;
+        if (params?.common !== false) {
+            let fromCommon = await this.getInner(this.common, Ctor, params);
+            if (fromCommon.contract) {
+                return fromCommon.contract;
+            }
         }
         let fromSimilar = await this.getInner(this.ds, Ctor, { sfx: true, ...(params ?? {}) });
         if (fromSimilar.contract) {
@@ -222,6 +231,17 @@ export abstract class DeploymentsBase<T extends ICdoDeploymentsBase = any> {
         if (byCdo.length > 1) {
             return { error: `Multiple ${Ctor.name} found for CDO ${cdo}: ${byCdo.map(x => x.id).join(', ')}` };
         }
+    }
+
+    async getDeploymentInfo (q: { address: TEth.Address }) {
+        try {
+            const info = await this.ds.store.getDeploymentInfo(q.address);
+            return info;
+        } catch (error) {
+            const info = await this.common.store.getDeploymentInfo(q.address);
+            return info;
+        }
+        throw new Error(`No deployment info found for ${q.address}`);
     }
 
     @memd.deco.memoize({ perInstance: true })
@@ -551,9 +571,7 @@ export abstract class DeploymentsBase<T extends ICdoDeploymentsBase = any> {
         const Contract = this.cdoInfo.ContractVersions?.accounting === 'continuous'
             ? Accounting
             : DiscreteAccounting;
-        const args = this.cdoInfo.ContractVersions?.accounting === 'continuous'
-            ? []
-            : [ decimals ];
+        const args = [ decimals ] as [ bigint ];
 
         const { contract: accounting } = await this.ds.ensureWithProxy(Contract as typeof Accounting, {
             id: `${this.pfx}Accounting`,
@@ -753,7 +771,8 @@ export abstract class DeploymentsBase<T extends ICdoDeploymentsBase = any> {
             initialize: [
                 this.owner.address,
                 acm.address
-            ]
+            ],
+            latest: false,
         });
 
         await this.ensureRole($contract.keccak256('DEPOSITOR_CONFIG_ROLE'), this.owner.address);
@@ -776,7 +795,8 @@ export abstract class DeploymentsBase<T extends ICdoDeploymentsBase = any> {
         let { contract: cdoLens } = await this.common.ensureWithProxy(CDOLens, {
             initialize: [
                 this.deployer.address
-            ]
+            ],
+            latest: false,
         });
         return { lens: cdoLens }
     }

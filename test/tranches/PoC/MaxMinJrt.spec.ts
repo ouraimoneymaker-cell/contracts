@@ -6,16 +6,23 @@ import { $erc20 } from '../utils/$erc20';
 import { $bigint } from 'dequanto/utils/$bigint';
 
 
-await $hh.test.deploy();
+const test = $hh.create('ethena', {
+    cdoInfo: {
+        ContractVersions: { accounting: 'discrete' }
+    },
+    fresh: true,
+})
+
+await test.deploy();
 
 UTest.create({
     async $after () {
-        await $hh.test.reset();
+        await test.wipe();
     },
 
     async 'mint 1K with jrtVault, and make the share price < 1, maxMint should handle it' () {
-        let { deployer } = $hh.test;
-        let { USDe, jrtVault, accounting } = $hh.test.tranches;
+        let { deployer } = test;
+        let { USDe, jrtVault, accounting } = test.tranches;
         await $erc20.mint(USDe, deployer, deployer.address, 1000);
         await $erc4626.deposit(jrtVault, deployer, '100%');
 

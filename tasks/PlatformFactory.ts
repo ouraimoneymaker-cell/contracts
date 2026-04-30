@@ -36,6 +36,7 @@ export namespace PlatformFactory {
         client?: Web3Client
         platform?: TEth.Platform
         deployments?: 'throw' | 'redeploy',
+        whenUpgradeRequired?: 'ignore'
         cdo: TKey
         accounts?: TKey | 'operator' | 'deployer'
         cdoInfo?: Partial<ICDO>
@@ -63,6 +64,7 @@ export namespace PlatformFactory {
             deployer: accounts.deployer as EoAccount,
             owner: accounts.timelock.admin,
             deployments: params?.deployments,
+            whenUpgradeRequired: params?.whenUpgradeRequired,
             accounts,
             initialDeposit: params?.initialDeposit,
             cdoInfo: params?.cdoInfo,

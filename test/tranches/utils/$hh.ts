@@ -91,9 +91,6 @@ export namespace $hh {
         }) {
             // Override default CDO infos for tests
             this.params ??= {};
-            this.params.cdoInfo ??= {}
-            this.params.cdoInfo.ContractVersions ??= {};
-            this.params.cdoInfo.ContractVersions.accounting ??= 'discrete';
         }
 
         @memd.deco.memoize({ perInstance: true })

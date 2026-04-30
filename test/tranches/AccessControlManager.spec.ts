@@ -48,6 +48,7 @@ UAction.create({
 
         await $hh.test.init();
         let { contract: accounting } = await $hh.test.factory.ds.ensureWithProxy(Accounting, {
+            arguments: [ 18n ],
             initialize: [
                 deployer.address,
                 deployer.address,

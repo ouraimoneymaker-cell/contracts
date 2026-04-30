@@ -27,7 +27,8 @@ UTest.create({
             forked: TestHelper.forked ?? 24808600,
             cdoInfo: {
                 pfx: `HHBasicSuite${key}`
-            }
+            },
+            fresh: true
         });
 
         const helper = new TestHelper(test)

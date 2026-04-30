@@ -5,7 +5,11 @@ import { $apr } from '@s/utils/$apr';
 import { ProtocolExecutor } from '../utils/ProtocolExecutor';
 
 
-const test = $hh.create('ethena', {})
+const test = $hh.create('ethena', {
+    cdoInfo: {
+        ContractVersions: { accounting: 'discrete' }
+    },
+})
 
 await test.deploy();
 
@@ -14,7 +18,7 @@ UTest.create({
         await test.reset();
     },
     async $after () {
-        await test.reset();
+        await test.wipe();
     },
     async 'changes APR in the middle' () {
         let exec = new AccountingExecutor(test);

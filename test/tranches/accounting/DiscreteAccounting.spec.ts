@@ -5,7 +5,11 @@ import { $apr } from '@s/utils/$apr';
 import { DiscreteAccounting as Accounting } from '@0xc/hardhat/DiscreteAccounting/DiscreteAccounting';
 import { $require } from 'dequanto/utils/$require';
 
-const test = $hh.create('ethena')
+const test = $hh.create('ethena', {
+    cdoInfo: {
+        ContractVersions: { accounting: 'discrete' }
+    },
+})
 const contracts = await test.deploy();
 const accounting = contracts.accounting as any as Accounting;
 

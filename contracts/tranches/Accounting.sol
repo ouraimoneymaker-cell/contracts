@@ -21,6 +21,7 @@ contract Accounting is IAccounting, CDOComponent {
     int64   private constant APR_FEED_BOUNDARY_MAX = 2e12; // 200%
     int64   private constant APR_FEED_BOUNDARY_MIN = 0;
     uint256 private constant APR_FEED_DECIMALS = 12;
+    uint256 private immutable ONE_ASSET;
 
     /// @dev The oracle to fetch the latest APR floor and APR base.
     /// @notice When the oracle is updated, it can actively push the latest values to this contract, allowing us to adjust srtTargetIndex.
@@ -84,6 +85,10 @@ contract Accounting is IAccounting, CDOComponent {
     event MinimumJrtSrtRatioBufferChanged(uint256 ratio);
     event FeeAccrued(bool isJrt, uint256 amountToReserve, uint256 amountToTranche);
     event FeeRetentionChanged(uint256 feeJrtRetention, uint256 feeSrtRetention);
+
+    constructor (uint256 navDecimals) {
+        ONE_ASSET = 10 ** navDecimals;
+    }
 
     function initialize(
         address owner_,
@@ -283,7 +288,10 @@ contract Accounting is IAccounting, CDOComponent {
             // Should never happen to USDe, jic: cover by Jrt, then Reserve, then Srt
             uint256 loss = uint256(-gain_dT);
 
-            uint256 jrtLoss = Math.min(jrtNavT0, loss);
+            uint256 jrtLoss = Math.min(
+                Math.saturatingSub(jrtNavT0, ONE_ASSET),
+                loss
+            );
 
             loss -= jrtLoss;
             uint256 reserveLoss = Math.min(reserveNavT0, loss);
@@ -327,7 +335,7 @@ contract Accounting is IAccounting, CDOComponent {
         }
         uint256 srtGainTargetAbs = Math.min(
             uint256(srtGainTarget),
-            Math.saturatingSub(jrtNavT1, 1e18)
+            Math.saturatingSub(jrtNavT1, ONE_ASSET)
         );
 
         // #2 Final new Jrt

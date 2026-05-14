@@ -231,6 +231,9 @@ contract StrataCDO is IErrors, IStrataCDO, IStrataCDOSetters, AccessControlled {
         if (!enabled) {
             revert DepositsDisabled(tranche);
         }
+        if (baseAssets > strategy.maxDeposit(tranche, token, tokenAmount)) {
+            revert DepositRejectedByStrategy(tranche, token);
+        }
         if (baseAssets > accounting.maxDeposit(isJrt_)) {
             revert DepositCapReached(tranche);
         }
@@ -259,6 +262,9 @@ contract StrataCDO is IErrors, IStrataCDO, IStrataCDOSetters, AccessControlled {
         bool enabled = isJrt_ ? actionsJrt.isWithdrawEnabled : actionsSrt.isWithdrawEnabled;
         if (!enabled) {
             revert WithdrawalsDisabled(tranche);
+        }
+        if (baseAssets > strategy.maxWithdraw(tranche, token, tokenAmount)) {
+            revert WithdrawalRejectedByStrategy(tranche, token);
         }
         bool isSharesLockup = sender == address(sharesCooldown);
         if (baseAssets > accounting.maxWithdraw(isJrt_, isSharesLockup)) {
@@ -420,6 +426,20 @@ contract StrataCDO is IErrors, IStrataCDO, IStrataCDOSetters, AccessControlled {
         sharesCooldown = sharesCooldown_;
         emit SharesCooldownSet(address(sharesCooldown_));
     }
+
+    /// @notice Updates the valuation price and pauses activities if valuation loss is detected
+    /// @dev Only callable by the valuation keeper. Automatically disables junior withdrawals and senior deposits upon entering valuation loss state
+    /// @param valuationPrice The new valuation price in 18 decimals (1e18 = $1)
+    function setValuationPrice (uint128 valuationPrice) external onlyValuationKeeper {
+        bool valuationLossEntered = accounting.setValuationPrice(valuationPrice);
+        if (valuationLossEntered) {
+            actionsJrt.isWithdrawEnabled = false;
+            actionsSrt.isDepositEnabled  = false;
+            emit WithdrawalsStateChanged(address(jrtVault), false);
+            emit DepositsStateChanged(address(srtVault), false);
+        }
+    }
+
 
     function shortfallPauser () internal {
         (uint256 jrtNav,,) = accounting.totalAssetsT0();

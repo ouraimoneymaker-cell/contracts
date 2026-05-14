@@ -6,6 +6,9 @@ import { IAprPairFeedListener } from "./IAprPairFeed.sol";
 
 interface IAccounting is ICDOComponent, IAprPairFeedListener {
 
+    event ValuationPriceChanged(uint256 valuationPrice);
+    event ValuationGracePeriodChanged(uint64 period);
+
     function updateAccounting () external;
     function updateBalanceFlow (
         uint256 jrtAssetsIn,
@@ -25,4 +28,6 @@ interface IAccounting is ICDOComponent, IAprPairFeedListener {
     function maxWithdraw(bool isJrt, bool ownerIsSharesCooldown) external view returns (uint256);
     function maxDeposit(bool isJrt) external view returns (uint256);
 
+    function setValuationPrice(uint128 valuationPrice) external returns (bool valuationLossEntered);
 }
+

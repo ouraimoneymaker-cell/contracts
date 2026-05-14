@@ -5,7 +5,6 @@ import { $ethena } from './$ethena';
 import { $require } from 'dequanto/utils/$require';
 import { l } from 'dequanto/utils/$logger';
 import { $test } from './$test';
-import { EthenaDeployments } from '@s/deployments/EthenaDeployments';
 import { $date } from 'dequanto/utils/$date';
 import { AprPairFeed } from '@0xc/hardhat/AprPairFeed/AprPairFeed';
 import { DiscreteAccounting as Accounting } from '@0xc/hardhat/DiscreteAccounting/DiscreteAccounting';
@@ -14,7 +13,7 @@ import { DeploymentsBase } from '@s/deployments/DeploymentsBase';
 export namespace $strata {
     export const SECONDS_PER_YEAR = 365 * 24 * 60 * 60;
 
-    export async function disableAPRs (tranches: EthenaDeployments) {
+    export async function disableAPRs (tranches: DeploymentsBase) {
         l`Disable APRs`;
         const { client, accounts } = tranches;
         const ROUND_STALE = $date.parseTimespan('1year', { get: 's' });

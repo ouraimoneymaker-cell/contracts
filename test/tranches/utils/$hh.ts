@@ -60,6 +60,13 @@ export namespace $hh {
         return await test.init();
     }
 
+    export async function deploy<T extends TCDOKey>(...args: Parameters<typeof create<T>>) {
+        const test = create(...args);
+        const ds = await test.init();
+        await ds.deploy();
+        return ds;
+    }
+
     export async function reset (client: Web3Client) {
         await client.debug.reset({});
         if (test.factory) {

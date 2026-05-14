@@ -8,7 +8,7 @@ import { IStrataCDO } from "./interfaces/IStrataCDO.sol";
 import { IAprPairFeed } from "./interfaces/IAprPairFeed.sol";
 import { CDOComponent } from "./base/CDOComponent.sol";
 import { UD60x18Ext } from "./utils/UD60x18Ext.sol";
-
+import { AccountingLib } from "./utils/AccountingLib.sol";
 
 /**
  * @title CDO::DiscreteAccounting
@@ -45,8 +45,8 @@ contract DiscreteAccounting is IAccounting, CDOComponent {
 
     /// @dev Latest balances at T0 (latest protocol interrogation)
     uint256 public nav;
-    uint256 public jrtNav;
-    uint256 public srtNav;
+    uint256 public jrtBaseNav;
+    uint256 public srtBaseNav;
     uint256 public reserveNav;
 
     /// @dev Risk parameters for Risk Premium calculation.
@@ -83,6 +83,27 @@ contract DiscreteAccounting is IAccounting, CDOComponent {
 
     /// @notice Projected Junior NAV during the rewardless periods
     uint256 public jrtNavProjected;
+
+    /** ValuationLoss Parameters */
+
+    /// @notice The current valuation price of the underlying asset in USD terms
+    /// @dev Scaled to 1e18 where 1e18 = $1.00. Maximum value is 1e18 (representing $1.00)
+    ///      When below 1e18, indicates a valuation loss has occurred
+    uint128 public valuationPrice;
+
+    /// @notice Timestamp of the last valuation price update
+    /// @dev Updated whenever the valuation keeper pushes a new valuation price
+    uint64 public valuationUpdatedAt;
+
+    /// @notice Timestamp when the valuation loss state was entered
+    /// @dev Set when valuationPrice drops below 1e18 for the first time
+    ///      Used to calculate the grace period during which deposits/withdrawals are restricted
+    uint64 public valuationEnteredAt;
+
+    /// @notice Duration in seconds of the grace period after entering valuation loss
+    /// @dev During this period after valuationEnteredAt, deposits and withdrawals are disabled
+    ///      to prevent front-running and allow for proper loss validation
+    uint64 public valuationGracePeriod;
 
 
     error InvalidNavSplit(uint256 navT1, uint256 jrtAssets, uint256 srtAssets, uint256 reserveAssets);
@@ -121,6 +142,7 @@ contract DiscreteAccounting is IAccounting, CDOComponent {
         indexTimestamp = block.timestamp;
         minimumJrtSrtRatio = 0.05e18;
         minimumJrtSrtRatioBuffer = 0.06e18;
+        valuationPrice = 1e18;
     }
 
     /// @notice Returns the updated total assets for each tranche and the reserve
@@ -135,8 +157,8 @@ contract DiscreteAccounting is IAccounting, CDOComponent {
             /*jrtNavT1Real*/,
             srtNavT1,
             reserveNavT1
-        ) = calculateNAVSplit(nav, jrtNavProjected, jrtNav, srtNav, reserveNav, navT1);
-        return (jrtNavT1Projected, srtNavT1, reserveNavT1);
+        ) = calculateNAVSplit(nav, jrtNavProjected, jrtBaseNav, srtBaseNav, reserveNav, navT1);
+        (jrtNavT1Projected, srtNavT1) = calcEffectiveNav(jrtNavT1Projected, srtNavT1);
     }
 
     /// @notice Returns the updated total assets for each tranche and the reserve
@@ -147,13 +169,7 @@ contract DiscreteAccounting is IAccounting, CDOComponent {
     /// @return reserveNavT1 The updated Reserve TVL
     function totalAssets () public view returns (uint256 jrtNavT1Projected, uint256 srtNavT1, uint256 reserveNavT1) {
         uint256 navT1 = cdo.totalStrategyAssets(nav, navTimestamp);
-        (
-            jrtNavT1Projected,
-            /*jrtNavT1Real*/,
-            srtNavT1,
-            reserveNavT1
-        ) = calculateNAVSplit(nav, jrtNavProjected, jrtNav, srtNav, reserveNav, navT1);
-        return (jrtNavT1Projected, srtNavT1, reserveNavT1);
+        return totalAssets(navT1);
     }
 
     /// @notice Returns the current saved real total assets for each tranche and the reserve
@@ -162,7 +178,8 @@ contract DiscreteAccounting is IAccounting, CDOComponent {
     /// @return srtNavT0 The last saved Senior Tranche TVL
     /// @return reserveNavT0 The last saved Reserve TVL
     function totalAssetsT0 () public view returns (uint256 jrtNavT0, uint256 srtNavT0, uint256 reserveNavT0) {
-        return (jrtNav, srtNav, reserveNav);
+        (jrtNavT0, srtNavT0) = calcEffectiveNav(jrtBaseNav, srtBaseNav);
+        reserveNavT0 = reserveNav;
     }
 
     /// @notice Returns current reserve value
@@ -171,6 +188,13 @@ contract DiscreteAccounting is IAccounting, CDOComponent {
     function totalReserve () external view returns (uint256) {
         (,,uint256 reserveNavT1) = totalAssets(cdo.totalStrategyAssets(nav, navTimestamp));
         return reserveNavT1;
+    }
+
+    function srtNav () external view returns (uint256 srtNavEffective) {
+        (, srtNavEffective) = calcEffectiveNav(jrtBaseNav, srtBaseNav);
+    }
+    function jrtNav () external view returns (uint256 jrtNavEffective) {
+        (jrtNavEffective,) = calcEffectiveNav(jrtBaseNav, srtBaseNav);
     }
 
     /// @notice Reduces the reserve by the specified amount
@@ -191,8 +215,8 @@ contract DiscreteAccounting is IAccounting, CDOComponent {
         nav = nav + jrtAmountIn + srtAmountIn - amount;
         navTimestamp = block.timestamp;
         jrtNavProjected += jrtAmountIn;
-        jrtNav += jrtAmountIn;
-        srtNav += srtAmountIn;
+        jrtBaseNav += jrtAmountIn;
+        srtBaseNav += srtAmountIn;
 
         // Fetch APRs and force recalculate aprSrt, as JRT and SRT TVLs may have changed.
         (bool modified, UD60x18 aprTarget_, UD60x18 aprBase_) = fetchAprs();
@@ -209,22 +233,32 @@ contract DiscreteAccounting is IAccounting, CDOComponent {
         return maxWithdrawInner(isJrt, ownerIsSharesCooldown);
     }
     function maxWithdrawInner(bool isJrt, bool ownerIsSharesCooldown) internal view returns (uint256) {
+        if (valuationPrice < 1e18 && block.timestamp < valuationEnteredAt + valuationGracePeriod) {
+            // Disable withdrawals during grace period after valuation loss
+            return 0;
+        }
+        (uint256 jrtNavEffective, uint256 srtNavEffective) = calcEffectiveNav(jrtBaseNav, srtBaseNav);
         if (ownerIsSharesCooldown) {
-            return isJrt ? jrtNav : srtNav;
+            return isJrt ? jrtNavEffective : srtNavEffective;
         }
         if (isJrt) {
-            uint256 minJrt = srtNav * minimumJrtSrtRatio / 1e18;
-            return Math.saturatingSub(jrtNav, minJrt);
+            uint256 minJrt = srtNavEffective * minimumJrtSrtRatio / 1e18;
+            return Math.saturatingSub(jrtNavEffective, minJrt);
         }
         // srt
-        return srtNav;
+        return srtNavEffective;
     }
     function maxDeposit(bool isJrt) external view returns (uint256) {
+        if (valuationPrice < 1e18 && block.timestamp < valuationEnteredAt + valuationGracePeriod) {
+            // Disable deposits during grace period after valuation loss
+            return 0;
+        }
         if (isJrt) {
             return type(uint256).max;
         }
-        uint256 maxSrt = jrtNav * 1e18 / minimumJrtSrtRatioBuffer;
-        return Math.saturatingSub(maxSrt, srtNav);
+        (uint256 jrtNavEffective, uint256 srtNavEffective) = calcEffectiveNav(jrtBaseNav, srtBaseNav);
+        uint256 maxSrt = jrtNavEffective * 1e18 / minimumJrtSrtRatioBuffer;
+        return Math.saturatingSub(maxSrt, srtNavEffective);
     }
 
     /// @notice Updates the accounting by fetching the current total assets from the strategy
@@ -248,9 +282,19 @@ contract DiscreteAccounting is IAccounting, CDOComponent {
         uint256 srtAssetsIn,
         uint256 srtAssetsOut
     ) external onlyCDO {
-        jrtNav = jrtNav + jrtAssetsIn - jrtAssetsOut;
+        if (valuationPrice < 1e18 && srtAssetsOut > 0) {
+            (jrtAssetsOut, srtAssetsOut) = AccountingLib.splitValuatedNavOut(
+                jrtBaseNav,
+                srtBaseNav,
+                ONE_ASSET,
+                valuationPrice,
+                jrtAssetsOut,
+                srtAssetsOut
+            );
+        }
+        jrtBaseNav = jrtBaseNav + jrtAssetsIn - jrtAssetsOut;
         jrtNavProjected = jrtNavProjected + jrtAssetsIn - jrtAssetsOut;
-        srtNav = srtNav + srtAssetsIn - srtAssetsOut;
+        srtBaseNav = srtBaseNav + srtAssetsIn - srtAssetsOut;
         nav = nav + jrtAssetsIn + srtAssetsIn - jrtAssetsOut - srtAssetsOut;
         navTimestamp = block.timestamp;
         (bool modified, UD60x18 aprTarget_, UD60x18 aprBase_) = fetchAprs();
@@ -266,10 +310,10 @@ contract DiscreteAccounting is IAccounting, CDOComponent {
         uint256 amountToReserve = amount * (1e18 - retentionBps) / 1e18;
         reserveNav += amountToReserve;
         if (isJrt) {
-            jrtNav -= amountToReserve;
+            jrtBaseNav -= amountToReserve;
             jrtNavProjected -= amountToReserve;
         } else {
-            srtNav -= amountToReserve;
+            srtBaseNav -= amountToReserve;
         }
         emit FeeAccrued(isJrt, amountToReserve, amount - amountToReserve);
     }
@@ -489,13 +533,13 @@ contract DiscreteAccounting is IAccounting, CDOComponent {
             uint256 jrtNavT1Real,
             uint256 srtNavT1,
             uint256 reserveNavT1
-        ) = calculateNAVSplit(nav, jrtNavProjected, jrtNav, srtNav, reserveNav, navT1);
+        ) = calculateNAVSplit(nav, jrtNavProjected, jrtBaseNav, srtBaseNav, reserveNav, navT1);
         updateIndex();
         nav = navT1;
         navTimestamp = block.timestamp;
-        srtNav = srtNavT1;
+        srtBaseNav = srtNavT1;
         jrtNavProjected = jrtNavT1Projected;
-        jrtNav = jrtNavT1Real;
+        jrtBaseNav = jrtNavT1Real;
         reserveNav = reserveNavT1;
     }
 
@@ -525,7 +569,7 @@ contract DiscreteAccounting is IAccounting, CDOComponent {
 
 
     function calculateRiskPremium () internal view returns (UD60x18){
-        UD60x18 tvlRatio = UD60x18.wrap(srtNav == 0 ? 0 : (srtNav * 1e18 / (srtNav + jrtNavProjected)));
+        UD60x18 tvlRatio = UD60x18.wrap(srtBaseNav == 0 ? 0 : (srtBaseNav * 1e18 / (srtBaseNav + jrtNavProjected)));
         UD60x18 riskPremium = calculateRiskPremiumInner(riskX, riskY, riskK, tvlRatio);
         return riskPremium;
     }
@@ -670,5 +714,59 @@ contract DiscreteAccounting is IAccounting, CDOComponent {
         require(ratio >= minimumJrtSrtRatio && ratio != 0, "RatioBelowHardFloor");
         minimumJrtSrtRatioBuffer = ratio;
         emit MinimumJrtSrtRatioBufferChanged(ratio);
+    }
+
+    /// @notice Sets the valuation price for the base asset.
+    function setValuationPrice (uint128 price) external onlyCDO returns (bool){
+        bool isValuationLossPeriod = valuationPrice < 1e18;
+        bool valuationLossEntered = isValuationLossPeriod == false && price < 1e18;
+        // Allow the valuation price in range 0.0001-1
+        require(0.0001e18 <= price && price <= 1e18, "InvalidValuationPrice");
+        valuationPrice = price;
+        valuationUpdatedAt = uint64(block.timestamp);
+        if (valuationLossEntered) {
+            valuationEnteredAt = uint64(block.timestamp);
+        }
+        emit ValuationPriceChanged(price);
+        return valuationLossEntered;
+    }
+
+    /// @notice Sets the grace period
+    function setValuationGracePeriod (uint64 period) external onlyRole(PAUSER_ROLE) {
+        require(period <= 1 days, "GracePeriodTooLong");
+        valuationGracePeriod = period;
+        emit ValuationGracePeriodChanged(period);
+    }
+
+
+    /// @notice Calculates valuation-adjusted NAVs for Junior and Senior tranches
+    /// @dev Applies the valuation loss adjustment mechanism where Junior absorbs Senior's valuation losses first.
+    ///      The effective NAVs are **always calculated on-the-fly** from base NAVs and are never stored in state.
+    ///      This design enables seamless recovery as valuation improves - no explicit rebalancing is required.
+    ///
+    ///      **Valuation Loss Mechanics:**
+    ///      - When valuationPrice < 1e18, Senior's effective NAV is reduced proportionally
+    ///      - Junior's effective NAV is reduced by the amount needed to cover Senior's shortfall
+    ///      - Junior is protected by ONE_ASSET minimum to prevent complete depletion
+    ///
+    ///      **Recovery Behavior:**
+    ///      - As valuationPrice → 1e18, effective NAVs converge back to base NAVs automatically
+    ///      - No state changes or rebalancing transactions needed
+    ///      - Recovery benefits all remaining participants proportionally
+    ///
+    ///      **Invariant Maintained:**
+    ///      ```
+    ///      jrtEffective + srtEffective == jrtFact + srtFact
+    ///      ```
+    function calcEffectiveNav (uint256 jrtFact, uint256 srtFact) internal view returns (uint256 jrtEffective, uint256 srtEffective) {
+        if (valuationPrice == 1e18) {
+            return (jrtFact, srtFact);
+        }
+        uint256 extraNeeded = srtFact * (1e18 - valuationPrice) / valuationPrice;
+        uint256 extraTaken = Math.min(
+            Math.saturatingSub(jrtFact, ONE_ASSET),
+            extraNeeded
+        );
+        return (jrtFact - extraTaken, srtFact + extraTaken);
     }
 }

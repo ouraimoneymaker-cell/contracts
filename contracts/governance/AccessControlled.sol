@@ -26,15 +26,20 @@ abstract contract AccessControlled is Initializable, Ownable2StepUpgradeable, Re
     /// @notice Access control manager contract
     IAccessControlManager public acm;
 
-    // @notice Two-step configuration updater contract
+    /// @notice Two-step configuration updater contract
     address public twoStepConfigManager;
 
-    uint256[48] private __gap;
+    /// @notice Valuation updater
+    address public valuationKeeper;
+
+    uint256[47] private __gap;
 
     /// @notice Emitted when access control manager contract address is changed
     event NewAccessControlManager(address accessControlManager);
     /// @notice Emitted when two step config manager is changed
     event NewTwoStepConfigManager(address twoStepConfigManager);
+    /// @notice Emitted when valuation keeper address is changed
+    event NewValuationKeeper(address valuationKeeper);
 
     /// @notice Thrown when the action is prohibited by AccessControlManager
     error Unauthorized(address sender, address calledContract, bytes4 sel);
@@ -53,6 +58,11 @@ abstract contract AccessControlled is Initializable, Ownable2StepUpgradeable, Re
 
     modifier onlyTwoStepConfigManager() {
         require(twoStepConfigManager == _msgSender(), "ConfigManagerOnly");
+        _;
+    }
+
+    modifier onlyValuationKeeper() {
+        require(valuationKeeper == _msgSender(), "ValuationKeeperOnly");
         _;
     }
 
@@ -101,6 +111,15 @@ abstract contract AccessControlled is Initializable, Ownable2StepUpgradeable, Re
         }
         acm = IAccessControlManager(accessControlManager);
         emit NewAccessControlManager(accessControlManager);
+    }
+
+    /**
+     * @notice Sets the address of ValuationKeeper
+     * @param valuationKeeper_ The new address of the ValuationKeeper
+     */
+    function setValuationKeeper(address valuationKeeper_) external onlyOwner {
+        valuationKeeper = valuationKeeper_;
+        emit NewValuationKeeper(valuationKeeper_);
     }
 
     /**

@@ -17,4 +17,23 @@ abstract contract Strategy is IStrategy, CDOComponent {
     function depositFeeBps (address) external virtual view returns (uint256 feeBps) {
         return 0;
     }
+
+    /**
+     * @notice Returns the maximum deposit amount allowed by the strategy
+     * @dev Override this method to implement deposit limits per tranche/token
+     * @dev e.g. checking the underlying protocol's deposit state
+     */
+    function maxDeposit(address tranche, address tokenIn, uint256 tokenAmout) external virtual view returns (uint256 assets) {
+        return type(uint256).max;
+    }
+
+    /**
+     * @notice Returns the maximum withdrawal amount allowed by the strategy
+     * @dev Override this method to implement withdrawal limits per tranche/token
+     * @dev e.g. checking the underlying protocol's withdrawal state
+     */
+    function maxWithdraw(address tranche, address tokenOut, uint256 tokenAmout) external virtual view returns (uint256 assets) {
+        return type(uint256).max;
+    }
+
 }

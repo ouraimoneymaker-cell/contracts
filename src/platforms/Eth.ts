@@ -73,4 +73,11 @@ export const Eth: IPlatform = {
         // Resolve from sUSDat on-chain: sUSDat.getWithdrawalQueue(), sUSDat.getStrcOracle()
         sUSDat: '0xD166337499E176bbC38a1FBd113Ab144e5bd2Df7',
     },
+    figure: {
+        navEngine: '0xfed839b6ba09c1abf4c768aba0eca50746e4eca9',
+        feedVerifier: '0xdF4ab20fA7752Be52E41e42F1FD667f37964d6a3',
+        yieldVault: '0x6aD038cA6C04e885630851278ca0a856Ad9a66Cc',
+        stakingVault: '0x19ebb35279a16207ec4ba82799cc64715065f7f6',
+        prismFeed: '0xf17C0EdcAA28371e9c8012D7699bF40ECF0F58d1',
+    },
 };

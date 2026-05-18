@@ -46,6 +46,14 @@ export interface IPlatform {
     saturn?: {
         sUSDat: TEth.Address;
     };
+
+    figure?: {
+        navEngine: TEth.Address;
+        feedVerifier: TEth.Address;
+        yieldVault: TEth.Address;
+        stakingVault: TEth.Address;
+        prismFeed: TEth.Address;
+    };
 }
 
 export interface IPlatformAccounts {

@@ -16,6 +16,9 @@ interface IErrors {
     error WithdrawalsDisabled(address tranche);
     error DepositsDisabled(address tranche);
 
+    error WithdrawalRejectedByStrategy(address tranche, address token);
+    error DepositRejectedByStrategy(address tranche, address token);
+
     error DepositCapReached(address tranche);
     error WithdrawalCapReached(address tranche);
 

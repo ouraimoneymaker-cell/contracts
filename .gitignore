@@ -38,6 +38,7 @@ contracts/backlog/
 config/*
 !config/web3.yml
 
-
-deployments/deployments-hardhat*
-deployments/*/deployments-hardhat*
+/data/
+/deployments/deployments-hardhat*
+/deployments/test/
+/deployments/*/deployments-hardhat*

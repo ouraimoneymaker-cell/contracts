@@ -17,7 +17,7 @@ $require.notEmpty(STRATS, `No strategies to test`);
 // Run basic tests for each strategy in the forked environment
 UTest.create({
     $config: {
-        timeout: 60_000
+        timeout: 10 * 60_000
     },
 
     ...alot(STRATS).toDictionary(key => key, key => {

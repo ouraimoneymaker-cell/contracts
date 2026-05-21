@@ -27,10 +27,25 @@ contract CDOLens is OwnableUpgradeable {
         int64 srt;
     }
 
+    /**
+     * @notice Fallback pricing route for an asset that has no direct Chainlink USD feed.
+     * @dev The asset is quoted in `quoteToken` through a Curve pool, then `quoteToken` is
+     *      converted to USD via its own Chainlink feed (priceFeeds[quoteToken]).
+     */
+    struct CurveRoute {
+        address pool;        // Curve pool holding both the asset and the quote token
+        address quoteToken;  // intermediate token quoted by the pool, e.g. USDC
+        int128 assetIndex;   // coin index of the priced asset within the pool
+        int128 quoteIndex;   // coin index of `quoteToken` within the pool
+    }
+
     IStrataCDOApi[] public cdos;
 
     /// @notice Chainlink-like price feed per asset, used to convert the exchange rate into USD
     mapping(address => IChainlinkPriceFeed) public priceFeeds;
+
+    /// @notice Curve fallback route per asset, used when no direct Chainlink USD feed exists
+    mapping(address => CurveRoute) public curveRoutes;
 
     function initialize(address owner) external initializer {
         __Ownable_init_unchained(owner);
@@ -89,8 +104,8 @@ contract CDOLens is OwnableUpgradeable {
     /**
      * @notice Returns the USD price per share for an ERC4626 vault (tranche)
      * @dev Computes the exchange rate via IERC4626.convertToAssets, then multiplies by the
-     *      Chainlink feed answer for the underlying asset to produce a USD-denominated price.
-     *      Result is always normalised to 18 decimal precision.
+     *      USD price of the underlying asset (see getAssetUsdPrice) to produce a
+     *      USD-denominated price. Result is always normalised to 18 decimal precision.
      * @param vault The ERC4626 vault (tranche) to price
      * @return price The USD price per share in 18 decimal precision
      */
@@ -98,17 +113,54 @@ contract CDOLens is OwnableUpgradeable {
         uint8 shareDecimals = vault.decimals();
         uint256 exchangeRate = vault.convertToAssets(10 ** shareDecimals);
         address asset = vault.asset();
-
-        IChainlinkPriceFeed feed = priceFeeds[asset];
-        require(address(feed) != address(0), "Price feed not set");
-
-        (, int256 answer,,,) = feed.latestRoundData();
-        require(answer > 0, "Invalid feed price");
-
         uint8 assetDecimals = IERC20Metadata(asset).decimals();
-        uint8 feedDecimals = feed.decimals();
 
-        price = exchangeRate * uint256(answer) * 1e18 / (10 ** (assetDecimals + feedDecimals));
+        // USD price of one whole unit of the underlying asset, in 18 decimal precision
+        uint256 assetUsdPrice = getAssetUsdPrice(asset);
+
+        // exchangeRate is denominated in `assetDecimals`; divide it out to leave 18 decimals
+        price = exchangeRate * assetUsdPrice / (10 ** assetDecimals);
+    }
+
+    /**
+     * @notice Returns the USD price of one whole unit of `asset`, in 18 decimal precision
+     * @dev Uses the asset's Chainlink feed when one is configured. When no direct feed
+     *      exists, falls back to the configured Curve route: the asset is priced in the
+     *      route's quote token (e.g. USDC) via the pool's `get_dy`, then the quote token
+     *      is converted to USD using its own Chainlink feed.
+     * @param asset The underlying asset to price
+     * @return The USD price of one whole `asset` token, normalised to 18 decimals
+     */
+    function getAssetUsdPrice (address asset) public view returns (uint256) {
+        IChainlinkPriceFeed feed = priceFeeds[asset];
+        if (address(feed) != address(0)) {
+            (, int256 answer,,,) = feed.latestRoundData();
+            require(answer > 0, "Invalid feed price");
+            return uint256(answer) * 1e18 / (10 ** feed.decimals());
+        }
+
+        // No direct USD feed: fall back to a Curve pool quoted against the route's quote token
+        CurveRoute memory route = curveRoutes[asset];
+        require(route.pool != address(0), "Price feed not set");
+
+        // get_dy returns the amount of quote token received for selling 1 whole asset token (adjusted for decimals)
+        uint256 assetInQuote = ICurvePool(route.pool).get_dy(
+            route.assetIndex,
+            route.quoteIndex,
+            10 ** IERC20Metadata(asset).decimals()
+        );
+
+        // Convert the quote-token price into USD via the quote token's Chainlink feed
+        IChainlinkPriceFeed quoteFeed = priceFeeds[route.quoteToken];
+        require(address(quoteFeed) != address(0), "Quote feed not set");
+        (, int256 quoteAnswer,,,) = quoteFeed.latestRoundData();
+        require(quoteAnswer > 0, "Invalid feed price");
+
+        uint8 quoteDecimals = IERC20Metadata(route.quoteToken).decimals();
+        uint8 quoteFeedDecimals = quoteFeed.decimals();
+
+        return assetInQuote * uint256(quoteAnswer) * 1e18
+            / (10 ** (quoteDecimals + quoteFeedDecimals));
     }
 
     /**
@@ -118,6 +170,17 @@ contract CDOLens is OwnableUpgradeable {
      */
     function setPriceFeed (address asset, IChainlinkPriceFeed feed) external onlyOwner {
         priceFeeds[asset] = feed;
+    }
+
+    /**
+     * @notice Set or remove the Curve fallback route for an asset without a direct USD feed
+     * @dev The asset is priced in `route.quoteToken` through the Curve pool; the quote token
+     *      must itself have a Chainlink feed configured via setPriceFeed.
+     * @param asset The asset address to configure
+     * @param route The Curve route (set `route.pool` to address(0) to remove)
+     */
+    function setCurveRoute (address asset, CurveRoute calldata route) external onlyOwner {
+        curveRoutes[asset] = route;
     }
 
     /**
@@ -185,4 +248,9 @@ interface IChainlinkPriceFeed {
         uint256 updatedAt,
         uint80 answeredInRound
     );
+}
+
+interface ICurvePool {
+    /// @notice Amount of coin `j` received as output for `dx` units of coin `i`
+    function get_dy(int128 i, int128 j, uint256 dx) external view returns (uint256);
 }

@@ -225,7 +225,7 @@ export const Tranches: Record<TCDOKey, ICDO> = {
                 jrt: 0.5, // 1 == 100%
                 srt: 0.5,
             },
-            performanceFee: 0.075, // 1 === 100%
+            performanceFee: 0, // 1 === 100%
         },
         riskPremium: {
             x: 0.125,
@@ -239,8 +239,8 @@ export const Tranches: Record<TCDOKey, ICDO> = {
             withdrawalsEnabled: true,
             sharesCooldown: [
                 { covPct: 10, feeBps: 0, lock: '28days' },
-                { covPct: 20, feeBps: 10, lock: '14days' },
-                { covPct: 0, feeBps: 20, lock: 0 },
+                { covPct: 20, feeBps: 0, lock: '14days' },
+                { covPct: 0, feeBps: 0, lock: 0 },
             ],
         },
         srt: {
@@ -250,8 +250,8 @@ export const Tranches: Record<TCDOKey, ICDO> = {
             withdrawalsEnabled: true,
             sharesCooldown: [
                 { covPct: 10, feeBps: 0, lock: 0 },
-                { covPct: 20, feeBps: 2.5, lock: 0 },
-                { covPct: 0, feeBps: 5, lock: 0 },
+                { covPct: 20, feeBps: 0, lock: 0 },
+                { covPct: 0, feeBps: 0, lock: 0 },
             ],
         },
         Feed: {

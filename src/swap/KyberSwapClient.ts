@@ -30,6 +30,7 @@ interface IKyberSwapRoute {
 }
 interface IKyberSwapRouteOptions {
     onlySinglePath: boolean
+    includedSources: string
 }
 interface IKyberSwapCalldataOptions {
     slippageTolerance: number;

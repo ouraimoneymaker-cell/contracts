@@ -43,6 +43,12 @@ export interface IPlatform {
         redemptionVault: TEth.Address;
     };
 
+    mkralpha?: {
+        oracle: TEth.Address;
+        depositVault: TEth.Address;
+        redemptionVault: TEth.Address;
+    };
+
     saturn?: {
         sUSDat: TEth.Address;
     };
@@ -52,7 +58,7 @@ export interface IPlatform {
         feedVerifier: TEth.Address;
         yieldVault: TEth.Address;
         stakingVault: TEth.Address;
-        prismFeed: TEth.Address;
+        primeFeed: TEth.Address;
     };
 }
 

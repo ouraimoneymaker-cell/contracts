@@ -4,10 +4,11 @@ import { MM1UsdTestHelper } from '@s/strategies/midas/MM1UsdTestHelper';
 import { MROXTestHelper } from '@s/strategies/midas/MROXTestHelper';
 import { NeutrlTestHelper } from '@s/strategies/neutrl/NeutrlTestHelper';
 import { TEth } from 'dequanto/models/TEth';
+import { MKRAlphaTranche } from './strats/MKRAlphaTranche';
 import { SaturnTranche } from './strats/SaturnTranche';
 import { FigureTranche } from './strats/FigureTranche';
 
-export type TCDOKey = 'ethena' | 'neutrl' | 'mhyper' | 'mm1usd' | 'mrox' | 'saturn' | 'figure';
+export type TCDOKey = 'ethena' | 'neutrl' | 'mhyper' | 'mkralpha' | 'mm1usd' | 'mrox' | 'saturn' | 'figure';
 export interface ICDO {
     // token symbol
     base: string;
@@ -82,7 +83,7 @@ export interface ICDO {
     };
     ContractVersions?: {
         // Discrete accounting is the default (backward compatible with previous versions).
-        accounting?: 'continuous' | 'discrete';
+        accounting?: 'continuous' | 'discrete' | 'dys';
     };
 
     // Contracts prefixes (can be overridden for testing)
@@ -216,6 +217,7 @@ export const Tranches: Record<TCDOKey, ICDO> = {
         },
         TestHelper: MidasTestHelper,
     },
+    mkralpha: MKRAlphaTranche,
     mm1usd: {
         base: 'USDC',
         fees: {
@@ -319,6 +321,7 @@ export const ContractsPrefixMapping = {
     figure: 'Figure',
     neutrl: 'Neutrl',
     mhyper: 'MHyper',
+    mkralpha: 'MKRAlpha',
     mm1usd: 'MM1USD',
     mrox: 'MROX',
     saturn: 'Saturn',

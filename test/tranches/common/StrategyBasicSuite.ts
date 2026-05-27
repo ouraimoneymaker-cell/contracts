@@ -77,6 +77,8 @@ export class StrategyBasicSuite<T extends DeploymentsBase> {
                     await $erc20.setBalanceAny(erc20, alice, $bigint.toWei(1000, decimals));
                     await $erc20.eqBalance(erc20, alice, 1000);
                 }
+
+                await suite.helper.setup?.();
             },
             async 'should deposit tokens'() {
                 const tokens = await suite.helper.getStrategyTokensIn();

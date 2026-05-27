@@ -13,6 +13,7 @@ import { $erc4626 } from '../utils/$erc4626';
 import { SaturnAprPairProvider } from '@0xc/hardhat/SaturnAprPairProvider/SaturnAprPairProvider';
 import { MockStakedUSDat } from '@0xc/hardhat/MockStakedUSDat/MockStakedUSDat';
 import { MockStrcPriceOracle } from '@0xc/hardhat/MockStrcPriceOracle/MockStrcPriceOracle';
+import { $promise } from 'dequanto/utils/$promise';
 
 const test = $hh.create('saturn');
 
@@ -368,6 +369,46 @@ UAction.create({
                 const totalFeeCalc = AMOUNT * feeRatio / (1 - feeRatio);
                 $test.eqDiff(totalFeeFact, totalFeeCalc, .0001);
             },
+        });
+    },
+
+    async 'SaturnStrategy:: Token Pause-States'() {
+        const { deployer } = test.factory;
+        const { base, sUSDat } = await test.factory.ensureUnderlying();
+        const { accounting, jrtVault, srtVault, strategy } = test.tranches;
+
+        await $erc4626.deposit(sUSDat as any, deployer, 500);
+
+        return UAction.create({
+            async 'disable and enable Senior sUSDat'() {
+                await strategy.$receipt().setTokenConfig(deployer, sUSDat.address, {
+                    jrtDepositsPaused: false,
+                    jrtWithdrawalsPaused: false,
+                    srtDepositsPaused: true,
+                    srtWithdrawalsPaused: false,
+                });
+
+                await $erc4626.depositMeta(jrtVault, sUSDat, deployer, 50)
+                const { error: errDeposit } = await $promise.caught(
+                    $erc4626.depositMeta(srtVault, sUSDat, deployer, 50)
+                );
+                $require.match(/TokenDepositPaused/, errDeposit.message);
+
+                await strategy.$receipt().setTokenConfig(deployer, sUSDat.address, {
+                    jrtDepositsPaused: true,
+                    jrtWithdrawalsPaused: true,
+                    srtDepositsPaused: false,
+                    srtWithdrawalsPaused: true,
+                });
+
+                const shares = await $erc4626.depositMeta(srtVault, sUSDat, deployer, 50);
+                $require.eq($bigint.toEther(shares), 50);
+
+                const { error: errWithdraw } = await $promise.caught(
+                    $erc4626.redeemMeta(srtVault, sUSDat, deployer, '100%')
+                );
+                $require.match(/TokenWithdrawalPaused/, errWithdraw.message);
+            }
         });
     },
 });

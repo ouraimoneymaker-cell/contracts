@@ -44,10 +44,23 @@ contract SaturnStrategy is Strategy {
     uint256 public sUSDatCooldownJrt;
     uint256 public sUSDatCooldownSrt;
 
+    struct TTokenConfig {
+        bool jrtDepositsPaused;
+        bool jrtWithdrawalsPaused;
+        bool srtDepositsPaused;
+        bool srtWithdrawalsPaused;
+    }
+
+    mapping(address token => TTokenConfig) public tokenConfigs;
+
     /// @dev sUSDat._decimalsOffset() = 12, used for manual ceil conversion
     uint256 private constant DECIMALS_OFFSET = 1e12;
 
     event CooldownsChanged(uint256 jrt, uint256 srt);
+    event TokenConfigChanged(address token, TTokenConfig config);
+
+    error TokenDepositPaused(address tranche, address token);
+    error TokenWithdrawalPaused(address tranche, address token);
 
     constructor (IsUSDat sUSDat_) {
         sUSDat = sUSDat_;
@@ -83,7 +96,13 @@ contract SaturnStrategy is Strategy {
      * @param owner The address of the asset owner from whom to transfer tokens
      * @return The amount of base assets received after deposit
      */
-    function deposit (address /* tranche */, address token, uint256 tokenAmount, uint256 baseAssets, address owner) external onlyCDO returns (uint256) {
+    function deposit (address tranche, address token, uint256 tokenAmount, uint256 baseAssets, address owner) external onlyCDO returns (uint256) {
+
+        bool isDepositEnabled = isTokenEnabledForDeposit(tranche, token);
+        if (!isDepositEnabled) {
+            revert TokenDepositPaused(tranche, token);
+        }
+
         SafeERC20.safeTransferFrom(IERC20(token), owner, address(this), tokenAmount);
 
         if (token == address(USDat)) {
@@ -121,6 +140,11 @@ contract SaturnStrategy is Strategy {
     }
 
     function withdrawInner (address tranche, address token, uint256 /* tokenAmount */, uint256 baseAssets, address sender, address receiver, bool shouldSkipCooldown) internal returns (uint256) {
+        bool isWithdrawalEnabled = isTokenEnabledForWithdrawal(tranche, token);
+        if (!isWithdrawalEnabled) {
+            revert TokenWithdrawalPaused(tranche, token);
+        }
+
         // Convert base assets to sUSDat shares needed (ceil rounding, favors protocol)
         // previewWithdraw is standard OZ (no fee override) — returns shares needed for given assets
         uint256 shares = sUSDat.previewWithdraw(baseAssets);
@@ -267,6 +291,36 @@ contract SaturnStrategy is Strategy {
     }
 
     /**
+     * @notice Checks if withdrawals are enabled for a specific token and tranche combination
+     * @dev Does not validate if the token is supported by the strategy - caller must ensure token validity.
+     *      Returns true if withdrawals are not paused for the given tranche type (JRT/SRT).
+     * @param tranche The address of the tranche (JRT or SRT)
+     * @param token The address of the token to check (not validated against supported tokens)
+     * @return True if withdrawals are enabled (not paused), false otherwise
+     */
+    function isTokenEnabledForWithdrawal (address tranche, address token) public view returns (bool) {
+        bool isWithdrawalPaused = cdo.isJrt(tranche)
+            ? tokenConfigs[token].jrtWithdrawalsPaused
+            : tokenConfigs[token].srtWithdrawalsPaused;
+        return isWithdrawalPaused != true;
+    }
+
+    /**
+     * @notice Checks if deposits are enabled for a specific token and tranche combination
+     * @dev Does not validate if the token is supported by the strategy - caller must ensure token validity.
+     *      Returns true if deposits are not paused for the given tranche type (JRT/SRT).
+     * @param tranche The address of the tranche (JRT or SRT)
+     * @param token The address of the token to check (not validated against supported tokens)
+     * @return True if deposits are enabled (not paused), false otherwise
+     */
+    function isTokenEnabledForDeposit (address tranche, address token) public view returns (bool) {
+        bool isDepositPaused = cdo.isJrt(tranche)
+            ? tokenConfigs[token].jrtDepositsPaused
+            : tokenConfigs[token].srtDepositsPaused;
+        return isDepositPaused != true;
+    }
+
+    /**
      * @notice Updates the cooldown periods for sUSDat withdrawals
      * @dev USDat cooldown is handled by Saturn's WithdrawalQueueERC721 (~7 days).
      *      These cooldowns only apply to direct sUSDat share withdrawals via erc20Cooldown.
@@ -282,6 +336,22 @@ contract SaturnStrategy is Strategy {
         bool isDisabled = sUSDatCooldownJrt_ == 0 && sUSDatCooldownSrt_ == 0;
         erc20Cooldown.setCooldownDisabled(IERC20(address(sUSDat)), isDisabled);
         emit CooldownsChanged(sUSDatCooldownJrt_, sUSDatCooldownSrt_);
+    }
+
+    /**
+    * @notice Updates the configuration for a supported token
+    * @dev Controls whether deposits/withdrawals are paused for junior (jrt) and/or senior (srt) tranches.
+    *      By default (false), all tokens and actions are allowed. Set to true to pause specific actions.
+    *      Only callable by accounts with PAUSER_ROLE.
+    * @param token The address of the token to configure (sUSDat or USDat)
+    * @param config The token configuration with pause flags
+    */
+    function setTokenConfig (address token, TTokenConfig calldata config) external onlyRole(PAUSER_ROLE) {
+        if (token != address(sUSDat) && token != address(USDat)) {
+            revert UnsupportedToken(token);
+        }
+        tokenConfigs[token] = config;
+        emit TokenConfigChanged(token, config);
     }
 
     /**

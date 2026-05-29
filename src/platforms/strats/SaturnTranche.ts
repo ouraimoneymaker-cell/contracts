@@ -23,8 +23,8 @@ export const SaturnTranche = <ICDO> {
         depositsEnabled: true,
         withdrawalsEnabled: true,
         sharesCooldown: [
-            { covPct: 15, feeBps: 0, lock: '21days' },
-            { covPct: 30, feeBps: 10, lock: '7days' },
+            { covPct: 15, feeBps: 0, lock: '28days' },
+            { covPct: 30, feeBps: 10, lock: '14days' },
             { covPct: 0, feeBps: 20, lock: 0 },
         ],
         sUSDatCooldown: 0,

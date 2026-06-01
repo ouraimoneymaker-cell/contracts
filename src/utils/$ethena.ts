@@ -9,6 +9,7 @@ import { $date } from 'dequanto/utils/$date';
 import { $number } from 'dequanto/utils/$number';
 import { $require } from 'dequanto/utils/$require';
 import { $apr } from './$apr';
+import { ERC20 } from 'dequanto/prebuilt/openzeppelin/ERC20';
 
 export namespace $ethena {
     const SECONDS_PER_YEAR = BigInt(31_536_000);
@@ -105,15 +106,23 @@ export namespace $ethena {
 
         let [
             totalAssets,
-            totalSupply
+            totalSupply,
+            asset,
         ] = await Promise.all([
             vault.totalAssets(),
-            vault.totalSupply()
+            vault.totalSupply(),
+            vault.asset(),
         ]);
-
+        let [
+            assetDecimals,
+            vaultDecimals,
+        ] = await Promise.all([
+            new ERC20(asset, vault.client).decimals(),
+            vault.decimals(),
+        ]);
         return {
-            totalAssets: $bigint.toEther(totalAssets),
-            totalSupply: $bigint.toEther(totalSupply),
+            totalAssets: $bigint.toEther(totalAssets, assetDecimals),
+            totalSupply: $bigint.toEther(totalSupply, vaultDecimals),
         }
     }
 }

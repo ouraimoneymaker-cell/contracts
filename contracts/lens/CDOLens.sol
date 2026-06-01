@@ -27,6 +27,15 @@ contract CDOLens is OwnableUpgradeable {
         int64 srt;
     }
 
+    struct TAPRsBreakdown {
+        int64 base;
+        int64 target;
+        int64 jrt;
+        int64 srt;
+        uint256 tvlRatioSrt;
+        uint256 riskPremium;
+    }
+
     /**
      * @notice Fallback pricing route for an asset that has no direct Chainlink USD feed.
      * @dev The asset is quoted in `quoteToken` through a Curve pool, then `quoteToken` is
@@ -52,6 +61,20 @@ contract CDOLens is OwnableUpgradeable {
     }
 
     function getAPRs (IStrataCDOApi cdo) public view returns (TAPRs memory) {
+        TAPRsBreakdown memory aprs = getAPRsBreakdownInner(cdo);
+        return TAPRs({
+            base: aprs.base,
+            target: aprs.target,
+            jrt: aprs.jrt,
+            srt: aprs.srt
+        });
+    }
+
+    function getAPRsBreakdown (IStrataCDOApi cdo) external view returns (TAPRsBreakdown memory) {
+        return getAPRsBreakdownInner(cdo);
+    }
+
+    function getAPRsBreakdownInner (IStrataCDOApi cdo) internal view returns (TAPRsBreakdown memory) {
         IAccountingApi accounting = cdo.accounting();
 
         IAprPairFeed feed = accounting.aprPairFeed();
@@ -75,21 +98,23 @@ contract CDOLens is OwnableUpgradeable {
         UD60x18 aprSrt1 = mul(UD60x18.wrap(uint256(aprBase)), UD60x18.wrap(1e18) - risk);
         int256 aprSrt = int256(UD60x18Ext.max(UD60x18.wrap(uint256(aprTarget)), aprSrt1).unwrap());
 
-        int256 aprJrtSpread = (int256(round.aprBase) - aprSrt) * int256(tvlRatioSrt.unwrap()) / int256(tvlRatioJrt.unwrap());
-        int256 aprJrt = int256(round.aprBase) + aprJrtSpread;
-
         uint256 reserveBps = accounting.reserveBps();
-        if (aprJrt > 0 && reserveBps > 0) {
-            // Net APR = grossApr * (1 - performanceFee)
+        if (aprBase > 0 && reserveBps > 0) {
+            // Net Base APR = grossApr * (1 - performanceFee)
             uint256 factor = 1e18 - reserveBps;
-            aprJrt = (aprJrt * int256(factor)) / int256(1e18);
+            aprBase = (aprBase * int256(factor)) / int256(1e18);
         }
 
-        return TAPRs({
+        int256 aprJrtSpread = (aprBase - aprSrt) * int256(tvlRatioSrt.unwrap()) / int256(tvlRatioJrt.unwrap());
+        int256 aprJrt = aprBase + aprJrtSpread;
+
+        return TAPRsBreakdown({
             base: int64(round.aprBase),
             target: int64(round.aprTarget),
             jrt: int64(aprJrt),
-            srt: int64(aprSrt)
+            srt: int64(aprSrt),
+            tvlRatioSrt: tvlRatioSrt.unwrap(),
+            riskPremium: risk.unwrap()
         });
     }
 

@@ -1,4 +1,4 @@
-import { UAction } from 'atma-utest'
+import { UTest } from 'atma-utest'
 import { $erc4626 } from '../utils/$erc4626';
 import { $hh } from '../utils/$hh';
 import { $require } from 'dequanto/utils/$require';
@@ -15,7 +15,7 @@ let { deployer, factory } = test
 let { sUSDe, USDe, strategy, cdo, accounting, unstakeCooldown } = test.tranches;
 
 
-UAction.create({
+UTest.create({
     async $before () {
         await $erc20.mint(USDe, deployer, deployer, 1000_000);
         await cdo.$receipt().setReserveTreasury(deployer, '0xff');

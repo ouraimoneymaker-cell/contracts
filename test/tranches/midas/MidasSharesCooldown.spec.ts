@@ -1,5 +1,5 @@
 import { HardhatProvider } from 'dequanto/hardhat/HardhatProvider';
-import { UAction } from 'atma-utest'
+import { UTest } from 'atma-utest'
 import { $erc20 } from '../utils/$erc20';
 import { $date } from 'dequanto/utils/$date';
 import { $require } from 'dequanto/utils/$require';
@@ -30,7 +30,7 @@ const {
 const { client, deployer } = test;
 const { sharesCooldown, unstakeCooldown } = await test.factory.ensureCooldowns(cdo);
 
-UAction.create({
+UTest.create({
     async $before () {
         await test.factory.addRoles({
             [alice.address]: [
@@ -64,7 +64,7 @@ UAction.create({
     },
 
     async 'finalize' () {
-        return UAction.create({
+        return UTest.create({
             async $before () {
                 await $erc4626.deposit(jrtVault, bob, 1000);
 

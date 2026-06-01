@@ -1,5 +1,5 @@
 import { HardhatProvider } from 'dequanto/hardhat/HardhatProvider';
-import { UAction } from 'atma-utest'
+import { UTest } from 'atma-utest'
 import { $usde } from '../utils/$usde';
 import { $erc20 } from '../utils/$erc20';
 import { $acc } from '../utils/$acc';
@@ -32,7 +32,7 @@ await $usde.mint(USDe, alice, 1000.0);
 await $hh.test.snapshot('erc20Cooldown');
 
 
-UAction.create({
+UTest.create({
     async $teardown() {
         await $hh.test.reset('erc20Cooldown');
     },

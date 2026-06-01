@@ -1,4 +1,4 @@
-import { UAction } from 'atma-utest'
+import { UTest } from 'atma-utest'
 import { $erc4626 } from './utils/$erc4626';
 import { $hh } from './utils/$hh';
 import { $require } from 'dequanto/utils/$require';
@@ -12,7 +12,7 @@ let { jrtVault, sUSDe,  } = $hh.test.tranches;
 let alice = await $hh.test.createAccount('alice');
 let USDE_INITIAL = 500;
 
-UAction.create({
+UTest.create({
     async $before () {
         let { client } = $hh.test;
         let { sUSDe, USDe, strategy, jrtVault, srtVault, feed, accounting } = $hh.test.tranches;
@@ -49,7 +49,7 @@ UAction.create({
         await $hh.test.reset('meta-vault');
     },
     async 'ERC4626 standard' () {
-        return UAction.create({
+        return UTest.create({
             async 'Deposit → Redeem' () {
                 let arr = [21.3e18, .3e9];
                 for (let value of arr) {

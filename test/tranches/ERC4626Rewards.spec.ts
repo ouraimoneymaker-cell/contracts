@@ -1,4 +1,4 @@
-import { UAction, UTest } from 'atma-utest'
+import { UTest } from 'atma-utest'
 import { $erc4626 } from './utils/$erc4626';
 import { $hh } from './utils/$hh';
 import { $erc20 } from './utils/$erc20';
@@ -6,7 +6,7 @@ import { $ethena } from './utils/$ethena';
 
 await $hh.test.deploy();
 
-UAction.create({
+UTest.create({
     async $before () {
         let { sUSDe, USDe, strategy, jrtVault } = $hh.test.tranches;
         let { deployer } = $hh.test;

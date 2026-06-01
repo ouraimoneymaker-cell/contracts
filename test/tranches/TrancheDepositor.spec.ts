@@ -1,4 +1,4 @@
-import { UAction } from 'atma-utest'
+import { UTest } from 'atma-utest'
 import { $erc4626 } from './utils/$erc4626';
 import { $hh } from './utils/$hh';
 import { $address } from 'dequanto/utils/$address';
@@ -19,7 +19,7 @@ import { $require } from 'dequanto/utils/$require';
 
 const test = await $hh.create('ethena', {});
 
-UAction.create({
+UTest.create({
     async $before () {
         await test.deploy();
     },

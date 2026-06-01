@@ -1,4 +1,4 @@
-import { UAction } from 'atma-utest'
+import { UTest } from 'atma-utest'
 import { $require } from 'dequanto/utils/$require';
 import { $address } from 'dequanto/utils/$address';
 import { $date } from 'dequanto/utils/$date';
@@ -15,7 +15,7 @@ import { $erc4626 } from '../utils/$erc4626';
 
 const test = $hh.create('neutrl');
 
-UAction.create({
+UTest.create({
 
     async $before() {
         await test.deploy();
@@ -200,7 +200,7 @@ UAction.create({
         await $tranche.ensureCoverage(test, 50, { jrt: 10_000 })
         await $erc20.mint(NUSD, deployer, deployer.address, 2000);
 
-        return UAction.create({
+        return UTest.create({
             async 'from Junior'() {
                 const AMOUNT = 1000;
                 await $tranche.deposit(jrtVault, deployer, NUSD, AMOUNT);
@@ -255,7 +255,7 @@ UAction.create({
         await $tranche.ensureCoverage(test, 15, { jrt: 100_000 });
         await $erc20.mint(NUSD, deployer, deployer.address, 2000);
 
-        return UAction.create({
+        return UTest.create({
             async 'from Junior'() {
 
                 const AMOUNT = 100;
@@ -304,7 +304,7 @@ UAction.create({
         await $tranche.ensureCoverage(test, 8, { jrt: 100_000 });
         await $erc20.mint(NUSD, deployer, deployer.address, 2000);
 
-        return UAction.create({
+        return UTest.create({
             async 'from Junior'() {
                 const AMOUNT = 100;
 

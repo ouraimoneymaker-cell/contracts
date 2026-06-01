@@ -5,7 +5,7 @@
  * Runs as a single sequential suite (state accumulates across steps).
  */
 
-import { UAction } from 'atma-utest';
+import { UTest } from 'atma-utest';
 import { $require } from 'dequanto/utils/$require';
 import { $bigint } from 'dequanto/utils/$bigint';
 import { l } from 'dequanto/utils/$logger';
@@ -60,7 +60,7 @@ async function setAprs(targetFraction: number, baseFraction: number) {
 // ── Sequential integration flow ───────────────────────────────────────────────
 // Each test step builds on the state left by the previous one.
 
-UAction.create({
+UTest.create({
     $config: { timeout: 300_000 },
 
     async $before() {

@@ -1,4 +1,4 @@
-import { UAction, UTest } from 'atma-utest'
+import { UTest } from 'atma-utest'
 import { $require } from 'dequanto/utils/$require';
 import { $address } from 'dequanto/utils/$address';
 import { $bigint } from 'dequanto/utils/$bigint';
@@ -9,7 +9,7 @@ import { l } from 'dequanto/utils/$logger';
 
 await $hh.test.deploy();
 
-UAction.create({
+UTest.create({
     async $before () {
         let { sUSDe, strategy } = $hh.test.tranches;
         let { deployer } = $hh.test;

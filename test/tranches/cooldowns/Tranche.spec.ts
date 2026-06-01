@@ -1,5 +1,5 @@
 import { HardhatProvider } from 'dequanto/hardhat/HardhatProvider';
-import { UAction } from 'atma-utest'
+import { UTest } from 'atma-utest'
 import { $usde } from '../utils/$usde';
 import { $erc20 } from '../utils/$erc20';
 import { $acc } from '../utils/$acc';
@@ -16,7 +16,7 @@ let alice = await hh.deployer(1);
 
 await $hh.test.deploy();
 
-UAction.create({
+UTest.create({
     async $after () {
         await $hh.test.reset();
     },

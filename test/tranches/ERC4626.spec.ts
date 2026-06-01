@@ -1,4 +1,4 @@
-import { UAction, UTest } from 'atma-utest'
+import { UTest } from 'atma-utest'
 import { $erc4626 } from './utils/$erc4626';
 import { $hh } from './utils/$hh';
 import { $require } from 'dequanto/utils/$require';
@@ -17,7 +17,7 @@ import { $bigfloat } from 'dequanto/utils/$bigfloat';
 
 await $hh.test.deploy();
 
-UAction.create({
+UTest.create({
     async $before () {
         let { sUSDe, strategy } = $hh.test.tranches;
         let { deployer } = $hh.test;

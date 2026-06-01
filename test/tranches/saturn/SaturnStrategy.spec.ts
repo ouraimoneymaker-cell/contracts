@@ -1,4 +1,4 @@
-import { UAction } from 'atma-utest'
+import { UTest } from 'atma-utest'
 import { $require } from 'dequanto/utils/$require';
 import { $address } from 'dequanto/utils/$address';
 import { $date } from 'dequanto/utils/$date';
@@ -17,7 +17,7 @@ import { $promise } from 'dequanto/utils/$promise';
 
 const test = $hh.create('saturn');
 
-UAction.create({
+UTest.create({
 
     async $before() {
         await test.deploy();
@@ -341,7 +341,7 @@ UAction.create({
         await $tranche.ensureCoverage(test, 50, { jrt: 10_000 });
         await $erc20.mint(base, deployer, deployer.address, 2000);
 
-        return UAction.create({
+        return UTest.create({
             async 'from Junior'() {
                 const AMOUNT = 1000;
                 const AMOUNT_WEI = $bigint.toWei(AMOUNT, 6);
@@ -379,7 +379,7 @@ UAction.create({
 
         await $erc4626.deposit(sUSDat as any, deployer, 500);
 
-        return UAction.create({
+        return UTest.create({
             async 'disable and enable Senior sUSDat'() {
                 await strategy.$receipt().setTokenConfig(deployer, sUSDat.address, {
                     jrtDepositsPaused: false,

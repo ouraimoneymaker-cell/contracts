@@ -1,4 +1,4 @@
-import { UAction } from 'atma-utest'
+import { UTest } from 'atma-utest'
 import { HardhatProvider } from 'dequanto/hardhat/HardhatProvider';
 import { AccessControlManager } from '@0xc/hardhat/AccessControlManager/AccessControlManager';
 import { $require } from 'dequanto/utils/$require';
@@ -18,7 +18,7 @@ const client = await hh.client();
 const deployer = await hh.deployer();
 await $hh.test.init();
 
-UAction.create({
+UTest.create({
 
     async 'should check permission' () {
         let { contract: acm } = await hh.deployClass(AccessControlManager, {

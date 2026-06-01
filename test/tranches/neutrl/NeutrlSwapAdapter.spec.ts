@@ -1,4 +1,4 @@
-import { UAction } from 'atma-utest'
+import { UTest } from 'atma-utest'
 import { $hh } from '../utils/$hh';
 import { Addresses } from '@s/constants';
 import { ERC20 } from 'dequanto/prebuilt/openzeppelin/ERC20';
@@ -12,7 +12,7 @@ const test = $hh.create('neutrl', {
 });
 
 
-UAction.create({
+UTest.create({
     async $before() {
        await test.deploy({ initialDeposit: false });
        await test.snapshot('neutrl');

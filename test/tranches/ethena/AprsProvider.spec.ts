@@ -1,4 +1,4 @@
-import { UAction } from 'atma-utest';
+import { UTest } from 'atma-utest';
 import { $hh } from '../utils/$hh';
 import { Addresses } from '@s/constants';
 import { $bigint } from 'dequanto/utils/$bigint';
@@ -13,7 +13,7 @@ import { $erc4626 } from '../utils/$erc4626';
 
 await $hh.test.deploy();
 
-UAction.create({
+UTest.create({
     async $before () {
 
     },

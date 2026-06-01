@@ -695,6 +695,13 @@
         "name": "priceFeeds",
         "size": null,
         "type": "mapping(address => address)"
+      },
+      {
+        "slot": 2,
+        "position": 0,
+        "name": "curveRoutes",
+        "size": null,
+        "type": "mapping(address => (address pool, address quoteToken, int128 assetIndex, int128 quoteIndex))"
       }
     ]
   },

@@ -633,15 +633,15 @@
     "id": "CDOLens",
     "name": "CDOLens",
     "main": "./0xc/hardhat/CDOLens/CDOLens.ts",
-    "bytecodeHash": "0x4a439cf8dcbd3a866d25435253f49da2fc67b0c449f69edb02113141fbef8796",
+    "bytecodeHash": "0xab3abe745d7e1e247f370aae73a055f645c3a6baade162bf8c923ddda6767e33",
     "address": "0xeA62e3a2D5FE8D5b66dc8E1bd2405AD23C851f4e",
-    "block": 24472866,
-    "tx": "0x0444ae49fce80040f25a0a42636f95c0ceb581f45b1644be4e1d2b28761bc391",
-    "gas": "1660929",
+    "block": 25225289,
+    "tx": "0xe91b000d0523db242eeb7a792b9ee8be373a4254bc8f113f6f8d71a857a55163",
+    "gas": "2050859",
     "deployer": "0x296400D87BE5cFB63C5025904cD006EBB23d15d5",
-    "timestamp": 1771286892,
-    "implementation": "0x38274dD13F90E6577b61D118fF05819112e1bB25",
-    "verified": "2026-02-17T00:11:13.069Z",
+    "timestamp": 1780350204,
+    "implementation": "0xc9d29A300DB9896c7C253cC729E012FBC7B06611",
+    "verified": "2026-06-01T21:43:40.894Z",
     "history": [
       {
         "main": "./0xc/hardhat/CDOLens/CDOLens.ts",
@@ -666,6 +666,14 @@
         "tx": "0xa023922601fb981f23967bac36ad86c35e0e1b40bda05db8b7be8758127f64b5",
         "gas": "1661793",
         "verified": "2026-02-16T23:43:27.920Z"
+      },
+      {
+        "main": "./0xc/hardhat/CDOLens/CDOLens.ts",
+        "address": "0x38274dD13F90E6577b61D118fF05819112e1bB25",
+        "block": 24472866,
+        "tx": "0x0444ae49fce80040f25a0a42636f95c0ceb581f45b1644be4e1d2b28761bc391",
+        "gas": "1660929",
+        "verified": "2026-02-17T00:11:13.069Z"
       }
     ]
   },
@@ -681,7 +689,7 @@
     "deployer": "0x296400D87BE5cFB63C5025904cD006EBB23d15d5",
     "timestamp": 1762180302,
     "verified": "2025-11-03T14:31:54.691Z",
-    "proxyFor": "0x38274dD13F90E6577b61D118fF05819112e1bB25"
+    "proxyFor": "0xc9d29A300DB9896c7C253cC729E012FBC7B06611"
   },
   {
     "id": "CDOLensProxyAdmin",

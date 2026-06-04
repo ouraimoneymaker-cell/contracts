@@ -1019,6 +1019,7 @@ contract DYSAccounting is IAccounting, CDOComponent {
         valuationPrice = price;
         valuationUpdatedAt = uint64(block.timestamp);
         if (valuationLossEntered) {
+            // Grace period starts; further grace periods in subsequent drops should handle PAUSER_ROLE
             valuationEnteredAt = uint64(block.timestamp);
         }
         emit ValuationPriceChanged(price);

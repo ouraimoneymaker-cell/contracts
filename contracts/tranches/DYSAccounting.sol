@@ -950,6 +950,16 @@ contract DYSAccounting is IAccounting, CDOComponent {
         updateAprSrt(aprTarget, aprBase);
     }
 
+    /// @notice Sets the APRs Feed contract for fetching APR target and APR base
+    /// @dev This feed provides the external APR values used in calculations
+    /// @param aprPairFeed_ The address of the new APRs Feed contract
+    /// @dev Only callable by the protocol owner
+    /// @dev IMPORTANT: When changing the APR feed, the Owner MUST execute onAprChanged() atomically
+    ///      BEFORE and AFTER calling this function:
+    ///      1. Call onAprChanged() BEFORE setAprPairFeed() to finalize the old SRT index period
+    ///      2. Call setAprPairFeed() to update the feed address
+    ///      3. Call onAprChanged() AFTER setAprPairFeed() to start the new period with updated APRs
+    ///      This ensures proper index continuity and prevents accounting discrepancies.
     function setAprPairFeed(IAprPairFeed aprPairFeed_) external onlyOwner {
         require(aprPairFeed_.decimals() == APR_FEED_DECIMALS, "InvalidFeed");
         aprPairFeed = aprPairFeed_;

@@ -505,7 +505,7 @@ contract DiscreteAccounting is IAccounting, CDOComponent {
         }
         uint256 srtGainTargetAbs = Math.min(
             uint256(srtGainTarget),
-            Math.saturatingSub(jrtNavT1Projected, ONE_ASSET)
+            Math.saturatingSub(jrtNavT0Real, ONE_ASSET)
         );
 
 

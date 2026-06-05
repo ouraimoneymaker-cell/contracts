@@ -123,6 +123,9 @@ contract DYSAccounting is IAccounting, CDOComponent {
      *                  DYS-specific State Variables                              *
      *****************************************************************************/
 
+    /// @notice Benchmark index for tracking Senior Benchmark PnL during projection (used in Benchmark mode)
+    uint256 public benchmarkIndex;
+
     /// @notice Time-weighted Senior NAV (asset-time)
     uint256 public srtNavTime;
 
@@ -137,6 +140,9 @@ contract DYSAccounting is IAccounting, CDOComponent {
 
     /// @notice Accumulated projected Senior PnL during the current epoch
     uint256 public srtPnLProjected;
+
+    /// @notice Accumulated benchmark Senior PnL during the current epoch
+    uint256 public srtPnLBenchmark;
 
     /// @notice Senior NAV at the start of the current floor window (anchor)
     uint256 public windowStartSrtNav;
@@ -196,6 +202,7 @@ contract DYSAccounting is IAccounting, CDOComponent {
         riskK = UD60x18.wrap(0.3e18);
 
         srtTargetIndex = 1e18;
+        benchmarkIndex = 1e18;
         navTargetIndex = 1e18;
         indexTimestamp = block.timestamp;
         lastAccrual = block.timestamp;
@@ -333,7 +340,6 @@ contract DYSAccounting is IAccounting, CDOComponent {
         if (amount < (jrtAmountIn + srtAmountIn)) {
             revert ReserveTooLow(amount, jrtAmountIn + srtAmountIn);
         }
-        _accrueAssetTime();
         reserveNav = reserveNav - amount;
         nav = nav + jrtAmountIn + srtAmountIn - amount;
         navTimestamp = block.timestamp;
@@ -434,6 +440,7 @@ contract DYSAccounting is IAccounting, CDOComponent {
             jrtNavProjected -= amountToReserve;
         } else {
             srtBaseNav -= amountToReserve;
+            windowNetFlows -= int256(amountToReserve);
         }
         emit FeeAccrued(isJrt, amountToReserve, amount - amountToReserve);
     }
@@ -464,7 +471,7 @@ contract DYSAccounting is IAccounting, CDOComponent {
             return (0, 0, 0, navT1);
         }
 
-        if (navT0 == navT1) {
+        if (!_shouldReconcile(navT0, navT1)) {
             // No realized gain yet; process using the projection
             return
                 calculateNAVSplitProjected(
@@ -480,7 +487,6 @@ contract DYSAccounting is IAccounting, CDOComponent {
         return
             calculateNAVSplitReconciliation(
                 navT0,
-                jrtNavT0Projected,
                 jrtNavT0Real,
                 srtNavT0,
                 reserveNavT0,
@@ -511,9 +517,12 @@ contract DYSAccounting is IAccounting, CDOComponent {
         }
 
         uint256 navTargetIndexT1 = getNavTargetIndexT1();
+        // Gain = Assets * (TargetIndex1 / TargetIndex0 - 1);
+        // Calculate gain based on real NAV, not projected
         int256 gain_dT = calculateGain(navT0, navTargetIndexT1, navTargetIndex);
 
         if (gain_dT < 0) {
+            // never happens in projection, jic: cover by Jrt, then Reserve, then Srt
             uint256 loss = uint256(-gain_dT);
 
             uint256 jrtLoss = Math.min(
@@ -550,6 +559,7 @@ contract DYSAccounting is IAccounting, CDOComponent {
 
         // Calculate Srt projected gain
         uint256 srtTargetIndexT1 = getSrtTargetIndexT1();
+        // Gain = Assets * (TargetIndex1 / TargetIndex0 - 1);
         int256 srtGainTarget = calculateGain(
             srtNavT0,
             srtTargetIndexT1,
@@ -586,7 +596,6 @@ contract DYSAccounting is IAccounting, CDOComponent {
     /// @dev Uses asset-time weighting to allocate realized PnL between tranches
     function calculateNAVSplitReconciliation(
         uint256 navT0,
-        uint256 jrtNavT0Projected,
         uint256 jrtNavT0Real,
         uint256 srtNavT0,
         uint256 reserveNavT0,
@@ -603,137 +612,139 @@ contract DYSAccounting is IAccounting, CDOComponent {
     {
         int256 pnl = int256(navT1) - int256(navT0);
 
-        // Handle loss: JRT absorbs first, then Reserve, then SRT
-        if (pnl < 0) {
-            uint256 loss = uint256(-pnl);
-
-            uint256 jrtLoss = Math.min(jrtNavT0Real, loss);
-            loss -= jrtLoss;
-            uint256 reserveLoss = Math.min(reserveNavT0, loss);
-            loss -= reserveLoss;
-            uint256 srtLoss = Math.min(srtNavT0, loss);
-            require(srtLoss == loss, "Loss>navT0");
-
-            jrtNavT0Real -= jrtLoss;
-            jrtNavT0Projected = jrtNavT0Projected > jrtLoss
-                ? jrtNavT0Projected - jrtLoss
-                : 0;
-            srtNavT0 -= srtLoss;
-            reserveNavT0 -= reserveLoss;
-            pnl = 0;
-        }
-
-        uint256 pnlAbs = uint256(pnl);
-
         // Reserve allocation
         uint256 reserve_dT = 0;
-        if (pnlAbs > 0 && reserveBps > 0) {
-            reserve_dT = (pnlAbs * reserveBps) / PERCENTAGE_100;
-            pnlAbs -= reserve_dT;
+        if (pnl > 0 && reserveBps > 0) {
+            reserve_dT = uint256(pnl) * reserveBps / PERCENTAGE_100;
+            pnl -= int256(reserve_dT);
         }
         reserveNavT1 = reserveNavT0 + reserve_dT;
 
-        // DYS-based Senior PnL allocation
-        int256 srtPnLRealized;
-        if (navTime > 0 && pnlAbs > 0) {
-            // Risk premium: srtFactor = 1 - riskPremium
-            UD60x18 riskPremium = calculateRiskPremium();
-            uint256 srtFactor = 1e18 - Math.min(riskPremium.unwrap(), PERCENTAGE_100);
+        // srtNavT0 includes srtPnLProjected added during the epoch
+        // unwind it and rollback to real T0 assets for SRT and JRT
+        // Guard: large Senior withdrawals during the epoch can make srtNavT0 < srtPnLProjected
+        uint256 projUndo = Math.min(srtPnLProjected, srtNavT0);
+        srtNavT0 = srtNavT0 - projUndo;
+        jrtNavT0Real = jrtNavT0Real + projUndo;
 
-            // srtPnL = totalUnderlyingProfit * srtFactor * srtNavTime / navTime
-            srtPnLRealized = int256(
-                ((((pnlAbs + reserve_dT) * srtFactor) / 1e18) * srtNavTime) / navTime
-            );
-        } else {
+        // Safe assets for SRT and JRT to move around
+        uint256 srtSafe = Math.saturatingSub(srtNavT0, ONE_ASSET);
+        uint256 jrtSafe = Math.saturatingSub(jrtNavT0Real, ONE_ASSET);
+
+        // True-UP: calculate Seniors PnL:
+        // 1. Realized based on the RiskPremium (for negative PnL - RiskPremium lowers the loss)
+        // 2. if Benchmark mode: take the Projected PnL if > realized
+        // 3. Check and apply the floored loss for Senior
+        //
+        // Whenever Seniors realized PnL is settled, calculate Juniors PnL:
+        // 1. Decrease received PnL by Senior's PnL:
+        // 2.   when possitive, add to Juniors NAV
+        // 3.   when negative, apply the loss waterfall: Juniors Loss, Reserve Loss, then Senior Loss
+
+        // Calculate Senior PnL allocation using asset-time weighting
+        // Use accumulated asset-time if available (navTime > 0), otherwise use snapshot NAVs
+        uint256 srtNavTime_ = navTime > 0 ? srtNavTime : srtNavT0;
+        uint256 navTime_ = navTime > 0 ? navTime : navT0;
+
+        // Note: riskPremium is capped at 1e18 (100%) via setRiskParameters validation
+        UD60x18 riskPremium = calculateRiskPremium();
+        // Risk premium: srtFactor = 1 - riskPremium
+        uint256 srtFactor = 1e18 - riskPremium.unwrap();
+
+        // srtPnL = totalUnderlyingProfit * srtFactor * srtNavTime / navTime
+        int256 srtPnLRealized = navTime_ == 0
+            ? int256(0)
+            : (pnl + int256(reserve_dT)) * int256(srtFactor) * int256(srtNavTime_) / (int256(navTime_) * 1e18);
+
+        // Benchmark mode: Use max(realized PnL, benchmark gain)
+        // Note: Benchmark APR changes during the epoch, so we separately track the benchmark gain during the projection
+        if (useBenchmarkProjection && srtPnLRealized < int256(srtPnLBenchmark)) {
+            srtPnLRealized = int256(srtPnLBenchmark);
+        }
+
+        uint256 floorRate_ = floorRate;
+
+        if (!useBenchmarkProjection && srtPnLRealized < 0 && floorRate_ == 0) {
+            // No loss for Seniors with BaseAPR mode, negative PnL, and the floor rate at 0
             srtPnLRealized = 0;
         }
 
-        // Cap Senior PnL: cannot exceed total post-reserve PnL
-        if (srtPnLRealized > int256(pnlAbs)) {
-            srtPnLRealized = int256(pnlAbs);
+        // Cap Senior loss to available safe assets
+        if (srtPnLRealized < -int256(srtSafe)) {
+            srtPnLRealized = -int256(srtSafe);
         }
 
-        // True-up: remove projected, add realized
-        // srtNavT0 includes srtPnLProjected added during the epoch; undo it and apply realized.
-        // When we subtract srtPnLProjected from SRT, that amount returns to JRT (who funded it).
-        if (srtPnLRealized >= 0) {
-            // Positive or zero realized PnL
-            uint256 srtPnLRealizedAbs = uint256(srtPnLRealized);
+        // Senior: apply realized PnL
+        srtNavT1 = uint256(int256(srtNavT0) + srtPnLRealized);
 
-            // Benchmark mode: Senior gets whichever is larger — projected or realized.
-            // This prevents Senior NAV from dipping at reconciliation when the strategy
-            // underperforms the benchmark, while still allowing upside when it outperforms.
-            // Only applies when pnlAbs > 0 (positive return); in loss scenarios the
-            // projection is unwound normally so Senior doesn't retain phantom gains.
-            if (useBenchmarkProjection && pnlAbs > 0 && srtPnLProjected > srtPnLRealizedAbs) {
-                srtPnLRealizedAbs = srtPnLProjected;
+        if (srtPnLRealized < 0 && floorRate_ > 0) {
+            // Senior: calculate and apply the rolling 24h Senior NAV floor
+            // Note: The floor can only be reached when Seniors have a negative return in the current reconciliation
+            uint256 srtNavFloor = _computeSrtNavFloor(floorRate_);
+            if (srtNavFloor > 0 && srtNavT1 < srtNavFloor) {
+                uint256 floorDelta = srtNavFloor - srtNavT1;
+                // Cap: cannot take more from JRT than available (preserve navT1 invariant)
+                floorDelta = Math.min(floorDelta, jrtSafe);
+                srtNavT1 += floorDelta;
+                srtPnLRealized += int256(floorDelta);
             }
+        }
 
-            // Cannot take from Junior more than available (keep ONE_ASSET minimum)
-            uint256 jrtAvailable = Math.saturatingSub(
-                jrtNavT0Real + srtPnLProjected + pnlAbs,
-                ONE_ASSET
-            );
-            srtPnLRealizedAbs = Math.min(srtPnLRealizedAbs, jrtAvailable);
+        // Junior PnL scenarios after Senior allocation:
+        // pnl < 0 and srtPnLRealized < 0: reduces JRT Loss
+        // pnl < 0 and srtPnLRealized > 0: increases JRT Loss (benchmark mode)
+        // pnl > 0 and srtPnLRealized > 0: reduces JRT Profit, can push JRT into loss (benchmark mode)
+        // pnl > 0 and srtPnLRealized < 0: increases JRT profit (edge case)
+        int256 jrtPnLRealized = pnl - srtPnLRealized;
 
-            // Senior: undo projection, apply realized
-            srtNavT1 = srtNavT0 - srtPnLProjected + srtPnLRealizedAbs;
-
-            // Junior: gets back projected amount, plus remaining PnL
-            jrtNavT1Real =
-                jrtNavT0Real +
-                srtPnLProjected +
-                pnlAbs -
-                srtPnLRealizedAbs;
+        if (jrtPnLRealized >= 0) {
+            jrtNavT1Real = jrtNavT0Real + uint256(jrtPnLRealized);
         } else {
-            // Negative realized PnL (floor kicked in)
-            uint256 srtLoss = uint256(-srtPnLRealized);
-            srtLoss = Math.min(srtLoss, srtNavT0);
+            // Apply the Loss-Waterfall: Junior -> Reserve -> Senior
+            // Note: This can cancel Senior's benchmark gain if Junior cannot cover it
+            uint256 loss = uint256(-jrtPnLRealized);
+            uint256 jrtLoss = Math.min(jrtNavT0Real, loss);
+            loss -= jrtLoss;
+            uint256 reserveLoss = Math.min(reserveNavT1, loss);
+            loss -= reserveLoss;
+            // Apply SRT loss to recently accrued balance
+            uint256 srtLoss = Math.min(srtNavT1, loss);
+            require(srtLoss == loss, "Loss>navT0");
 
-            srtNavT1 = srtNavT0 - srtPnLProjected - srtLoss;
-            jrtNavT1Real = jrtNavT0Real + srtPnLProjected + pnlAbs + srtLoss;
-        }
-        jrtNavT1Projected = jrtNavT1Real;
-
-        // Apply rolling 24h Senior NAV floor
-        uint256 srtNavFloor = _computeSrtNavFloor();
-        if (srtNavFloor > 0 && srtNavT1 < srtNavFloor) {
-            uint256 floorDelta = srtNavFloor - srtNavT1;
-            // Cap: cannot take more from JRT than available (preserve navT1 invariant)
-            floorDelta = Math.min(floorDelta, jrtNavT1Real);
-            srtNavT1 += floorDelta;
-            jrtNavT1Real -= floorDelta;
-            jrtNavT1Projected = jrtNavT1Real;
+            jrtNavT1Real = jrtNavT0Real - jrtLoss;
+            srtNavT1 -= srtLoss;
+            reserveNavT1 -= reserveLoss;
         }
 
+        // Invariant: Total new NAV must equal sum of all NAVs
+        // This ensures no value is created or destroyed during reconciliation
         if (navT1 != (jrtNavT1Real + srtNavT1 + reserveNavT1)) {
             revert InvalidNavSplit(navT1, jrtNavT1Real, srtNavT1, reserveNavT1);
         }
 
-        return (jrtNavT1Projected, jrtNavT1Real, srtNavT1, reserveNavT1);
+        return (jrtNavT1Real, jrtNavT1Real, srtNavT1, reserveNavT1);
     }
 
     /// @notice Computes the Senior NAV floor based on the rolling 24h window
     /// @dev Returns 0 if floor is disabled or not yet initialized
-    function _computeSrtNavFloor() internal view returns (uint256) {
-        if (floorRate == 0 || windowStartSrtNav == 0) return 0;
-
-        uint256 allowedLoss;
-        if (block.timestamp >= windowEnd && windowEnd > 0) {
-            // Window has expired — extend allowed loss for inactivity
-            uint256 dT = block.timestamp - windowEnd;
-            allowedLoss =
-                (windowStartSrtNav * floorRate * (1 days + dT)) /
-                (1 days * 1e18);
-        } else {
-            // Within the current window
-            allowedLoss = (windowStartSrtNav * floorRate) / 1e18;
+    function _computeSrtNavFloor(uint256 floorRate_) internal view returns (uint256) {
+        if (floorRate_ == 0) {
+            return 0;
+        }
+        int256 baseline = int256(windowStartSrtNav) + windowNetFlows;
+        if (baseline <= 0) {
+            return 0;
         }
 
-        int256 floor = int256(windowStartSrtNav) +
-            windowNetFlows -
-            int256(allowedLoss);
-        return floor > 0 ? uint256(floor) : 0;
+        if (block.timestamp > windowEnd) {
+            // Window has expired — extend allowed loss for inactivity
+            uint256 dT = block.timestamp - windowEnd;
+            floorRate_ = floorRate_ * (1 days + dT) / 1 days;
+        }
+
+        uint256 minRate = Math.saturatingSub(1e18, floorRate_);
+        uint256 srtNavFloor = minRate * uint256(baseline) / 1e18;
+        return srtNavFloor;
     }
 
     /*****************************************************************************
@@ -743,7 +754,7 @@ contract DYSAccounting is IAccounting, CDOComponent {
     function updateAccountingInner(uint256 navT1) internal {
         _accrueAssetTime();
 
-        bool isReconciliation = (nav != navT1) && nav > 0;
+        bool isReconciliation = _shouldReconcile(nav, navT1);
 
         (
             uint256 jrtNavT1Projected,
@@ -764,6 +775,7 @@ contract DYSAccounting is IAccounting, CDOComponent {
             // The calculateNAVSplitProjected during the epoch accumulated srtPnLProjected
             // At reconciliation, the true-up was already applied, so reset
             srtPnLProjected = 0;
+            srtPnLBenchmark = 0;
             srtNavTime = 0;
             jrtNavTime = 0;
             navTime = 0;
@@ -779,6 +791,16 @@ contract DYSAccounting is IAccounting, CDOComponent {
             // During epoch (projection): track the projected SRT gain
             uint256 srtGain = srtNavT1 > srtBaseNav ? srtNavT1 - srtBaseNav : 0;
             srtPnLProjected += srtGain;
+
+            if (useBenchmarkProjection) {
+                uint256 benchmarkIndexT1 = getBenchmarkIndexT1();
+                int256 srtBenchmarkGain = calculateGain(
+                    srtBaseNav, benchmarkIndexT1, benchmarkIndex
+                );
+                if (srtBenchmarkGain > 0) {
+                    srtPnLBenchmark += uint256(srtBenchmarkGain);
+                }
+            }
         }
 
         updateIndex();
@@ -802,6 +824,16 @@ contract DYSAccounting is IAccounting, CDOComponent {
                 indexTimestamp,
                 block.timestamp,
                 aprSrt
+            );
+    }
+
+    function getBenchmarkIndexT1() internal view returns (uint256) {
+        return
+            calculateTargetIndex(
+                benchmarkIndex,
+                indexTimestamp,
+                block.timestamp,
+                aprTarget
             );
     }
 
@@ -875,21 +907,17 @@ contract DYSAccounting is IAccounting, CDOComponent {
     }
 
     function updateIndex() internal {
+        if (useBenchmarkProjection) {
+            benchmarkIndex = getBenchmarkIndexT1();
+        }
         srtTargetIndex = getSrtTargetIndexT1();
         navTargetIndex = getNavTargetIndexT1();
         indexTimestamp = block.timestamp;
     }
     function updateAprSrt(UD60x18 aprTarget_, UD60x18 aprBase_) internal {
-        if (useBenchmarkProjection) {
-            // Benchmark mode: Senior projects at the benchmark APR only.
-            // The risk-adjusted upside (if any) is allocated at reconciliation.
-            aprSrt = aprTarget_;
-        } else {
-            // Default mode: Senior projects at the higher of benchmark or risk-adjusted rate.
-            UD60x18 risk = calculateRiskPremium();
-            UD60x18 aprSrt1 = mul(aprBase_, UD60x18.wrap(1e18) - risk);
-            aprSrt = UD60x18Ext.max(aprTarget_, aprSrt1);
-        }
+        UD60x18 risk = calculateRiskPremium();
+        UD60x18 aprSrt1 = mul(aprBase_, UD60x18.wrap(1e18) - risk);
+        aprSrt = UD60x18Ext.max(aprTarget_, aprSrt1);
     }
 
     function calculateGain(
@@ -966,12 +994,33 @@ contract DYSAccounting is IAccounting, CDOComponent {
         emit AprPairFeedChanged(address(aprPairFeed_));
     }
 
+    /// @notice Sets the maximum allowed daily loss rate for the Senior tranche
+    /// @dev The floor rate defines the maximum percentage loss Senior can experience over a rolling
+    ///      24-hour window. This protection mechanism ensures Senior holders have a predictable
+    ///      worst-case scenario during periods of strategy underperformance.
+    ///      **Mechanism**:
+    ///      - The floor is calculated as: `srtNavFloor = (windowStartSrtNav + windowNetFlows) * (1 - floorRate)`
+    ///      - At reconciliation, if `srtNavT1 < srtNavFloor`, Junior transfers assets to bring Senior back to the floor
+    ///      - The window resets every 24 hours at reconciliation, capturing the new baseline Senior NAV
+    ///      **Window Extension**:
+    ///      If no reconciliation occurs for >24h, the allowed loss extends proportionally
+    ///      **State Reset**:
+    ///      Calling this function triggers accounting update and immediately resets the floor window
+    /// @param rate The maximum daily loss rate in 18-decimal fixed-point (e.g., 0.01e18 = 1% per day)
+    /// @custom:example If floorRate = 0.005e18 (0.5%/day) and windowStartSrtNav = 1000 USDC:
+    ///                 - Floor = 1000 * (1 - 0.005) = 995 USDC
+    ///                 - If reconciliation shows srtNavT1 = 990 USDC, Junior transfers 5 USDC to Senior
+    ///                 - If Junior cannot cover the full 5 USDC, it transfers up to its safe assets
     function setFloorRate(uint256 rate) external onlyOwner {
         require(rate <= 0.01e18, "FloorRateTooHigh"); // max 1%/day
+        updateAccountingInner(cdo.totalStrategyAssets(nav, navTimestamp));
         floorRate = rate;
+
+        windowStartSrtNav = srtBaseNav;
+        windowNetFlows = 0;
+        windowEnd = block.timestamp + 1 days;
         emit FloorRateChanged(rate);
     }
-
 
     function setReserveBps(uint256 bps) external onlyOwner {
         require(
@@ -1033,6 +1082,30 @@ contract DYSAccounting is IAccounting, CDOComponent {
         emit ValuationGracePeriodChanged(period);
     }
 
+    /// @notice Adjusts Junior and Senior NAVs when the base asset is trading below par (valuation loss)
+    /// @dev When valuationPrice < 1e18, transfers value from Junior to Senior to compensate for the
+    ///      Senior tranche's exposure to the devalued asset. This ensures Senior holders maintain
+    ///      their expected value despite the underlying asset trading at a discount.
+    ///
+    ///      **Important**: This function returns **virtual/effective NAVs** for view calculations only.
+    ///      The actual stored state variables (jrtBaseNav, srtBaseNav) remain unchanged. The effective
+    ///      NAVs are used in:
+    ///      - `totalAssets()` and `totalAssetsT0()` for share price calculations
+    ///      - `maxWithdraw()` and `maxDeposit()` for deposit/withdrawal limits
+    ///      - Price-per-share queries by external contracts
+    ///
+    ///      The valuation adjustment is applied at withdrawal time via `splitValuatedNavOut()` in
+    ///      `updateBalanceFlow()`, which ensures the actual asset distribution matches the effective
+    ///      NAV ratios.
+    ///
+    /// @param jrtFact The factual Junior NAV before adjustment (from storage)
+    /// @param srtFact The factual Senior NAV before adjustment (from storage)
+    /// @return jrtEffective The adjusted Junior NAV after transferring value to Senior (virtual)
+    /// @return srtEffective The adjusted Senior NAV after receiving value from Junior (virtual)
+    /// @custom:example If valuationPrice = 0.95e18 (5% discount) and srtFact = 1000 USDC,
+    ///                 Senior needs an additional ~52.63 USDC from Junior to maintain full value.
+    ///                 The transfer is capped by Junior's available safe assets (jrtFact - ONE_ASSET).
+    /// @custom:invariant jrtEffective + srtEffective == jrtFact + srtFact (total NAV preserved)
     function calcEffectiveNav (uint256 jrtFact, uint256 srtFact) internal view returns (uint256 jrtEffective, uint256 srtEffective) {
         if (valuationPrice == 1e18) {
             return (jrtFact, srtFact);
@@ -1043,5 +1116,20 @@ contract DYSAccounting is IAccounting, CDOComponent {
             extraNeeded
         );
         return (jrtFact - extraTaken, srtFact + extraTaken);
+    }
+
+    /// @notice Determines if reconciliation should occur based on NAV changes
+    /// @dev Reconciliation is triggered when the absolute difference between NAV values exceeds
+    ///      the dust threshold and the initial NAV is non-zero. The threshold is set to 1000 wei
+    ///      to avoid unnecessary reconciliation due to roundings while still capturing
+    ///      meaningful changes.
+    /// @param navT0 The NAV at time T0 (previous state)
+    /// @param navT1 The NAV at time T1 (current state)
+    /// @return bool True if reconciliation should occur, false otherwise
+    function _shouldReconcile (uint256 navT0, uint256 navT1) internal pure returns (bool) {
+        uint256 diff = navT1 > navT0
+            ? navT1 - navT0
+            : navT0 - navT1;
+        return diff > 1_000 && navT0 > 0;
     }
 }

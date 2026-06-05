@@ -448,6 +448,9 @@ UTest.create({
 
       await balanceFlow(100, 0, 900, 0);
       await setNav(1000);
+      await updateAccounting();
+      console.log('srtNav', await accounting.srtNav());
+      console.log('windowStartSrtNav', await accounting.windowStartSrtNav());
 
       // Mine 2 days — floor should allow 2x loss (-0.2% of avgSrAssets)
       await test.mine("2days");
@@ -470,11 +473,24 @@ UTest.create({
       );
 
       // Floor for 2 days: 0.2% * 900 = 1.8 USDC max loss → SRT >= 900 - 1.8 = 898.2
-      const minSrtNav2Day = toWei(896); // generous tolerance
+      const minSrtNav2Day = toWei(898);
+      $require.lt(
+        srtNavAfter,
+        toWei(900 - 1),
+        "SRT should realize loss",
+      );
       $require.gte(
         srtNavAfter,
         minSrtNav2Day,
         "SRT protected by 2-day scaled floor",
+      );
+
+      // Floor for 2 days covered by 0.2% SRT loss
+      const minJrtNav2Day = toWei(100 - 50 + (0.002 * 900));
+      $require.gte(
+        jrtNavAfter,
+        minJrtNav2Day,
+        "JRT covered by 2-day SRT scaled floor",
       );
     },
   },

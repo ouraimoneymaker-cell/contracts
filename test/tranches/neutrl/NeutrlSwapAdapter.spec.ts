@@ -18,7 +18,7 @@ UTest.create({
        await test.snapshot('neutrl');
     },
     async $after() {
-        await $hh.reset(test.client);
+        await test.wipe();
     },
     async $teardown () {
         await test.reset('neutrl')

@@ -122,7 +122,7 @@ export abstract class DeploymentsBase<T extends ICdoDeploymentsBase = any> {
             whenUpgradeRequired: params.whenUpgradeRequired,
         });
         this.common = new Deployments(params.client, params.deployer, {
-            directory: `./deployments${params.isTest ? 'test/' : ''}`,
+            directory: `./deployments/${params.isTest ? 'test/' : ''}`,
             whenBytecodeChanged: params.deployments ?? (this.isTestnet() ? null : 'throw'),
             fork: params.client.forked?.platform,
             whenUpgradeRequired: params.whenUpgradeRequired,
@@ -575,8 +575,10 @@ export abstract class DeploymentsBase<T extends ICdoDeploymentsBase = any> {
             : accountingType === 'dys'
                 ? DYSAccounting
                 : DiscreteAccounting;
+        const contractOptions = this.cdoInfo.ContractVersions?.accountingOptions;
+        const useBenchmark = contractOptions?.useBenchmark ?? false;
         const args = accountingType === 'dys'
-            ? [ decimals, false ] as [ bigint, boolean ]
+            ? [ decimals, useBenchmark ] as [ bigint, boolean ]
             : [ decimals ] as [ bigint ];
 
         const { contract: accounting } = await this.ds.ensureWithProxy(Contract as typeof Accounting, {

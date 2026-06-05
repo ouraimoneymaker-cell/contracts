@@ -84,6 +84,10 @@ export interface ICDO {
     ContractVersions?: {
         // Discrete accounting is the default (backward compatible with previous versions).
         accounting?: 'continuous' | 'discrete' | 'dys';
+        accountingOptions?: {
+            // Relevant for DYS accounting
+            useBenchmark?: boolean
+        }
     };
 
     // Contracts prefixes (can be overridden for testing)

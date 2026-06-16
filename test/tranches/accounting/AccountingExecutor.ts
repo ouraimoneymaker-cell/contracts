@@ -93,16 +93,16 @@ export class AccountingExecutor {
             if (step.eqAvg) {
                 console.log('JRT:', $bigint.toEther(await accounting.jrtNav()));
                 console.log('SRT:', $bigint.toEther(await accounting.srtNav()));
-                step.eqAvg[0] != null && await Balance.eqAvg(accounting.jrtNav(), step.eqAvg[0]);
-                step.eqAvg[1] != null && await Balance.eqAvg(accounting.srtNav(), step.eqAvg[1]);
+                step.eqAvg[0] != null && await Balance.eqAvg(accounting.jrtNav(), step.eqAvg[0], 'JRT');
+                step.eqAvg[1] != null && await Balance.eqAvg(accounting.srtNav(), step.eqAvg[1], 'SRT');
             }
             if (step.eqProjectedAvg) {
                 const acc = accounting as any as Accounting;
                 console.log('JRTp:', $bigint.toEther(await acc.jrtNavProjected()));
                 console.log('SRT:', $bigint.toEther(await acc.srtNav()));
                 console.log(step);
-                step.eqProjectedAvg[0] != null && await Balance.eqAvg(acc.jrtNavProjected(), step.eqProjectedAvg[0]);
-                step.eqProjectedAvg[1] != null && await Balance.eqAvg(acc.srtNav()         , step.eqProjectedAvg[1]);
+                step.eqProjectedAvg[0] != null && await Balance.eqAvg(acc.jrtNavProjected(), step.eqProjectedAvg[0], 'JRTprojected');
+                step.eqProjectedAvg[1] != null && await Balance.eqAvg(acc.srtNav()         , step.eqProjectedAvg[1], 'SRTnav');
             }
             if (step.updateAccounting) {
                 await Updater.updateAccounting();
@@ -211,7 +211,7 @@ namespace Balance {
         let bEther = $bigint.toEther(b, 18);
         let diff = Math.abs(bEther - requireBalance);
         if (diff > 5) {
-            throw new Error(`Balance not around to ${requireBalance}, actual: ${bEther}`);
+            throw new Error(`Balance not around to ${requireBalance}, actual: ${bEther} ${msg ?? ''}`);
         }
 
     }

@@ -212,7 +212,7 @@ export class StrategyBasicSuite<T extends DeploymentsBase> {
             totalAssets,
             srtNAV,
             jrtNAV,
-            srtAPR,
+            srtAPRBase18,
             reserveBps,
         ] = await Promise.all([
             strategy.totalAssets(),
@@ -244,7 +244,7 @@ export class StrategyBasicSuite<T extends DeploymentsBase> {
         );
 
         l`Calculate SRT gain based on APR`
-        const navSrtGainExpect = this.calcWeiPerT(srtNAV, srtAPR / 10n ** 6n, dt);
+        const navSrtGainExpect = this.calcWeiPerT(srtNAV, srtAPRBase18 / 10n ** 6n, dt);
         const navSrtGainFact = await accounting.srtNav() - srtNAV;
         this.eqBigInt(
             navSrtGainFact

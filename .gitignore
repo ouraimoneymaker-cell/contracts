@@ -31,8 +31,9 @@ crytic-export
 echidna*/
 medusa*/
 
-0xc/
-0x/
+/logs/
+/0xc/
+/0x/
 0xweb.json
 contracts/backlog/
 config/*

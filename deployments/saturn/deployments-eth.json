@@ -211,15 +211,15 @@
     "id": "SaturnSaturnStrategy",
     "name": "SaturnStrategy",
     "main": "./0xc/hardhat/SaturnStrategy/SaturnStrategy.ts",
-    "bytecodeHash": "0xaa169d27601825e2fc683c8cdf11dcafa25e734efcd2496203f7f774ad64ffac",
+    "bytecodeHash": "0xb0af9c1ecda97c88cecde7103baef86e0132a072cbc5cd6e33dccfcb23977532",
     "address": "0xce7B00D1004d9ED22E702A6a7F5bBdcE7297B090",
-    "block": 24974126,
-    "tx": "0x0a63136f38a48b3a6c80a920e92c31cef8a71ee9438bea907b3960c8d0d1bf7e",
-    "gas": "2034234",
+    "block": 25172016,
+    "tx": "0xa4dc528681f289f6d3569c7b6db8887c16d5edb56c4c086d69860a6b3835fac3",
+    "gas": "2316651",
     "deployer": "0x296400D87BE5cFB63C5025904cD006EBB23d15d5",
-    "timestamp": 1777325952,
-    "verified": "2026-04-27T21:41:10.790Z",
-    "implementation": "0x9686E327a6f50aCA2a1beA4219E04Dc4449dc286",
+    "timestamp": 1779708428,
+    "verified": "2026-05-25T11:28:13.168Z",
+    "implementation": "0xCAF0865334EB135b8C47Fca6D9049D5EaFe19D9b",
     "history": [
       {
         "main": "./0xc/hardhat/SaturnStrategy/SaturnStrategy.ts",
@@ -228,6 +228,14 @@
         "tx": "0x36280ec386f53c25b7052a1a44bd38e0b16c9ffdee7530a757e7d119056c4433",
         "gas": "2030567",
         "verified": "2026-04-24T22:38:42.097Z"
+      },
+      {
+        "main": "./0xc/hardhat/SaturnStrategy/SaturnStrategy.ts",
+        "address": "0x9686E327a6f50aCA2a1beA4219E04Dc4449dc286",
+        "block": 24974126,
+        "tx": "0x0a63136f38a48b3a6c80a920e92c31cef8a71ee9438bea907b3960c8d0d1bf7e",
+        "gas": "2034234",
+        "verified": "2026-04-27T21:41:10.790Z"
       }
     ]
   },
@@ -243,7 +251,7 @@
     "deployer": "0x296400D87BE5cFB63C5025904cD006EBB23d15d5",
     "timestamp": 1777070389,
     "verified": "2026-04-24T22:43:46.417Z",
-    "proxyFor": "0x9686E327a6f50aCA2a1beA4219E04Dc4449dc286"
+    "proxyFor": "0xCAF0865334EB135b8C47Fca6D9049D5EaFe19D9b"
   },
   {
     "id": "SaturnSaturnStrategyProxyAdmin",

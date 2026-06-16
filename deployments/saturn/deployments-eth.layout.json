@@ -355,6 +355,13 @@
         "name": "sUSDatCooldownSrt",
         "size": 256,
         "type": "uint256"
+      },
+      {
+        "slot": 104,
+        "position": 0,
+        "name": "tokenConfigs",
+        "size": null,
+        "type": "mapping(address => (bool jrtDepositsPaused, bool jrtWithdrawalsPaused, bool srtDepositsPaused, bool srtWithdrawalsPaused))"
       }
     ]
   },

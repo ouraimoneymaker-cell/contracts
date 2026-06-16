@@ -59,6 +59,8 @@ UTest.create({
             amountIn: wethAmount,
             routeOptions: {
                 onlySinglePath: true,
+                // use simple dexes for test purposes
+                includedSources: 'ekubo-v3,uniswapv3',
             },
             swapOptions: {
                 slippageTolerance: 2000,

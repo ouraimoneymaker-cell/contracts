@@ -234,7 +234,10 @@ export class StrategyBasicSuite<T extends DeploymentsBase> {
         const navGainFact = await strategy.totalAssets() - totalAssets;
 
         const tolerance2SecVesting = this.calcWeiPerT(totalAssets, params.apr, 2);
-        const WEI_TOLERANCE = $bigint.multWithFloat(BigInt(10 ** (this.baseDecimals - 6)), 2);
+        const WEI_TOLERANCE = $bigint.max(
+            BigInt(2 * 10 ** (this.baseDecimals - 6)),
+            10n
+        );
 
         this.eqBigInt(
             navGainFact

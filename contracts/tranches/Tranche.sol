@@ -207,33 +207,35 @@ contract Tranche is ITranche, CDOComponent, ERC4626Upgradeable, ERC20PermitUpgra
 
     /** @dev See {IERC4626-deposit}. */
     function deposit(uint256 tokenAssets, address receiver) public override(ERC4626Upgradeable, IERC4626) returns (uint256) {
-        cdo.updateAccounting();
-        uint256 shares = super.deposit(tokenAssets, receiver);
-        return shares;
+        return deposit(asset(), tokenAssets, receiver, TDepositParams(bytes("")));
+    }
+    function deposit(uint256 tokenAssets, address receiver, TDepositParams memory params) public virtual returns (uint256) {
+        return deposit(asset(), tokenAssets, receiver, params);
     }
     function deposit(address token, uint256 tokenAmount, address receiver) public virtual returns (uint256) {
-        if (token == asset()) {
-            return deposit(tokenAmount, receiver);
-        }
+        return deposit(token, tokenAmount, receiver, TDepositParams(bytes("")));
+    }
+    function deposit(address token, uint256 tokenAmount, address receiver, TDepositParams memory params) public virtual returns (uint256) {
         cdo.updateAccounting();
         // {Optimistic path} Reverts if token is not supported
         IStrategy strategy = cdo.strategy();
         uint256 baseAssets = strategy.convertToAssets(token, tokenAmount, Math.Rounding.Floor);
         uint256 feeBps = strategy.depositFeeBps(token);
         uint256 shares = quoteDeposit(baseAssets, feeBps);
-        _deposit(token, _msgSender(), receiver, baseAssets, tokenAmount, shares);
+        _deposit(token, _msgSender(), receiver, baseAssets, tokenAmount, shares, params.strategyOptions);
         return shares;
     }
     /** @dev See {IERC4626-mint}. */
     function mint(uint256 shares, address receiver) public override(ERC4626Upgradeable, IERC4626) returns (uint256) {
-        cdo.updateAccounting();
-        uint256 assets = super.mint(shares, receiver);
-        return assets;
+        return mint(asset(), shares, receiver, TDepositParams(bytes("")));
+    }
+    function mint(uint256 shares, address receiver, TDepositParams memory params) public returns (uint256) {
+        return mint(asset(), shares, receiver, params);
     }
     function mint(address token, uint256 shares, address receiver) public virtual returns (uint256) {
-        if (token == asset()) {
-            return mint(shares, receiver);
-        }
+        return mint(token, shares, receiver, TDepositParams(bytes("")));
+    }
+    function mint(address token, uint256 shares, address receiver, TDepositParams memory params) public virtual returns (uint256) {
         cdo.updateAccounting();
 
         IStrategy strategy = cdo.strategy();
@@ -241,29 +243,31 @@ contract Tranche is ITranche, CDOComponent, ERC4626Upgradeable, ERC20PermitUpgra
         uint256 baseAssets = quoteMint(shares, feeBps);
         // {Optimistic path} Reverts if token is not supported
         uint256 tokenAssets = strategy.convertToTokens(token, baseAssets, Math.Rounding.Ceil);
-        _deposit(token, _msgSender(), receiver, baseAssets, tokenAssets, shares);
+        _deposit(token, _msgSender(), receiver, baseAssets, tokenAssets, shares, params.strategyOptions);
         return tokenAssets;
-    }
-
-    /**
-     * @dev Deposit/mint common workflow for base token
-     */
-    function _deposit(address caller, address receiver, uint256 assets, uint256 shares) internal override {
-        super._deposit(caller, receiver, assets, shares);
-        cdo.deposit(address(this), asset(), assets, assets);
     }
 
     /**
      * @dev Deposit/mint common workflow for meta token
      */
-    function _deposit(address token, address caller, address receiver, uint256 baseAssets, uint256 tokenAssets, uint256 shares) internal virtual {
-        // Ensure the caller can withdraw the deposited tokenAssets amount
-        cdo.strategy().ensureRedeemable(caller, token, baseAssets);
+    function _deposit(
+        address token,
+        address caller,
+        address receiver,
+        uint256 baseAssets,
+        uint256 tokenAssets,
+        uint256 shares,
+        bytes memory strategyOptions
+    ) internal virtual {
+        if (token != asset()) {
+            // Ensure the caller can withdraw the deposited tokenAssets amount
+            cdo.strategy().ensureRedeemable(caller, token, baseAssets);
+        }
 
         SafeERC20.safeTransferFrom(IERC20(token), caller, address(this), tokenAssets);
         _mint(receiver, shares);
 
-        cdo.deposit(address(this), token, tokenAssets, baseAssets);
+        cdo.deposit(address(this), token, tokenAssets, baseAssets, strategyOptions);
         emit Deposit(caller, receiver, baseAssets, shares);
         emit OnMetaDeposit(receiver, token, tokenAssets, shares);
     }
@@ -278,8 +282,19 @@ contract Tranche is ITranche, CDOComponent, ERC4626Upgradeable, ERC20PermitUpgra
     function withdraw(uint256 assets, address receiver, address owner) public override(ERC4626Upgradeable, IERC4626) returns (uint256) {
         return withdraw(asset(), assets, receiver, owner);
     }
+    function withdraw(uint256 assets, address receiver, address owner, TRedemptionParams memory params) public virtual returns (uint256) {
+        return withdraw(asset(), assets, receiver, owner, params);
+    }
     function withdraw(address token, uint256 tokenAmount, address receiver, address owner) public virtual returns (uint256) {
-        return withdraw(token, tokenAmount, receiver, owner, TRedemptionParams(IStrataCDO.TExitMode.Dynamic, 0, 0));
+        return withdraw(token, tokenAmount, receiver, owner, TRedemptionParams(IStrataCDO.TExitMode.Dynamic, 0, 0, bytes("")));
+    }
+    function withdraw(address token, uint256 tokenAmount, address receiver, address owner, TRedemptionExitParams memory params) public virtual returns (uint256) {
+        return withdraw(token, tokenAmount, receiver, owner, TRedemptionParams({
+            exitMode: params.exitMode,
+            exitFee: params.exitFee,
+            cooldownSeconds: params.cooldownSeconds,
+            strategyOptions: bytes("")
+        }));
     }
     function withdraw(address token, uint256 tokenAmount, address receiver, address owner, TRedemptionParams memory params) public virtual returns (uint256) {
         cdo.updateAccounting();
@@ -293,7 +308,12 @@ contract Tranche is ITranche, CDOComponent, ERC4626Upgradeable, ERC20PermitUpgra
             revert ERC4626ExceededMaxWithdraw(owner, baseAssets, maxAssets);
         }
         uint256 shares = quoteWithdraw(baseAssets, exitFee);
-        _withdraw(token, _msgSender(), receiver, owner, baseAssets, tokenAmount, shares, exitMode, exitFee, cooldownSec);
+        _withdraw(token, _msgSender(), receiver, owner, baseAssets, tokenAmount, shares, TRedemptionParams({
+            exitMode: exitMode,
+            exitFee: exitFee,
+            cooldownSeconds: cooldownSec,
+            strategyOptions: params.strategyOptions
+        }));
         return shares;
     }
 
@@ -301,8 +321,19 @@ contract Tranche is ITranche, CDOComponent, ERC4626Upgradeable, ERC20PermitUpgra
     function redeem(uint256 shares, address receiver, address owner) public override(ERC4626Upgradeable, IERC4626)  returns (uint256) {
         return redeem(asset(), shares, receiver, owner);
     }
+    function redeem(uint256 shares, address receiver, address owner, TRedemptionParams memory params) public virtual returns (uint256) {
+        return redeem(asset(), shares, receiver, owner, params);
+    }
     function redeem(address token, uint256 shares, address receiver, address owner) public virtual returns (uint256) {
-        return redeem(token, shares, receiver, owner, TRedemptionParams(IStrataCDO.TExitMode.Dynamic, 0, 0));
+        return redeem(token, shares, receiver, owner, TRedemptionParams(IStrataCDO.TExitMode.Dynamic, 0, 0, bytes("")));
+    }
+    function redeem(address token, uint256 shares, address receiver, address owner, TRedemptionExitParams memory params) public virtual returns (uint256) {
+        return redeem(token, shares, receiver, owner, TRedemptionParams({
+            exitMode: params.exitMode,
+            exitFee: params.exitFee,
+            cooldownSeconds: params.cooldownSeconds,
+            strategyOptions: bytes("")
+        }));
     }
     function redeem(address token, uint256 shares, address receiver, address owner, TRedemptionParams memory params) public virtual returns (uint256) {
         cdo.updateAccounting();
@@ -317,7 +348,12 @@ contract Tranche is ITranche, CDOComponent, ERC4626Upgradeable, ERC20PermitUpgra
         uint256 baseAssets = quoteRedeem(shares, exitFee);
         // {Optimistic path} Reverts if token is not supported
         uint256 tokenAssets = cdo.strategy().convertToTokens(token, baseAssets, Math.Rounding.Ceil);
-        _withdraw(token, _msgSender(), receiver, owner, baseAssets, tokenAssets, shares, exitMode, exitFee, cooldownSec);
+        _withdraw(token, _msgSender(), receiver, owner, baseAssets, tokenAssets, shares, TRedemptionParams({
+            exitMode: exitMode,
+            exitFee: exitFee,
+            cooldownSeconds: cooldownSec,
+            strategyOptions: params.strategyOptions
+        }));
         return tokenAssets;
     }
 
@@ -332,21 +368,19 @@ contract Tranche is ITranche, CDOComponent, ERC4626Upgradeable, ERC20PermitUpgra
         uint256 baseAssets,
         uint256 tokenAssets,
         uint256 sharesGross,
-        IStrataCDO.TExitMode exitMode,
-        uint256 exitFee,
-        uint32 cooldownSec
+        TRedemptionParams memory params
     ) internal virtual {
         if (caller != owner) {
             _spendAllowance(owner, caller, sharesGross);
         }
 
-        emit OnExit(receiver, token, tokenAssets, sharesGross, exitMode, exitFee, cooldownSec);
+        emit OnExit(receiver, token, tokenAssets, sharesGross, params.exitMode, params.exitFee, params.cooldownSeconds);
 
-        if (exitMode == IStrataCDO.TExitMode.SharesLock) {
+        if (params.exitMode == IStrataCDO.TExitMode.SharesLock) {
             _transfer(owner, address(cdo.sharesCooldown()), sharesGross);
             // Consider transfers: owner => owner, caller => owner, or caller => caller as private to hit PRIVATE_REQUEST_SLOTS_CAP.
             address initialFrom = caller == receiver || owner == receiver ? receiver : owner;
-            cdo.cooldownShares(address(this), token, sharesGross, initialFrom, receiver, exitFee, cooldownSec);
+            cdo.cooldownShares(address(this), token, sharesGross, initialFrom, receiver, params.exitFee, params.cooldownSeconds, params.strategyOptions);
             return;
         }
 
@@ -357,7 +391,7 @@ contract Tranche is ITranche, CDOComponent, ERC4626Upgradeable, ERC20PermitUpgra
         if (fee > 0) {
             cdo.accrueFee(address(this), fee);
         }
-        cdo.withdraw(address(this), token, tokenAssets, baseAssets, owner, receiver);
+        cdo.withdraw(address(this), token, tokenAssets, baseAssets, owner, receiver, params.strategyOptions);
         _onAfterWithdrawalChecks();
         emit Withdraw(caller, receiver, owner, baseAssets, sharesGross);
         emit OnMetaWithdraw(receiver, token, tokenAssets, sharesGross);
@@ -439,7 +473,7 @@ contract Tranche is ITranche, CDOComponent, ERC4626Upgradeable, ERC20PermitUpgra
             return;
         }
         if (params.exitMode != exitMode || params.exitFee != exitFee || params.cooldownSeconds != cooldownSec) {
-            revert RedemptionParamsMismatch(params, TRedemptionParams({
+            revert RedemptionParamsMismatch(params, TRedemptionExitParams({
                 exitMode: exitMode,
                 exitFee: exitFee,
                 cooldownSeconds: cooldownSec

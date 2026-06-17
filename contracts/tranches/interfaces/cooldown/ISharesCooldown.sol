@@ -13,6 +13,7 @@ interface ISharesCooldown is ICooldown {
         uint64 unlockAt;
         uint192 shares;
         address token;
+        bytes strategyOptions;
     }
     struct TClaimableToken {
         address token;
@@ -73,6 +74,17 @@ interface ISharesCooldown is ICooldown {
         uint256 shares,
         uint256 exitFee,
         uint32  exitSharesLock
+    ) external;
+
+    function requestRedeem(
+        ITranche vault,
+        address token,
+        address initialFrom,
+        address to,
+        uint256 shares,
+        uint256 exitFee,
+        uint32  exitSharesLock,
+        bytes memory strategyOptions
     ) external;
 
     function setVaultExitBounds(address vault, TExitUpperBounds calldata bounds)external;

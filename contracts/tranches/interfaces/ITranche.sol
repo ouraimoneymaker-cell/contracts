@@ -7,16 +7,38 @@ import { IStrataCDO } from "./IStrataCDO.sol";
 
 interface ITranche is ICDOComponent, IMetaVault {
 
-    /// @dev Reverts when user-specified redemption parameters don't match current exit mode settings,
-    ///      protecting against mode slippage before transaction execution
-    struct TRedemptionParams {
+    /// @dev Used for backward compatibility and when no strategy options are needed
+    struct TRedemptionExitParams {
+        /// @dev Reverts when user-specified redemption parameters don't match current exit mode settings,
+        ///      protecting against mode slippage before transaction execution
         IStrataCDO.TExitMode exitMode;
         uint256 exitFee;
         uint32 cooldownSeconds;
     }
+    struct TRedemptionParams {
+        /// @dev Reverts when user-specified redemption parameters don't match current exit mode settings,
+        ///      protecting against mode slippage before transaction execution
+        IStrataCDO.TExitMode exitMode;
+        uint256 exitFee;
+        uint32 cooldownSeconds;
+        /// @dev Strategy-specific encoded options
+        ///      Format depends on the underlying strategy implementation.
+        bytes strategyOptions;
+    }
 
-    error RedemptionParamsMismatch(TRedemptionParams requested, TRedemptionParams current);
+    struct TDepositParams {
+        /// @dev Strategy-specific encoded options
+        ///      Format depends on the underlying strategy implementation.
+        bytes strategyOptions;
+    }
+
+    error RedemptionParamsMismatch(TRedemptionParams requested, TRedemptionExitParams current);
 
     function configure () external;
     function burnSharesAsFee(uint256 shares, address owner) external returns (uint256);
+
+    function deposit(address token, uint256 tokenAssets, address receiver, TDepositParams memory params) external returns (uint256);
+    function mint(address token, uint256 shares, address receiver, TDepositParams memory params) external returns (uint256);
+    function withdraw(address token, uint256 tokenAssets, address receiver, address owner, TRedemptionParams memory params) external returns (uint256);
+    function redeem(address token, uint256 shares, address receiver, address owner, TRedemptionParams memory params) external returns (uint256);
 }

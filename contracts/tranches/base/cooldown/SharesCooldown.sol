@@ -60,6 +60,32 @@ contract SharesCooldown is ISharesCooldown, CooldownBase {
         uint256 fee,
         uint32 cooldownSeconds
     ) external onlyRole(COOLDOWN_WORKER_ROLE) {
+        return requestRedeemInner(vault, token, initialFrom, to, shares, fee, cooldownSeconds, bytes(""));
+    }
+
+    function requestRedeem(
+        ITranche vault,
+        address token,
+        address initialFrom,
+        address to,
+        uint256 shares,
+        uint256 fee,
+        uint32 cooldownSeconds,
+        bytes memory strategyOptions
+    ) external onlyRole(COOLDOWN_WORKER_ROLE) {
+        return requestRedeemInner(vault, token, initialFrom, to, shares, fee, cooldownSeconds, strategyOptions);
+    }
+
+    function requestRedeemInner(
+        ITranche vault,
+        address token,
+        address initialFrom,
+        address to,
+        uint256 shares,
+        uint256 fee,
+        uint32 cooldownSeconds,
+        bytes memory strategyOptions
+    ) internal {
         if (shares == 0) {
             return;
         }
@@ -96,7 +122,7 @@ contract SharesCooldown is ISharesCooldown, CooldownBase {
                 last.token = token;
                 last.shares += uint192(shares);
             } else {
-                requests.push(TRequest(unlockAt, uint192(shares), token));
+                requests.push(TRequest(unlockAt, uint192(shares), token, strategyOptions));
             }
         } else {
             TRequest storage last = requests[requestsCount - 1];

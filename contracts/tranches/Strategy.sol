@@ -10,6 +10,30 @@ import { CDOComponent }  from "./base/CDOComponent.sol";
 /// @dev Concrete strategies must implement specific investment logic by extending this contract
 abstract contract Strategy is IStrategy, CDOComponent {
 
+    function deposit (
+        address /*tranche*/,
+        address /*token*/,
+        uint256 /*tokenAmount*/,
+        uint256 /*baseAssets*/,
+        address /*owner*/,
+        bytes memory /*options*/
+    ) external virtual returns (uint256) {
+        revert ("NotImplemented");
+    }
+
+    function withdraw (
+        address /*tranche*/,
+        address /*token*/,
+        uint256 /*tokenAmount*/,
+        uint256 /*baseAssets*/,
+        address /*sender*/,
+        address /*receiver*/,
+        bool /*shouldSkipCooldown*/,
+        bytes memory /*options*/
+    ) external virtual returns (uint256) {
+        revert ("NotImplemented");
+    }
+
     /**
      * @notice Returns the deposit fee percentage for the underlying protocol
      * @return feeBps The deposit fee in basis points (e.g., 10 = 0.1%)

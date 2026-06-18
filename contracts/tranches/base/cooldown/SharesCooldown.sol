@@ -155,9 +155,9 @@ contract SharesCooldown is ISharesCooldown, CooldownBase {
     }
     function finalize(ITranche vault, address token, address user, uint256 at) public returns (uint256 claimed) {
         if (token == address(0)) {
-            claimed = _finalizeAll(address(vault), user, address(0), at);
+            claimed = _finalizeAll(address(vault), user, address(0), at, bytes(""));
         } else {
-            (claimed, ) = _processFinalization(address(vault), user, token, address(0), at);
+            (claimed, ) = _processFinalization(address(vault), user, token, address(0), at, bytes(""));
         }
         if (claimed == 0) {
             revert NothingToFinalize();
@@ -174,7 +174,34 @@ contract SharesCooldown is ISharesCooldown, CooldownBase {
     /// @param user The request owner (must be msg.sender).
     /// @return claimed The total shares redeemed.
     function finalizeWithTokenOverride(IERC20 vault, address token, address user) external onlyUser(user) returns (uint256 claimed) {
-        claimed = _finalizeAll(address(vault), user, token, block.timestamp);
+        claimed = _finalizeAll(address(vault), user, token, block.timestamp, bytes(""));
+        emit Finalized(vault, user, claimed);
+        return claimed;
+    }
+
+    /// @notice Finalizes all claimable requests with override token and/or strategy options.
+    /// @dev Only callable by the request owner to override both token and/or strategy options for all requests.
+    /// @param vault The tranche vault address.
+    /// @param token The output asset to redeem for all claimable requests.
+    /// @param user The request owner (must be msg.sender).
+    /// @param strategyOptions Custom strategy options for redemption.
+    /// @return claimed The total shares redeemed.
+    function finalizeWithOverrides(IERC20 vault, address token, address user, bytes calldata strategyOptions) external onlyUser(user) returns (uint256 claimed) {
+        claimed = _finalizeAll(address(vault), user, token, block.timestamp, strategyOptions);
+        emit Finalized(vault, user, claimed);
+        return claimed;
+    }
+
+    /// @notice Finalizes a single redemption request with optional overrides.
+    /// @dev Only callable by the request owner to override token and/or strategy options for a specific request.
+    /// @param vault The tranche vault address.
+    /// @param idx The index of the request in the user's active requests array.
+    /// @param token The output asset to redeem (use address(0) for request's original token).
+    /// @param user The request owner (must be msg.sender).
+    /// @param strategyOptions Custom strategy options for redemption (empty to use request's original options).
+    /// @return claimed The shares redeemed.
+    function finalizeRequest(IERC20 vault, uint256 idx, address token, address user, bytes calldata strategyOptions) external onlyUser(user) returns (uint256 claimed) {
+        claimed = _finalizeRequest(address(vault), idx, user, token, strategyOptions);
         emit Finalized(vault, user, claimed);
         return claimed;
     }
@@ -218,7 +245,8 @@ contract SharesCooldown is ISharesCooldown, CooldownBase {
         require(maxShares >= sharesUser, "MaxRedemptionLimitReached");
 
         address tokenToRedeem = token != address(0) ? token : req.token;
-        vault.redeem(tokenToRedeem, sharesUser, user, address(this));
+
+        redeem(vault, tokenToRedeem, sharesUser, user, req.strategyOptions);
         emit ExitFeeAccrued(address(this), user, sharesFee, sharesUser);
 
         claimed = sharesUser;
@@ -338,20 +366,51 @@ contract SharesCooldown is ISharesCooldown, CooldownBase {
 
     /// @dev Finalize all requests using their output assets; when `overrideToken` is set, redeem all requests
     ///      to that token (used only through onlyUser entrypoints).
-    function _finalizeAll(address vault, address user, address overridenToken, uint256 at) internal returns (uint256 claimed) {
+    function _finalizeAll(address vault, address user, address overridenToken, uint256 at, bytes memory strategyOptions) internal returns (uint256 claimed) {
         if (overridenToken != address(0)) {
-            (claimed, ) = _processFinalization(vault, user, address(0), overridenToken, at);
+            (claimed, ) = _processFinalization(vault, user, address(0), overridenToken, at, strategyOptions);
             return claimed;
         }
         address finalizeToken = ITranche(vault).asset();
         while (true) {
-            (uint256 singleClaimed, address nextToken) = _processFinalization(vault, user, finalizeToken, overridenToken, at);
+            (uint256 singleClaimed, address nextToken) = _processFinalization(vault, user, finalizeToken, overridenToken, at, strategyOptions);
             claimed += singleClaimed;
             if (nextToken == address(0)) {
                 break;
             }
             finalizeToken = nextToken;
         }
+        return claimed;
+    }
+
+    /// @dev Finalizes a single request by index; when `overridenToken` is set, redeem to that token.
+    function _finalizeRequest(address vault, uint256 idx, address user, address overridenToken, bytes memory strategyOptions) internal returns (uint256 claimed) {
+        TRequest[] storage requests = activeRequests[vault][user];
+        uint256 len = requests.length;
+        require(idx < len, "OutOfRange");
+        TRequest memory req = requests[idx];
+        bool isCooldownActive = isCooldownActiveInner(vault);
+        if (isCooldownActive && req.unlockAt > block.timestamp) {
+            revert("RequestLocked");
+        }
+
+        bytes memory options = strategyOptions.length != 0
+            ? strategyOptions
+            : req.strategyOptions;
+
+        address token = overridenToken != address(0)
+            ? overridenToken
+            : req.token;
+
+        claimed = req.shares;
+        redeem(ITranche(vault), token, claimed, user, options);
+
+        if (idx < len - 1) {
+            requests[idx] = requests[len - 1];
+        }
+        requests.pop();
+
+
         return claimed;
     }
 
@@ -363,28 +422,35 @@ contract SharesCooldown is ISharesCooldown, CooldownBase {
     /// @param vault Tranche vault address.
     /// @param user Owner of the requests being finalized.
     /// @param token Token filter; when zero, all claimable requests are aggregated.
-    /// @param overrideToken Override token to withdraw.
+    /// @param tokenToRedeem Override token to withdraw (optional).
     /// @param at Timestamp used to determine claimable requests.
+    /// @param strategyOptions Overriden options for redemption (optional).
     /// @return claimed Total shares redeemed in this pass.
     /// @return nextToken Next token found among remaining requests (zero if none).
     function _processFinalization(
         address vault,
         address user,
         address token,
-        address overrideToken,
-        uint256 at
+        address tokenToRedeem,
+        uint256 at,
+        bytes memory strategyOptions
     ) internal returns (uint256 claimed, address nextToken) {
         if (at > block.timestamp) {
             revert InvalidTime();
         }
-        if (token == address(0) && overrideToken == address(0)) {
+        if (tokenToRedeem == address(0)) {
+            tokenToRedeem = token;
+        }
+        if (tokenToRedeem == address(0)) {
             revert ZeroAddress();
         }
 
         TRequest[] storage requests = activeRequests[address(vault)][user];
         bool isCooldownActive = isCooldownActiveInner(vault);
 
+        uint256 claimedUnbatched = 0;
         uint256 len = requests.length;
+
         for (uint256 i; i < len; ) {
             TRequest memory req = requests[i];
             if (isCooldownActive && req.unlockAt > at) {
@@ -403,7 +469,13 @@ contract SharesCooldown is ISharesCooldown, CooldownBase {
                 }
                 continue;
             }
-            claimed += req.shares;
+            if (strategyOptions.length == 0 && req.strategyOptions.length > 0) {
+                claimedUnbatched += req.shares;
+                redeem(ITranche(vault), tokenToRedeem, req.shares, user, req.strategyOptions);
+            } else {
+                // Batch shares for redemption with empty or overriden options
+                claimed += req.shares;
+            }
 
             if (i < len - 1) {
                 requests[i] = requests[len - 1];
@@ -414,11 +486,22 @@ contract SharesCooldown is ISharesCooldown, CooldownBase {
             }
         }
         if (claimed > 0) {
-            address tokenToRedeem = overrideToken != address(0) ? overrideToken : token;
-            ITranche(vault).redeem(tokenToRedeem, claimed, user, address(this));
+            redeem(ITranche(vault), tokenToRedeem, claimed, user, strategyOptions);
         }
 
-        return (claimed, nextToken);
+        return (claimed + claimedUnbatched, nextToken);
     }
 
+    function redeem (ITranche vault, address token, uint256 shares, address receiver, bytes memory strategyOptions) internal {
+        if (strategyOptions.length == 0) {
+            ITranche(vault).redeem(token, shares, receiver, address(this));
+            return;
+        }
+        ITranche(vault).redeem(token, shares, receiver, address(this), ITranche.TRedemptionParams({
+            exitMode: IStrataCDO.TExitMode.Dynamic,
+            exitFee: 0,
+            cooldownSeconds: 0,
+            strategyOptions: strategyOptions
+        }));
+    }
 }

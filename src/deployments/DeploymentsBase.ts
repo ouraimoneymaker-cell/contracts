@@ -175,6 +175,10 @@ export abstract class DeploymentsBase<T extends ICdoDeploymentsBase = any> {
         return base;
     }
 
+    protected getDepositAmount (): number {
+        return 40;
+    }
+
 
     async get<T extends ContractBase>(Ctor: Constructor<T>, params?: {
         id?: 'jrUSDe' | 'srUSDe' | string,
@@ -723,7 +727,7 @@ export abstract class DeploymentsBase<T extends ICdoDeploymentsBase = any> {
         if (this.owner.type === 'safe') {
             throw new Error(`Mainnet deployment not ready`);
         }
-        const AMOUNT = $bigint.toWei(20, await erc20.decimals());
+        const AMOUNT = $bigint.toWei(this.getDepositAmount(), await erc20.decimals());
         let balance = await erc20.balanceOf(this.owner.address);
         if (balance < AMOUNT) {
             if (this.client.network === 'hardhat' || this.client.network === 'hoodi') {
@@ -752,8 +756,7 @@ export abstract class DeploymentsBase<T extends ICdoDeploymentsBase = any> {
         let erc20 = await this.getDepositToken();
         let { jrtVault, srtVault, cdo } = tranches;
 
-
-        const AMOUNT = $bigint.toWei(40, await erc20.decimals());
+        const AMOUNT = $bigint.toWei(this.getDepositAmount(), await erc20.decimals());
         let balance = await erc20.balanceOf(this.owner.address);
         if (balance < AMOUNT) {
             throw new Error(`Not enough balance for initial deposit.`);
@@ -790,10 +793,12 @@ export abstract class DeploymentsBase<T extends ICdoDeploymentsBase = any> {
         let acm = await this.ensureACM();
         let { base } = await this.ensureUnderlying();
         let { cdo, jrtVault } = await this.ensureCDO();
+
+        let v = this.cdoInfo.ContractVersions?.depositor ?? 'V3';
         let { contract: depositor } = await this.common.ensureWithProxy(TrancheDepositor, {
             id: this.isTestnet()
                 ? `${this.pfx}TrancheDepositor`
-                : `TrancheDepositorV3`,
+                : `TrancheDepositor${v}`,
             initialize: [
                 this.owner.address,
                 acm.address
@@ -802,7 +807,8 @@ export abstract class DeploymentsBase<T extends ICdoDeploymentsBase = any> {
         });
 
         await this.ensureRole($contract.keccak256('DEPOSITOR_CONFIG_ROLE'), this.owner.address);
-        let status = await depositor.tranches(jrtVault.address, base.address);
+        let depositToken = await this.getDepositToken();
+        let status = await depositor.tranches(jrtVault.address, depositToken.address);
         if (status == false) {
             await depositor.$receipt().addCdo(this.owner, cdo.address);
         }

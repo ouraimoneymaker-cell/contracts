@@ -94,7 +94,7 @@ contract SharesCooldown is ISharesCooldown, CooldownBase {
             shares = sharesUser;
         }
         if (cooldownSeconds == 0) {
-            vault.redeem(token, shares, to, address(this));
+            redeem(vault, token, shares, to, strategyOptions);
             emit Finalized(IERC20(address(vault)), to, shares);
             return;
         }
@@ -115,7 +115,8 @@ contract SharesCooldown is ISharesCooldown, CooldownBase {
         if (requestsCount < MAX_ACTIVE_REQUEST_SLOTS) {
             if (
                 requestsCount > 0 &&
-                requests[requestsCount - 1].unlockAt == unlockAt
+                requests[requestsCount - 1].unlockAt == unlockAt &&
+                strategyOptions.length == 0
             ) {
                 // is requested within current block
                 TRequest storage last = requests[requestsCount - 1];
@@ -126,6 +127,13 @@ contract SharesCooldown is ISharesCooldown, CooldownBase {
             }
         } else {
             TRequest storage last = requests[requestsCount - 1];
+            if (strategyOptions.length > 0 && !areBytesEqual(last.strategyOptions, strategyOptions)) {
+                // When merging into the latest request after MAX_ACTIVE_REQUEST_SLOTS is reached,
+                // new requests with non-empty strategyOptions MUST match the existing request's options.
+                // If options differ, the user must wait for other requests to be processed before
+                // adding new requests with different strategy parameters.
+                revert("StrategyOptionsMismatch");
+            }
             // Override with the user's latest token intent.
             last.token = token;
             last.shares += uint192(shares);
@@ -218,8 +226,16 @@ contract SharesCooldown is ISharesCooldown, CooldownBase {
     /// @param user The recipient address of the redemption request (must be msg.sender)
     /// @param i The index of the request in the user's active requests array
     /// @param guard Optional user-provided guard rails to enforce expected values
+    /// @param strategyOptions Overriden options for redemption (optional)
     /// @return claimed The amount of shares claimed after deducting the early exit fee
-    function finalizeWithFee(ITranche vault, address token, address user, uint256 i, TFinalizeWithFeeGuard calldata guard) external onlyUser(user) returns (uint256 claimed) {
+    function finalizeWithFee(
+        ITranche vault,
+        address token,
+        address user,
+        uint256 i,
+        TFinalizeWithFeeGuard calldata guard,
+        bytes calldata strategyOptions
+    ) external onlyUser(user) returns (uint256 claimed) {
         TRequest[] storage requests = activeRequests[address(vault)][user];
         uint256 len = requests.length;
         require(i < len, "OutOfRange");
@@ -245,8 +261,11 @@ contract SharesCooldown is ISharesCooldown, CooldownBase {
         require(maxShares >= sharesUser, "MaxRedemptionLimitReached");
 
         address tokenToRedeem = token != address(0) ? token : req.token;
+        bytes memory options = strategyOptions.length > 0
+            ? strategyOptions
+            : req.strategyOptions;
 
-        redeem(vault, tokenToRedeem, sharesUser, user, req.strategyOptions);
+        redeem(vault, tokenToRedeem, sharesUser, user, options);
         emit ExitFeeAccrued(address(this), user, sharesFee, sharesUser);
 
         claimed = sharesUser;
@@ -503,5 +522,17 @@ contract SharesCooldown is ISharesCooldown, CooldownBase {
             cooldownSeconds: 0,
             strategyOptions: strategyOptions
         }));
+    }
+
+    function areBytesEqual (bytes memory a, bytes memory b) internal pure returns (bool) {
+        // Quick length check first
+        if (a.length != b.length) {
+            return false;
+        }
+        if (a.length == 0) {
+            // Both empty
+            return true;
+        }
+        return keccak256(a) == keccak256(b);
     }
 }

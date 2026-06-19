@@ -63,7 +63,30 @@ interface ISharesCooldown is ICooldown {
 
     function finalize(ITranche vault, address token, address user) external returns (uint256 claimed);
     function finalize(ITranche vault, address token, address user, uint256 at) external returns (uint256 claimed);
-    function finalizeWithFee(ITranche vault, address token, address user, uint256 i, TFinalizeWithFeeGuard calldata guard) external returns (uint256 claimed);
+    function finalizeWithFee(
+        ITranche vault,
+        address token,
+        address user,
+        uint256 i,
+        TFinalizeWithFeeGuard calldata guard,
+        bytes memory strategyOptions
+    ) external returns (uint256 claimed);
+
+    function finalizeWithOverrides(
+        IERC20 vault,
+        address token,
+        address user,
+        bytes calldata strategyOptions
+    ) external returns (uint256 claimed);
+
+    function finalizeRequest(
+        IERC20 vault,
+        uint256 idx,
+        address token,
+        address user,
+        bytes calldata strategyOptions
+    ) external returns (uint256 claimed);
+
     function cancel(IERC20 vault, address user, uint256 i, TCancelGuard calldata guard) external;
 
     function requestRedeem(

@@ -10,10 +10,19 @@ import { IStrataCDO } from "../IStrataCDO.sol";
 interface ISharesCooldown is ICooldown {
 
     struct TRequest {
-        uint64 unlockAt;
-        uint192 shares;
-        address token;
+        uint64 unlockAt;  // 8 bytes
+        uint192 shares;   // 24 bytes
+        address token;    // 20 bytes
+
+        /// @dev Unique key to retrieve associated metadata from requestMeta mapping.
+        ///      Zero value indicates no metadata stored for this request.
+        bytes12 metaKey;  // 12 bytes
+    }
+    struct TRequestMeta {
+        /// @dev Strategy-specific parameters to be forwarded during redemption finalization.
+        ///      Empty bytes indicates no custom options for this request.
         bytes strategyOptions;
+        /// @dev Extensible: new fields can be added without breaking existing requests.
     }
     struct TClaimableToken {
         address token;

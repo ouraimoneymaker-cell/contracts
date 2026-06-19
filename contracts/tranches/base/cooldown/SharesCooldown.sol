@@ -39,6 +39,13 @@ contract SharesCooldown is ISharesCooldown, CooldownBase {
     mapping(address vault => uint256 fee)               public vaultEarlyExitFeePerDay;
     mapping(address vault => TExitUpperBounds bounds)   public vaultExitBounds;
 
+    mapping(address vault => mapping(address account => mapping(bytes12 key => TRequestMeta meta)))
+        public requestMeta;
+
+    // Counter to generate unique keys per user
+    mapping(address vault => mapping(address account => uint96 metaKeyNonce))
+        private _metaKeyNonce;
+
 
     /// @notice Initiates a share redemption request with optional cooldown period and fee.
     /// @dev Called by COOLDOWN_WORKER_ROLE (typically StrataCDO) when vault coverage requires lockup or fee.
@@ -112,22 +119,39 @@ contract SharesCooldown is ISharesCooldown, CooldownBase {
         }
 
         uint64 unlockAt = uint64(block.timestamp + cooldownSeconds);
+        bytes12 metaKey = bytes12(0);
         if (requestsCount < MAX_ACTIVE_REQUEST_SLOTS) {
             if (
                 requestsCount > 0 &&
                 requests[requestsCount - 1].unlockAt == unlockAt &&
-                strategyOptions.length == 0
+                requests[requestsCount - 1].metaKey == bytes12(0)
             ) {
                 // is requested within current block
                 TRequest storage last = requests[requestsCount - 1];
                 last.token = token;
                 last.shares += uint192(shares);
             } else {
-                requests.push(TRequest(unlockAt, uint192(shares), token, strategyOptions));
+                // Generate unique key if options provided
+                if (strategyOptions.length > 0) {
+                    uint96 nonce = _metaKeyNonce[address(vault)][to]++;
+                    metaKey = bytes12(uint96(nonce));
+                    requestMeta[address(vault)][to][metaKey] = TRequestMeta({
+                        strategyOptions: strategyOptions
+                    });
+                }
+                requests.push(TRequest({
+                    unlockAt: unlockAt,
+                    shares: uint192(shares),
+                    token: token,
+                    metaKey: metaKey
+                }));
             }
         } else {
             TRequest storage last = requests[requestsCount - 1];
-            if (strategyOptions.length > 0 && !areBytesEqual(last.strategyOptions, strategyOptions)) {
+            // Check if strategy options are compatible
+            bytes memory lastMeta = requestMeta[address(vault)][to][last.metaKey].strategyOptions;
+
+            if (strategyOptions.length > 0 && !areBytesEqual(lastMeta, strategyOptions)) {
                 // When merging into the latest request after MAX_ACTIVE_REQUEST_SLOTS is reached,
                 // new requests with non-empty strategyOptions MUST match the existing request's options.
                 // If options differ, the user must wait for other requests to be processed before
@@ -243,6 +267,16 @@ contract SharesCooldown is ISharesCooldown, CooldownBase {
         require(req.unlockAt > block.timestamp, "RequestReady");
         require(guard.shares == 0 || guard.shares == req.shares, "UnexpectedShares");
 
+        bytes memory options;
+        if (strategyOptions.length > 0) {
+            options = strategyOptions;
+        } else {
+            options = requestMeta[address(vault)][user][req.metaKey].strategyOptions;
+        }
+
+        if (req.metaKey != bytes12(0)) {
+            delete requestMeta[address(vault)][user][req.metaKey];
+        }
         if (i < len - 1) {
             requests[i] = requests[len - 1];
         }
@@ -261,9 +295,7 @@ contract SharesCooldown is ISharesCooldown, CooldownBase {
         require(maxShares >= sharesUser, "MaxRedemptionLimitReached");
 
         address tokenToRedeem = token != address(0) ? token : req.token;
-        bytes memory options = strategyOptions.length > 0
-            ? strategyOptions
-            : req.strategyOptions;
+
 
         redeem(vault, tokenToRedeem, sharesUser, user, options);
         emit ExitFeeAccrued(address(this), user, sharesFee, sharesUser);
@@ -286,6 +318,9 @@ contract SharesCooldown is ISharesCooldown, CooldownBase {
         uint256 len = requests.length;
         require(i < len, "OutOfRange");
         TRequest memory req = requests[i];
+        if (req.metaKey != bytes12(0)) {
+            delete requestMeta[address(vault)][user][req.metaKey];
+        }
         if (i < len - 1) {
             requests[i] = requests[len - 1];
         }
@@ -415,7 +450,7 @@ contract SharesCooldown is ISharesCooldown, CooldownBase {
 
         bytes memory options = strategyOptions.length != 0
             ? strategyOptions
-            : req.strategyOptions;
+            : requestMeta[vault][user][req.metaKey].strategyOptions;
 
         address token = overridenToken != address(0)
             ? overridenToken
@@ -424,12 +459,13 @@ contract SharesCooldown is ISharesCooldown, CooldownBase {
         claimed = req.shares;
         redeem(ITranche(vault), token, claimed, user, options);
 
+        if (req.metaKey != bytes12(0)) {
+            delete requestMeta[vault][user][req.metaKey];
+        }
         if (idx < len - 1) {
             requests[idx] = requests[len - 1];
         }
         requests.pop();
-
-
         return claimed;
     }
 
@@ -488,14 +524,18 @@ contract SharesCooldown is ISharesCooldown, CooldownBase {
                 }
                 continue;
             }
-            if (strategyOptions.length == 0 && req.strategyOptions.length > 0) {
+            bytes memory options = requestMeta[address(vault)][user][req.metaKey].strategyOptions;
+            if (strategyOptions.length == 0 && options.length > 0) {
                 claimedUnbatched += req.shares;
-                redeem(ITranche(vault), tokenToRedeem, req.shares, user, req.strategyOptions);
+                redeem(ITranche(vault), tokenToRedeem, req.shares, user, options);
             } else {
                 // Batch shares for redemption with empty or overriden options
                 claimed += req.shares;
             }
 
+            if (req.metaKey != bytes12(0)) {
+                delete requestMeta[vault][user][req.metaKey];
+            }
             if (i < len - 1) {
                 requests[i] = requests[len - 1];
             }

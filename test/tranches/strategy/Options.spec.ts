@@ -56,18 +56,17 @@ UTest.create({
                     return baseAssets;
                 }
                 function withdraw (
-                    address tranche,
-                    address token,
-                    uint256 tokenAmount,
+                    address,
+                    address,
+                    uint256,
                     uint256 baseAssets,
-                    address sender,
+                    address,
                     address receiver,
-                    bool shouldSkipCooldown,
+                    bool,
                     bytes memory options
                 ) external returns (uint256) {
                     TOptions memory option = abi.decode(options, (TOptions));
                     optionsArr.push(option);
-
                     USDe.transfer(receiver, baseAssets);
                     return baseAssets;
                 }
@@ -192,7 +191,8 @@ UTest.create({
                 });
 
                 const req = await sharesCooldown.activeRequests(jrtVault.address, deployer.address, 0n);
-                $require.eq(req.strategyOptions, strategyOptionsHex);
+                const meta = await sharesCooldown.requestMeta(jrtVault.address, deployer.address, req.metaKey);
+                $require.eq(meta, strategyOptionsHex);
 
                 await client.debug.mine('2days');
                 await sharesCooldown.$receipt().finalize(deployer, jrtVault.address, deployer.address);
@@ -216,7 +216,8 @@ UTest.create({
                 });
 
                 const req = await sharesCooldown.activeRequests(jrtVault.address, deployer.address, 0n);
-                $require.eq(req.strategyOptions, strategyOptionsHex);
+                const meta = await sharesCooldown.requestMeta(jrtVault.address, deployer.address, req.metaKey);
+                $require.eq(meta, strategyOptionsHex);
 
                 await client.debug.mine('2days');
                 const strategyOptionsHexOverride = $abiUtils.encode(['uint256', 'uint256'], [14n, 16n]);
@@ -241,7 +242,8 @@ UTest.create({
                 });
 
                 const req = await sharesCooldown.activeRequests(jrtVault.address, deployer.address, 0n);
-                $require.eq(req.strategyOptions, strategyOptionsHex);
+                const meta = await sharesCooldown.requestMeta(jrtVault.address, deployer.address, req.metaKey);
+                $require.eq(meta, strategyOptionsHex);
 
                 await client.debug.mine('2days');
                 const strategyOptionsHexOverride = $abiUtils.encode(['uint256', 'uint256'], [23n, 27n]);

@@ -9,6 +9,7 @@ import {IStrategy} from "../../interfaces/IStrategy.sol";
 import {IRebalancer, IRebalanceable} from "../../interfaces/IRebalancer.sol";
 import {IAccounting} from "../../interfaces/IAccounting.sol";
 import {Strategy} from "../../Strategy.sol";
+import {IndexPackerLib} from "../../utils/IndexPackerLib.sol";
 
 abstract contract MultiStrategy is Strategy, IMultiStrategy, IRebalanceable {
     IStrategy[] public strats;
@@ -34,7 +35,7 @@ abstract contract MultiStrategy is Strategy, IMultiStrategy, IRebalanceable {
     }
 
     function _depositStratIndex(address tranche) internal view virtual returns (uint256);
-    function _primaryWithdrawStratIndex(address tranche) internal view virtual returns (uint256);
+    function _withdrawStratIndexes(address tranche) internal view virtual returns (uint256);
 
     // Override to route deposits based on token/amount (e.g. debt-aware routing).
     // Defaults to the tranche→strat mapping so existing impls need no change.
@@ -183,29 +184,29 @@ abstract contract MultiStrategy is Strategy, IMultiStrategy, IRebalanceable {
         address receiver,
         bool shouldSkipCooldown
     ) internal returns (uint256 tokenAmountOut) {
-        uint256 primaryIdx = _primaryWithdrawStratIndex(tranche);
-        uint256 secondaryIdx = _depositStratIndex(tranche);
-        IStrategy primaryStrat = strats[primaryIdx];
-        IStrategy secondaryStrat = strats[secondaryIdx];
+        uint256 withdrawOrder = _withdrawStratIndexes(tranche);
+        uint256 length = IndexPackerLib.length(withdrawOrder);
+        uint256 remainingAssets = baseAssets;
 
-        uint256 borrowedAssets = 0;
-        if (perStrategyTokens[address(primaryStrat)][token]) {
-            borrowedAssets = Math.min(baseAssets, primaryStrat.totalAssets());
+        for (uint256 i = 0; i < length && remainingAssets > 0; i++) {
+            uint256 stratIdx = IndexPackerLib.unpack(withdrawOrder, i);
+            IStrategy strat = strats[stratIdx];
+
+            if (!perStrategyTokens[address(strat)][token]) {
+                continue;
+            }
+
+            uint256 available = strat.totalAssets();
+            uint256 toWithdraw = Math.min(remainingAssets, available);
+
+            if (toWithdraw > 0) {
+                uint256 tokenAmountStrat = strat.convertToTokens(token, toWithdraw, Math.Rounding.Ceil);
+                tokenAmountOut += strat.withdraw(tranche, token, tokenAmountStrat, toWithdraw, sender, receiver, shouldSkipCooldown);
+                remainingAssets -= toWithdraw;
+            }
         }
-
-        if (borrowedAssets > 0) {
-            uint256 primaryTokenAmount = primaryStrat.convertToTokens(token, borrowedAssets, Math.Rounding.Ceil);
-            tokenAmountOut += primaryStrat.withdraw(tranche, token, primaryTokenAmount, borrowedAssets, sender, receiver, true);
-        }
-
-        uint256 secondaryAssets = baseAssets - borrowedAssets;
-        if (secondaryAssets > 0) {
-            uint256 secondaryTokenAmount = tokenAmountOut < tokenAmount
-                ? tokenAmount - tokenAmountOut
-                : secondaryStrat.convertToTokens(token, secondaryAssets, Math.Rounding.Ceil);
-            tokenAmountOut += secondaryStrat.withdraw(
-                tranche, token, secondaryTokenAmount, secondaryAssets, sender, receiver, shouldSkipCooldown
-            );
+        if (remainingAssets > 0) {
+            revert WithdrawalCapReached(tranche);
         }
     }
 

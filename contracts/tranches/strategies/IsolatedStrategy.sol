@@ -8,14 +8,24 @@ import {IStrategy} from "../interfaces/IStrategy.sol";
 import {IRebalanceable} from "../interfaces/IRebalancer.sol";
 import {MultiStrategy} from "./base/MultiStrategy.sol";
 import {Strategy} from "../Strategy.sol";
+import {IndexPackerLib} from "../utils/IndexPackerLib.sol";
 
 contract IsolatedStrategy is MultiStrategy, IIsolatedStrategy {
+
+    /// @dev Packed withdrawal order for JRT: [senior(1), junior(0)]
+    uint256 private immutable _jrtWithdrawOrderPacked;
+    /// @dev Packed withdrawal order for SRT: [junior(0), senior(1)]
+    uint256 private immutable _srtWithdrawOrderPacked;
+
     IStrategy public juniorStrat;
     IStrategy public seniorStrat;
 
     event StratsSet(address indexed juniorStrat, address indexed seniorStrat);
 
-    constructor() Strategy(address(0), address(0)) {}
+    constructor() Strategy(address(0), address(0)) {
+        _jrtWithdrawOrderPacked = IndexPackerLib.pack2(1, 0);
+        _srtWithdrawOrderPacked = IndexPackerLib.pack2(0, 1);
+    }
 
     function initialize(
         address owner_,
@@ -69,9 +79,11 @@ contract IsolatedStrategy is MultiStrategy, IIsolatedStrategy {
         return _depositStratIndex(tranche);
     }
 
-    // JRT redemptions borrow from senior first (index 1); SRT borrows from junior first (index 0).
-    function _primaryWithdrawStratIndex(address tranche) internal view override returns (uint256) {
-        return cdo.isJrt(tranche) ? 1 : 0;
+    // JRT redemptions from senior strategy first (index 1); SRT redeems from junior first (index 0).
+    function _withdrawStratIndexes (address tranche) internal view override returns (uint256) {
+        return cdo.isJrt(tranche)
+            ? _jrtWithdrawOrderPacked
+            : _srtWithdrawOrderPacked;
     }
 
     function totalAssetsByTranche() public view returns (uint256 jrtAssets, uint256 srtAssets) {

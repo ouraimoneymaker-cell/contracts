@@ -583,8 +583,9 @@ export abstract class DeploymentsBase<T extends ICdoDeploymentsBase = any> {
                     ? [ decimals, true ] as [ bigint, boolean ]
                     : [ decimals, false ] as [ bigint, boolean ];
 
-        const useBenchmark = this.cdoInfo.ContractVersions?.accountingOptions?.useBenchmark ?? false;
-        const useRatesForReconciliation = this.cdoInfo.ContractVersions?.useRatesForReconciliation ?? false;
+        const accountingOptions = this.cdoInfo.ContractVersions?.accountingOptions;
+        const useBenchmark = accountingOptions?.useBenchmark ?? false;
+        const useRatesForReconciliation = accountingOptions?.useRatesForReconciliation ?? false;
         const { contract: accounting } = await this.ds.ensureWithProxy(Contract as typeof Accounting, {
             id: `${this.pfx}Accounting`,
             initialize: [ this.owner.address, acm.address, cdo, feed.address ],

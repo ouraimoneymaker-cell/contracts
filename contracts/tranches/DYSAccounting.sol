@@ -142,14 +142,19 @@ contract DYSAccounting is IAccounting, CDOComponent {
     /// @notice Time-weighted Junior NAV (asset-time, uses projected)
     uint256 public jrtNavTime;
 
-    /// @notice Time-weighted total system NAV (asset-time)
+    /// @notice Time-weighted total system NAV (asset-time) (incl. projected assets)
     uint256 public navTime;
+
+    /// @notice Time-weighted total system NAV (asset-time) (net assets during projection)
+    uint256 public navTimeNet;
 
     /// @notice Timestamp of last asset-time accrual
     uint256 public lastAccrual;
 
     /// @notice Accumulated projected Senior PnL during the current epoch
     uint256 public srtPnLProjected;
+
+    uint256 public srtProjectedPnLTime;
 
     /// @notice Accumulated benchmark Senior PnL during the current epoch
     uint256 public srtPnLBenchmark;
@@ -257,6 +262,8 @@ contract DYSAccounting is IAccounting, CDOComponent {
         srtNavTime += srAssets * dt;
         jrtNavTime += jrAssets * dt;
         navTime += systemAssets * dt;
+        navTimeNet += nav * dt;
+        srtProjectedPnLTime += srtPnLProjected * dt;
         lastAccrual = block.timestamp;
     }
 
@@ -680,23 +687,34 @@ contract DYSAccounting is IAccounting, CDOComponent {
         uint256 srtFactor = 1e18 - riskPremium.unwrap();
 
         int256 srtPnLRealized;
-        if (useRatesForReconciliation && srtNavTime > 0) {
+        if (useRatesForReconciliation) {
             // Rate-based formula: senior earns (senior sub-strategy rate growth) * srtNavTime * srtFactor.
             // Used when the senior sub-strategy has a queryable exchange rate (e.g. IsolatedStrategy);
             // isolates senior returns regardless of junior sub-strategy performance.
             uint256 srtRateT1 = cdo.strategy().getRate();
             uint256 epochDt = block.timestamp > epochStart ? block.timestamp - epochStart : 0;
-            if (srtRateT1 > strategyRate && epochDt > 0) {
-                uint256 navTimeXGrowth = Math.mulDiv(srtNavTime, srtRateT1 - strategyRate, strategyRate);
-                srtPnLRealized = int256(Math.mulDiv(navTimeXGrowth, srtFactor, 1e18 * epochDt));
+            bool isPositive = srtRateT1 > strategyRate;
+            uint256 rateDeltaAbs = isPositive
+                ? srtRateT1 - strategyRate
+                : strategyRate - srtRateT1;
+            if (epochDt > 0) {
+                uint256 srtNavTimeReal = Math.saturatingSub(srtNavTime_, srtProjectedPnLTime);
+                uint256 navTimeXGrowth = Math.mulDiv(srtNavTimeReal, rateDeltaAbs, strategyRate);
+                uint256 pnlAbs = Math.mulDiv(navTimeXGrowth, srtFactor, 1e18 * epochDt);
+                srtPnLRealized = isPositive
+                    ?  int256(pnlAbs)
+                    : -int256(pnlAbs);
             }
             // else: sub-strat had no growth this epoch — senior earns nothing (srtPnLRealized stays 0)
         } else {
             // Proportional nav-time formula (single strategy / no rate tracking).
             // srtPnL = totalUnderlyingProfit * srtFactor * srtNavTime / navTime
+            uint256 srtNavTimeNet_ = Math.saturatingSub(srtNavTime_, srtProjectedPnLTime);
+            uint256 navTimeNet_ = navTimeNet > 0 ? navTimeNet : navT0;
+
             srtPnLRealized = navTime_ == 0
                 ? int256(0)
-                : (pnl + int256(reserve_dT)) * int256(srtFactor) * int256(srtNavTime_) / (int256(navTime_) * 1e18);
+                : (pnl + int256(reserve_dT)) * int256(srtFactor) * int256(srtNavTimeNet_) / (int256(navTimeNet_) * 1e18);
         }
 
         // Benchmark mode: Use max(realized PnL, benchmark gain)
@@ -726,8 +744,6 @@ contract DYSAccounting is IAccounting, CDOComponent {
             uint256 srtNavFloor = _computeSrtNavFloor(floorRate_);
             if (srtNavFloor > 0 && srtNavT1 < srtNavFloor) {
                 uint256 floorDelta = srtNavFloor - srtNavT1;
-                // Cap: cannot take more from JRT than available (preserve navT1 invariant)
-                floorDelta = Math.min(floorDelta, jrtSafe);
                 srtNavT1 += floorDelta;
                 srtPnLRealized += int256(floorDelta);
             }
@@ -746,7 +762,7 @@ contract DYSAccounting is IAccounting, CDOComponent {
             // Apply the Loss-Waterfall: Junior -> Reserve -> Senior
             // Note: This can cancel Senior's benchmark gain if Junior cannot cover it
             uint256 loss = uint256(-jrtPnLRealized);
-            uint256 jrtLoss = Math.min(jrtNavT0Real, loss);
+            uint256 jrtLoss = Math.min(jrtSafe, loss);
             loss -= jrtLoss;
             uint256 reserveLoss = Math.min(reserveNavT1, loss);
             loss -= reserveLoss;
@@ -822,6 +838,8 @@ contract DYSAccounting is IAccounting, CDOComponent {
             srtNavTime = 0;
             jrtNavTime = 0;
             navTime = 0;
+            navTimeNet = 0;
+            srtProjectedPnLTime = 0;
             epochStart = block.timestamp;
 
             // Snapshot the senior sub-strategy exchange rate as T0 for the next epoch.

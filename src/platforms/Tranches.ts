@@ -87,9 +87,9 @@ export interface ICDO {
         accountingOptions?: {
             // Relevant for DYS accounting
             useBenchmark?: boolean
+            // When true, DYSAccounting uses the rate-based senior true-up (MultiStrategy deployments).
+            useRatesForReconciliation?: boolean;
         }
-        // When true, DYSAccounting uses the rate-based senior true-up (MultiStrategy deployments).
-        useRatesForReconciliation?: boolean;
     };
 
     // Contracts prefixes (can be overridden for testing)

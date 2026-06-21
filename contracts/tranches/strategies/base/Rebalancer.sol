@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity ^0.8.28;
 
+import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {AccessControlled} from "../../../governance/AccessControlled.sol";
@@ -27,6 +28,7 @@ contract Rebalancer is IRebalancer, AccessControlled {
         address shareToken;     // underlying protocol share token registered in unstakeCooldown (e.g. mHYPER for Midas)
         address depositToken;
         uint256 baseAssets;
+        uint256 tokenAmount;
     }
 
     IRebalanceable public strategy;
@@ -97,7 +99,7 @@ contract Rebalancer is IRebalancer, AccessControlled {
         require(withdrawToken == depositToken, "TokenMismatch");
 
         uint256 balBefore = IERC20(depositToken).balanceOf(address(this));
-        strategy.withdrawForRebalance(fromStratIdx, withdrawToken, baseAssets, address(this));
+        uint256 tokenAmount = strategy.withdrawForRebalance(fromStratIdx, withdrawToken, baseAssets, address(this));
         uint256 received = IERC20(depositToken).balanceOf(address(this)) - balBefore;
 
         if (received > 0) {
@@ -113,7 +115,8 @@ contract Rebalancer is IRebalancer, AccessControlled {
                 withdrawToken: withdrawToken,
                 shareToken: shareToken,
                 depositToken: depositToken,
-                baseAssets: baseAssets
+                baseAssets: baseAssets,
+                tokenAmount: tokenAmount
             }));
             _pendingToStrat[toStratIdx] += baseAssets;
 
@@ -121,31 +124,40 @@ contract Rebalancer is IRebalancer, AccessControlled {
         }
     }
 
-    // Completes a deferred rebalance: finalises the underlying cooldown so the deposit token
-    // arrives at this contract, then deposits it into the destination strat.
-    //
-    // When multiple pending entries share the same shareToken, a single finalize() call drains
-    // all matured cooldown proxies at once. The first completeRebalance caps its deposit at
-    // pending.baseAssets and leaves the excess in this contract for subsequent calls.
-    // Subsequent calls detect this via balanceOf(shareToken) == 0 (all proxies gone) and skip
-    // finalize, consuming the pre-loaded balance instead.
-    function completeRebalance(uint256 idx) external onlyRole(UPDATER_STRAT_CONFIG_ROLE) {
+    /// Completes a deferred rebalance: finalises the underlying cooldown so the deposit token
+    /// arrives at this contract, then deposits it into the destination strat.
+    ///
+    /// When multiple pending entries share the same shareToken, a single finalize() call drains
+    /// all matured cooldown proxies at once. The first completeRebalance caps its deposit at
+    /// pending.baseAssets and leaves the excess in this contract for subsequent calls.
+    /// Subsequent calls detect this via balanceOf(shareToken) == 0 (all proxies gone) and skip
+    /// finalize, consuming the pre-loaded balance instead.
+    ///
+    /// @param idx The index of the pending rebalance entry to complete.
+    /// @param minAssets The minimum assets expected from the redemption request. Useful in case
+    ///        the underlying protocol charges a fee on redemption, ensuring the operator can
+    ///        enforce a slippage tolerance.
+    function completeRebalance(uint256 idx, uint256 minAssets) external onlyRole(UPDATER_STRAT_CONFIG_ROLE) {
         require(idx < pendingRebalances.length, "InvalidIndex");
         PendingRebalance memory pending = pendingRebalances[idx];
 
         ICooldown.TBalanceState memory state = unstakeCooldown.balanceOf(
             IERC20(pending.shareToken), address(this)
         );
-        if (state.pending > 0 || state.claimable > 0) {
+        if (state.claimable > 0) {
+            // Finalize claimable, if any
             unstakeCooldown.finalize(IERC20(pending.shareToken), address(this));
         }
 
         uint256 available = IERC20(pending.depositToken).balanceOf(address(this));
-        require(available >= pending.baseAssets, "AssetsNotAvailable");
+        require(available >= minAssets, "AssetsNotAvailable");
 
-        IERC20(pending.depositToken).forceApprove(address(strategy), pending.baseAssets);
-        strategy.depositForRebalance(pending.toStratIdx, pending.depositToken, pending.baseAssets, pending.baseAssets);
+        uint256 baseAssets = Math.min(available, pending.baseAssets);
 
+        IERC20(pending.depositToken).forceApprove(address(strategy), baseAssets);
+        strategy.depositForRebalance(pending.toStratIdx, pending.depositToken, baseAssets, baseAssets);
+
+        // Reduce by the expected pending baseAssets
         _pendingToStrat[pending.toStratIdx] -= pending.baseAssets;
 
         uint256 last = pendingRebalances.length - 1;
@@ -153,83 +165,54 @@ contract Rebalancer is IRebalancer, AccessControlled {
             pendingRebalances[idx] = pendingRebalances[last];
         }
         pendingRebalances.pop();
-
         emit RebalanceCompleted(pending.fromStratIdx, pending.toStratIdx, pending.baseAssets);
     }
 
-    /// @notice Owner escape hatch for deferred rebalances whose redemptions were canceled: returns the
-    ///         recovered share tokens to the source strat and reverses the pending credits, atomically.
-    /// @param canceledRequests Indexes of entries whose redemption is Canceled, strictly descending and
-    ///        all sharing one shareToken/source strat. Caller must list only canceled requests.
-    function cancelPendingRebalances(uint256[] calldata canceledRequests) external onlyOwner {
-        uint256 n = canceledRequests.length;
-        require(n > 0, "EmptyInput");
-
-        address shareToken = pendingRebalances[canceledRequests[0]].shareToken;
-        uint256 fromStratIdx = pendingRebalances[canceledRequests[0]].fromStratIdx;
-
-        // Strictly descending (so the swap-pop removal below can't overwrite a not-yet-processed entry).
-        for (uint256 i = 1; i < n; i++) {
-            require(canceledRequests[i] < canceledRequests[i - 1], "UnsortedOrDup");
-        }
+    /// @notice Cancels a pending rebalance when the underlying redemption is canceled by the protocol.
+    /// @dev Recovers share tokens from cooldown proxies, returns them to the source strategy,
+    ///      and reverses the pending credit to maintain NAV consistency.
+    /// @param idx The index of the pending rebalance to cancel.
+    /// @param minShares Minimum share tokens to recover.
+    function cancelRebalance(uint256 idx, uint256 minShares) external onlyRole(UPDATER_STRAT_CONFIG_ROLE) {
+        PendingRebalance memory pending = pendingRebalances[idx];
+        address shareToken = pending.shareToken;
+        uint256 fromStratIdx = pending.fromStratIdx;
 
         // Pull the returned share tokens out of the cooldown proxies into this contract.
         ICooldown.TBalanceState memory state = unstakeCooldown.balanceOf(IERC20(shareToken), address(this));
-        if (state.pending > 0 || state.claimable > 0) {
+        if (state.claimable > 0) {
+            // Finalize any claimable shares. The minShares check below ensures sufficient recovery.
             unstakeCooldown.finalize(IERC20(shareToken), address(this));
         }
         uint256 recovered = IERC20(shareToken).balanceOf(address(this));
-        require(recovered > 0, "NothingRecovered");
+        require(recovered >= minShares, "InsufficientRecovery");
+
+        uint256 tokenAmount = Math.min(recovered, pending.tokenAmount);
 
         // Return them to the source strat, restoring its (balanceOf-based) totalAssets so the credit
         // reversals below net to zero change in total NAV.
-        IERC20(shareToken).safeTransfer(address(strategy.strats(fromStratIdx)), recovered);
+        IERC20(shareToken).safeTransfer(address(strategy.strats(fromStratIdx)), tokenAmount);
 
-        // Descending indexes make swap-pop safe: relocated entries always come from above the cursor.
-        for (uint256 i; i < n; i++) {
-            uint256 idx = canceledRequests[i];
-            PendingRebalance memory p = pendingRebalances[idx];
-            _pendingToStrat[p.toStratIdx] -= p.baseAssets;
-            uint256 last = pendingRebalances.length - 1;
-            if (idx < last) {
-                pendingRebalances[idx] = pendingRebalances[last];
-            }
-            pendingRebalances.pop();
-            emit RebalanceCanceled(p.fromStratIdx, p.toStratIdx, p.baseAssets);
+        // Reduce by the expected pending baseAssets
+        _pendingToStrat[pending.toStratIdx] -= pending.baseAssets;
+
+        uint256 last = pendingRebalances.length - 1;
+        if (idx < last) {
+            pendingRebalances[idx] = pendingRebalances[last];
         }
+        pendingRebalances.pop();
+        emit RebalanceCanceled(pending.fromStratIdx, pending.toStratIdx, pending.baseAssets);
     }
 
-    /// @notice Returns the base asset value of all in-flight deferred rebalances.
-    /// @dev Covers two locations where assets may reside:
-    ///      1. unstakeCooldown — proxies still pending or claimable (not yet finalized).
-    ///      2. This contract — raw depositToken balance left when a finalize() drained multiple
-    ///         cooldown proxies at once and completeRebalance capped its deposit at pending.baseAssets.
-    function totalAssets() external view returns (uint256 total) {
-        uint256 n = pendingRebalances.length;
-        if (n == 0) return 0;
-        address[] memory seenShare   = new address[](n);
-        address[] memory seenDeposit = new address[](n);
-        uint256 shareCount;
-        uint256 depositCount;
-
-        for (uint256 i; i < n; i++) {
-            address shareTok = pendingRebalances[i].shareToken;
-            bool found;
-            for (uint256 j; j < shareCount; j++) if (seenShare[j] == shareTok) { found = true; break; }
-            if (!found) {
-                seenShare[shareCount++] = shareTok;
-                ICooldown.TBalanceState memory state = unstakeCooldown.balanceOf(IERC20(shareTok), address(this));
-                total += state.pending + state.claimable;
-            }
-
-            address depTok = pendingRebalances[i].depositToken;
-            found = false;
-            for (uint256 j; j < depositCount; j++) if (seenDeposit[j] == depTok) { found = true; break; }
-            if (!found) {
-                seenDeposit[depositCount++] = depTok;
-                total += IERC20(depTok).balanceOf(address(this));
-            }
+    /// @notice Returns the total base assets locked in pending rebalances.
+    /// @dev Reports the requested baseAssets amount until completion or cancellation,
+    ///      independent of the underlying unstake request status.
+    function totalAssets() external view returns (uint256 assets) {
+        uint256 len = pendingRebalances.length;
+        for (uint256 i = 0; i < len; i++) {
+            assets += pendingRebalances[i].baseAssets;
         }
+        return assets;
     }
 
     function pendingCount() external view returns (uint256) {

@@ -12,6 +12,9 @@ import {IndexPackerLib} from "../utils/IndexPackerLib.sol";
 
 contract IsolatedStrategy is MultiStrategy, IIsolatedStrategy {
 
+    uint256 constant private JRT_IDX = 0;
+    uint256 constant private SRT_IDX = 1;
+
     /// @dev Packed withdrawal order for JRT: [senior(1), junior(0)]
     uint256 private immutable _jrtWithdrawOrderPacked;
     /// @dev Packed withdrawal order for SRT: [junior(0), senior(1)]
@@ -21,10 +24,11 @@ contract IsolatedStrategy is MultiStrategy, IIsolatedStrategy {
     IStrategy public seniorStrat;
 
     event StratsSet(address indexed juniorStrat, address indexed seniorStrat);
+    event LiquidAllocationFloorSet(uint256 floor);
 
     constructor() Strategy(address(0), address(0)) {
-        _jrtWithdrawOrderPacked = IndexPackerLib.pack2(1, 0);
-        _srtWithdrawOrderPacked = IndexPackerLib.pack2(0, 1);
+        _jrtWithdrawOrderPacked = IndexPackerLib.pack2(SRT_IDX, JRT_IDX);
+        _srtWithdrawOrderPacked = IndexPackerLib.pack2(JRT_IDX, SRT_IDX);
     }
 
     function initialize(
@@ -41,29 +45,30 @@ contract IsolatedStrategy is MultiStrategy, IIsolatedStrategy {
         juniorStrat = juniorStrat_;
         seniorStrat = seniorStrat_;
         IStrategy[] memory strats_ = new IStrategy[](2);
-        strats_[0] = juniorStrat_;
-        strats_[1] = seniorStrat_;
+        strats_[JRT_IDX] = juniorStrat_;
+        strats_[SRT_IDX] = seniorStrat_;
         _setStrats(strats_);
         emit StratsSet(address(juniorStrat_), address(seniorStrat_));
     }
 
     function setLiquidAllocationFloor(uint256 floor_) external onlyOwner {
         liquidAllocationFloor = floor_;
+        emit LiquidAllocationFloorSet(floor_);
     }
 
     function setStrats(IStrategy juniorStrat_, IStrategy seniorStrat_) external onlyOwner {
         juniorStrat = juniorStrat_;
         seniorStrat = seniorStrat_;
         IStrategy[] memory strats_ = new IStrategy[](2);
-        strats_[0] = juniorStrat_;
-        strats_[1] = seniorStrat_;
+        strats_[JRT_IDX] = juniorStrat_;
+        strats_[SRT_IDX] = seniorStrat_;
         _setStrats(strats_);
         emit StratsSet(address(juniorStrat_), address(seniorStrat_));
     }
 
     // JRT deposits go to junior strat (index 0), SRT to senior strat (index 1).
     function _depositStratIndex(address tranche) internal view override returns (uint256) {
-        return cdo.isJrt(tranche) ? 0 : 1;
+        return cdo.isJrt(tranche) ? JRT_IDX : SRT_IDX;
     }
 
     function _depositStratIndex(address tranche, address token, uint256 baseAssets) internal view override returns (uint256) {

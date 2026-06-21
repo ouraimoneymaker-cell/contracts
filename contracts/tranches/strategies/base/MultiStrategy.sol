@@ -25,6 +25,8 @@ abstract contract MultiStrategy is Strategy, IMultiStrategy, IRebalanceable {
     mapping(address strat => mapping(address token => bool)) public perStrategyTokens;
     mapping(address token => IStrategy) public converters;
 
+    uint256[42] private __gap;
+
     event StratNavSnapshot(uint256[] navs);
     event RebalancerSet(address indexed rebalancer);
     event AccountingSet(address indexed accounting);
@@ -39,7 +41,7 @@ abstract contract MultiStrategy is Strategy, IMultiStrategy, IRebalanceable {
 
     // Override to route deposits based on token/amount (e.g. debt-aware routing).
     // Defaults to the tranche→strat mapping so existing impls need no change.
-    function _depositStratIndex(address tranche, address token, uint256 baseAssets) internal view virtual returns (uint256) {
+    function _depositStratIndex(address tranche, address /*token*/, uint256 /*baseAssets*/) internal view virtual returns (uint256) {
         return _depositStratIndex(tranche);
     }
 
@@ -53,8 +55,7 @@ abstract contract MultiStrategy is Strategy, IMultiStrategy, IRebalanceable {
         IStrategy strat = strats[idx];
         SafeERC20.safeTransferFrom(IERC20(token), owner, address(this), tokenAmount);
         SafeERC20.forceApprove(IERC20(token), address(strat), tokenAmount);
-        uint256 out = strat.deposit(address(0), token, tokenAmount, baseAssets, address(this));
-        return out;
+        return strat.deposit(tranche, token, tokenAmount, baseAssets, address(this));
     }
 
     function withdraw(
@@ -84,16 +85,29 @@ abstract contract MultiStrategy is Strategy, IMultiStrategy, IRebalanceable {
         for (uint256 i; i < strats.length; i++) {
             total += strats[i].totalAssets();
         }
-        if (address(rebalancer) != address(0)) total += rebalancer.totalAssets();
+        if (address(rebalancer) != address(0)) {
+            total += rebalancer.totalAssets();
+        }
     }
 
+    /// @notice Calculates total assets across all strategies with rewards detection
+    /// @param navT0 The cached total assets from the accounting
+    /// @param timestamp The last reconciliation timestamp used to check for new rewards
+    /// @return total The sum of all strategy assets if new rewards are detected, otherwise returns navT0
+    /// @dev Returns navT0 if any strategy reports no new rewards (nav == 0), signaling the accounting
+    ///      contract to continue NAV projection. When all strategies report new rewards, returns the
+    ///      updated total, triggering full reconciliation in the accounting contract.
     function totalAssets(uint256 navT0, uint256 timestamp) public view returns (uint256 total) {
         for (uint256 i; i < strats.length; i++) {
             uint256 nav = strats[i].totalAssets(0, timestamp);
-            if (nav == 0) return navT0;
+            if (nav == 0) {
+                return navT0;
+            }
             total += nav;
         }
-        if (address(rebalancer) != address(0)) total += rebalancer.totalAssets();
+        if (address(rebalancer) != address(0)) {
+            total += rebalancer.totalAssets();
+        }
     }
 
     function setRebalancer(IRebalancer rebalancer_) external onlyOwner {
@@ -106,10 +120,12 @@ abstract contract MultiStrategy is Strategy, IMultiStrategy, IRebalanceable {
         emit AccountingSet(address(accounting_));
     }
 
-    function withdrawForRebalance(uint256 stratIdx, address token, uint256 baseAssets, address receiver) external onlyRebalancer {
+    function withdrawForRebalance(uint256 stratIdx, address token, uint256 baseAssets, address receiver) external onlyRebalancer returns (uint256 tokenAmount){
         IStrategy strat = strats[stratIdx];
-        uint256 tokenAmount = strat.convertToTokens(token, baseAssets, Math.Rounding.Ceil);
-        strat.withdraw(address(0), token, tokenAmount, baseAssets, receiver, receiver, true);
+        tokenAmount = strat.convertToTokens(token, baseAssets, Math.Rounding.Ceil);
+
+        // Update tokenAmount to the actual withdrawn amount returned by the strategy (may differ due to rounding/fees).
+        tokenAmount = strat.withdraw(address(0), token, tokenAmount, baseAssets, receiver, receiver, true);
     }
 
     function depositForRebalance(uint256 stratIdx, address token, uint256 tokenAmount, uint256 baseAssets) external onlyRebalancer {
@@ -143,10 +159,6 @@ abstract contract MultiStrategy is Strategy, IMultiStrategy, IRebalanceable {
         revert UnsupportedToken(token);
     }
 
-    function stratOf(address tranche) external view returns (address) {
-        return address(strats[_depositStratIndex(tranche)]);
-    }
-
     function getSupportedTokens() external view returns (IERC20[] memory) {
         return _supportedTokenList;
     }
@@ -178,7 +190,7 @@ abstract contract MultiStrategy is Strategy, IMultiStrategy, IRebalanceable {
     function _withdraw(
         address tranche,
         address token,
-        uint256 tokenAmount,
+        uint256 /*tokenAmount*/,
         uint256 baseAssets,
         address sender,
         address receiver,

@@ -75,7 +75,7 @@ abstract contract Strategy is IStrategy, CDOComponent {
      * @dev Override this method to implement deposit limits per tranche/token
      * @dev e.g. checking the underlying protocol's deposit state
      */
-    function maxDeposit(address tranche, address tokenIn, uint256 tokenAmout) external virtual view returns (uint256 assets) {
+    function maxDeposit(address /*tranche*/, address /*tokenIn*/, uint256 /*tokenAmout*/) external virtual view returns (uint256 assets) {
         return type(uint256).max;
     }
 
@@ -84,7 +84,7 @@ abstract contract Strategy is IStrategy, CDOComponent {
      * @dev Override this method to implement withdrawal limits per tranche/token
      * @dev e.g. checking the underlying protocol's withdrawal state
      */
-    function maxWithdraw(address tranche, address tokenOut, uint256 tokenAmout) external virtual view returns (uint256 assets) {
+    function maxWithdraw(address /*tranche*/, address /*tokenOut*/, uint256 /*tokenAmout*/) external virtual view returns (uint256 assets) {
         return type(uint256).max;
     }
 

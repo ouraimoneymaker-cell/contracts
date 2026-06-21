@@ -178,7 +178,7 @@ UTest.create({
         await redemptionVault.$receipt().fulfillRequest(deployer, requestId - 1n);
 
         // Complete rebalance: Rebalancer finalizes unstakeCooldown and deposits to Spark
-        await rebalancer.$receipt().completeRebalance(deployer, 0n);
+        await rebalancer.$receipt().completeRebalance(deployer, 0n, 0n);
 
         $require.eq((await strategy.debts()).toJunior, 0n, 'toJunior debt cleared after Midas→Spark rebalance completes');
         $require.eq(await rebalancer.pendingCount(), 0n, 'No pending rebalances');

@@ -52,7 +52,7 @@ UTest.create({
 
         // fail to withdraw
         const { error } = await $promise.caught($testCooldown.finalize(erc20Cooldown, USDe, bob));
-        $require.notNull(error, `The time not passed, the finalization should fail.`);
+        $require.match(/NothingToFinalize/, error?.message, `The time not passed, the finalization should fail.`);
 
         // #1: 60s passed, withdraw 1. portion
         await $hh.test.mine(`51s`);

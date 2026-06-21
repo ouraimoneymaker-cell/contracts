@@ -225,7 +225,7 @@ contract StrataCDO is IErrors, IStrataCDO, IStrataCDOSetters, AccessControlled {
         accounting.updateAccounting();
     }
 
-    function deposit(address tranche, address token, uint256 tokenAmount, uint256 baseAssets) external onlyTranche nonReentrant {
+    function deposit(address tranche, address token, uint256 tokenAmount, uint256 baseAssets, bytes memory strategyOptions) external onlyTranche nonReentrant {
         bool isJrt_ = isJrt(tranche);
         bool enabled = isJrt_ ? actionsJrt.isDepositEnabled : actionsSrt.isDepositEnabled;
         if (!enabled) {
@@ -240,7 +240,9 @@ contract StrataCDO is IErrors, IStrataCDO, IStrataCDOSetters, AccessControlled {
         if (tokenAmount == 0 || baseAssets == 0) {
             revert ZeroAmount();
         }
-        uint256 baseAssetsNet = strategy.deposit(tranche, token, tokenAmount, baseAssets, /* owner: */ tranche);
+        uint256 baseAssetsNet = strategyOptions.length == 0
+            ? strategy.deposit(tranche, token, tokenAmount, baseAssets, /* owner: */ tranche)
+            : strategy.deposit(tranche, token, tokenAmount, baseAssets, /* owner: */ tranche, strategyOptions);
 
         // The strategy converts deposited assets to shares and back to assets (assets -> shares -> assets).
         // This double conversion can introduce minor rounding discrepancies even when the strategy charges no fees.
@@ -254,7 +256,7 @@ contract StrataCDO is IErrors, IStrataCDO, IStrataCDOSetters, AccessControlled {
         shortfallPauser();
     }
 
-    function withdraw(address tranche, address token, uint256 tokenAmount, uint256 baseAssets, address sender, address receiver) external onlyTranche nonReentrant {
+    function withdraw(address tranche, address token, uint256 tokenAmount, uint256 baseAssets, address sender, address receiver, bytes memory strategyOptions) external onlyTranche nonReentrant {
         if (tokenAmount == 0 || baseAssets == 0) {
             revert ZeroAmount();
         }
@@ -273,7 +275,12 @@ contract StrataCDO is IErrors, IStrataCDO, IStrataCDOSetters, AccessControlled {
         // When the sender is the shares lockup contract, we should skip any cooldown on our side,
         // unless the underlying protocol has some cooldown/unstake process.
         bool shouldSkipCooldown = isSharesLockup == true;
-        strategy.withdraw(tranche, token, tokenAmount, baseAssets, sender, receiver, shouldSkipCooldown);
+        if (strategyOptions.length == 0) {
+            // Support older strategies that don't accept options.
+            strategy.withdraw(tranche, token, tokenAmount, baseAssets, sender, receiver, shouldSkipCooldown);
+        } else {
+            strategy.withdraw(tranche, token, tokenAmount, baseAssets, sender, receiver, shouldSkipCooldown, strategyOptions);
+        }
         uint256 jrtAssetsOut = isJrt_ ? baseAssets : 0;
         uint256 srtAssetsOut = isJrt_ ? 0          : baseAssets;
         accounting.updateBalanceFlow(0, jrtAssetsOut, 0, srtAssetsOut);
@@ -298,7 +305,17 @@ contract StrataCDO is IErrors, IStrataCDO, IStrataCDOSetters, AccessControlled {
     /// @param receiver The address that will receive the assets after cooldown completes.
     /// @param fee The exit fee to be applied when redeeming (in 18 decimals).
     /// @param cooldownSeconds The duration of the cooldown period in seconds.
-    function cooldownShares(address tranche, address token, uint256 shares, address sender, address receiver, uint256 fee, uint32 cooldownSeconds) external onlyTranche nonReentrant {
+    /// @param strategyOptions Strategy-specific encoded options for the redemption process.
+    function cooldownShares(
+        address tranche,
+        address token,
+        uint256 shares,
+        address sender,
+        address receiver,
+        uint256 fee,
+        uint32 cooldownSeconds,
+        bytes memory strategyOptions
+    ) external onlyTranche nonReentrant {
         if (shares == 0) {
             revert ZeroAmount();
         }
@@ -307,7 +324,7 @@ contract StrataCDO is IErrors, IStrataCDO, IStrataCDOSetters, AccessControlled {
         if (!enabled) {
             revert WithdrawalsDisabled(tranche);
         }
-        sharesCooldown.requestRedeem(ITranche(tranche), token, sender, receiver, shares, fee, cooldownSeconds);
+        sharesCooldown.requestRedeem(ITranche(tranche), token, sender, receiver, shares, fee, cooldownSeconds, strategyOptions);
     }
 
     /// @notice Determines if the given address is the Junior (BB) Tranche

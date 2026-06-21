@@ -10,9 +10,19 @@ import { IStrataCDO } from "../IStrataCDO.sol";
 interface ISharesCooldown is ICooldown {
 
     struct TRequest {
-        uint64 unlockAt;
-        uint192 shares;
-        address token;
+        uint64 unlockAt;  // 8 bytes
+        uint192 shares;   // 24 bytes
+        address token;    // 20 bytes
+
+        /// @dev Unique key to retrieve associated metadata from requestMeta mapping.
+        ///      Zero value indicates no metadata stored for this request.
+        bytes12 metaKey;  // 12 bytes
+    }
+    struct TRequestMeta {
+        /// @dev Strategy-specific parameters to be forwarded during redemption finalization.
+        ///      Empty bytes indicates no custom options for this request.
+        bytes strategyOptions;
+        /// @dev Extensible: new fields can be added without breaking existing requests.
     }
     struct TClaimableToken {
         address token;
@@ -62,7 +72,30 @@ interface ISharesCooldown is ICooldown {
 
     function finalize(ITranche vault, address token, address user) external returns (uint256 claimed);
     function finalize(ITranche vault, address token, address user, uint256 at) external returns (uint256 claimed);
-    function finalizeWithFee(ITranche vault, address token, address user, uint256 i, TFinalizeWithFeeGuard calldata guard) external returns (uint256 claimed);
+    function finalizeWithFee(
+        ITranche vault,
+        address token,
+        address user,
+        uint256 i,
+        TFinalizeWithFeeGuard calldata guard,
+        bytes memory strategyOptions
+    ) external returns (uint256 claimed);
+
+    function finalizeWithOverrides(
+        IERC20 vault,
+        address token,
+        address user,
+        bytes calldata strategyOptions
+    ) external returns (uint256 claimed);
+
+    function finalizeRequest(
+        IERC20 vault,
+        uint256 idx,
+        address token,
+        address user,
+        bytes calldata strategyOptions
+    ) external returns (uint256 claimed);
+
     function cancel(IERC20 vault, address user, uint256 i, TCancelGuard calldata guard) external;
 
     function requestRedeem(
@@ -73,6 +106,17 @@ interface ISharesCooldown is ICooldown {
         uint256 shares,
         uint256 exitFee,
         uint32  exitSharesLock
+    ) external;
+
+    function requestRedeem(
+        ITranche vault,
+        address token,
+        address initialFrom,
+        address to,
+        uint256 shares,
+        uint256 exitFee,
+        uint32  exitSharesLock,
+        bytes memory strategyOptions
     ) external;
 
     function setVaultExitBounds(address vault, TExitUpperBounds calldata bounds)external;

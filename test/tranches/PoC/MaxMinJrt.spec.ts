@@ -48,7 +48,8 @@ UTest.create({
 
 
         await feed.$receipt().setRoundStaleAfter(deployer, BigInt(356 * 24 * 60 * 60));
-        await feed.$receipt().updateRoundData(deployer, 2e12, 1e12, $date.toUnixTimestamp());
+        const timestamp = (await client.getBlock('latest')).timestamp;
+        await feed.$receipt().updateRoundData(deployer, 2e12, 1e12, timestamp);
 
         await $erc4626.deposit(jrtVault, deployer, 1);
         await $erc4626.deposit(srtVault, deployer, 11);

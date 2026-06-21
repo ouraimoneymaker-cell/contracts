@@ -25,9 +25,18 @@ interface IStrataCDO {
     function updateAccounting () external;
     function updateBalanceFlow () external;
 
-    function deposit (address tranche, address token, uint256 tokenAmount, uint256 baseAssets) external;
-    function withdraw (address tranche, address token, uint256 tokenAmount, uint256 baseAssets, address owner, address receiver) external;
-    function cooldownShares(address tranche, address token, uint256 shares, address sender, address receiver, uint256 fee, uint32 cooldownSeconds) external;
+    function deposit (address tranche, address token, uint256 tokenAmount, uint256 baseAssets, bytes memory strategyOptions) external;
+    function withdraw (address tranche, address token, uint256 tokenAmount, uint256 baseAssets, address owner, address receiver, bytes memory strategyOptions) external;
+    function cooldownShares(
+        address tranche,
+        address token,
+        uint256 shares,
+        address sender,
+        address receiver,
+        uint256 fee,
+        uint32 cooldownSeconds,
+        bytes memory strategyOptions
+    ) external;
 
     function maxWithdraw(address tranche) external view returns (uint256);
     function maxWithdraw(address tranche, address owner) external view returns (uint256);

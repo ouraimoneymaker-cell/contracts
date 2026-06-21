@@ -16,6 +16,30 @@ contract MockSingleStrategy is IStrategy {
         token = token_;
     }
 
+    function deposit (
+        address /*tranche*/,
+        address /*token*/,
+        uint256 /*tokenAmount*/,
+        uint256 /*baseAssets*/,
+        address /*owner*/,
+        bytes memory /*options*/
+    ) external virtual returns (uint256) {
+        revert ("NotImplemented");
+    }
+
+    function withdraw (
+        address /*tranche*/,
+        address /*token*/,
+        uint256 /*tokenAmount*/,
+        uint256 /*baseAssets*/,
+        address /*sender*/,
+        address /*receiver*/,
+        bool /*shouldSkipCooldown*/,
+        bytes memory /*options*/
+    ) external virtual returns (uint256) {
+        revert ("NotImplemented");
+    }
+
     function deposit(address, address token_, uint256 tokenAmount, uint256 baseAssets, address owner) external returns (uint256) {
         require(token_ == address(token), "UnsupportedToken");
         token.safeTransferFrom(owner, address(this), tokenAmount);

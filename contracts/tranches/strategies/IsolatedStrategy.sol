@@ -170,6 +170,15 @@ contract IsolatedStrategy is MultiStrategy, IIsolatedStrategy {
             srtAssets += pendingToSenior;
         }
 
+        if (liquidAllocationFloor > 0) {
+            uint256 target = Math.mulDiv(jrtNavT0 + srtNavT0, liquidAllocationFloor, 1e18);
+            if (jrtAssets < target) {
+                // Override accounting NAVs to maintain the liquid allocation floor for Junior
+                srtNavT0 = jrtNavT0 + srtNavT0 - target;
+                jrtNavT0 = target;
+            }
+        }
+
         // Calculate deficits/surpluses for each strategy
         uint256 jrtDeficit = jrtNavT0 > jrtAssets ? jrtNavT0 - jrtAssets : 0;
         uint256 jrtSurplus = jrtAssets > jrtNavT0 ? jrtAssets - jrtNavT0 : 0;

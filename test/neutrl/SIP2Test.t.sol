@@ -398,7 +398,7 @@ contract SIP2Test is NeutrlDeploy {
         uint256 nusdBefore = IERC20(NUSD).balanceOf(alice);
 
         // finalizeWithFee returns the number of shares claimed (after early exit fee deducted)
-        uint256 claimedShares = sharesCooldown.finalizeWithFee(jrtVault, NUSD, alice, 0, ISharesCooldown.TFinalizeWithFeeGuard({shares: uint192(pendingShares), daysLeft: 0}));
+        uint256 claimedShares = sharesCooldown.finalizeWithFee(jrtVault, NUSD, alice, 0, ISharesCooldown.TFinalizeWithFeeGuard({shares: uint192(pendingShares), daysLeft: 0}), "");
 
         uint256 nusdAfter = IERC20(NUSD).balanceOf(alice);
         assertEq(nusdAfter, nusdBefore + claimedShares, "Should receive NUSD tokens");
@@ -443,7 +443,7 @@ contract SIP2Test is NeutrlDeploy {
         // Try to call finalizeWithFee after cooldown - should revert
         vm.prank(alice);
         vm.expectRevert("RequestReady");
-        sharesCooldown.finalizeWithFee(jrtVault, NUSD, alice, 0, ISharesCooldown.TFinalizeWithFeeGuard({shares: 0, daysLeft: 0}));
+        sharesCooldown.finalizeWithFee(jrtVault, NUSD, alice, 0, ISharesCooldown.TFinalizeWithFeeGuard({shares: 0, daysLeft: 0}), "");
     }
 
     /*//////////////////////////////////////////////////////////////

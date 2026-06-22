@@ -489,7 +489,7 @@ contract IsolatedVaultIntegration is IsolatedIntegrationDeploy {
         vm.warp(block.timestamp + 1 weeks);
         redemptionVault.fulfillRequest(0); // simulate Midas admin approval
         vm.prank(owner);
-        rebalancer.completeRebalance(0);
+        rebalancer.completeRebalance(0, 0);
 
         assertApproxEqAbs(state.pending, borrowAmount, 2, "Pending amount should be the borrowed amount");
 
@@ -592,7 +592,7 @@ contract IsolatedVaultIntegration is IsolatedIntegrationDeploy {
         vm.warp(block.timestamp + 1 weeks);
         redemptionVault.fulfillRequest(0);
         vm.prank(owner);
-        rebalancer.completeRebalance(0);
+        rebalancer.completeRebalance(0, 0);
 
         assertEq(_debtToJunior(), 0, "Debt cleared after rebalance completes");
         assertApproxEqAbs(juniorStrat.totalAssets(), juniorAssetsBefore + borrowAmount, 1, "Junior strat restored");
@@ -693,7 +693,7 @@ contract IsolatedVaultIntegration is IsolatedIntegrationDeploy {
     // A deferred Midas->Spark rebalance whose Midas redemption is rejected returns the mHYPER (not
     // USDC), so completeRebalance can never settle it. cancelPendingRebalances recovers the returned
     // mHYPER back into Midas and reverses the pending credit, atomically restoring the accounting.
-    function test_Integration_CancelPendingRebalances_RecoversCanceledRedemption() public {
+    function test_Integration_CancelRebalances_RecoversCanceledRedemption() public {
         _depositToJrt(alice, DEPOSIT_AMOUNT);   // 1000 in Spark
         _depositToSrt(alice, DEPOSIT_AMOUNT);   // 1000 in Midas
 
@@ -719,17 +719,16 @@ contract IsolatedVaultIntegration is IsolatedIntegrationDeploy {
         // Midas rejects the redemption -> mHYPER is returned to the cooldown proxy (no USDC paid).
         redemptionVault.rejectRequest(redemptionVault.currentRequestId());
 
-        // completeRebalance can never settle it (depositToken/USDC never arrives).
+        // completeRebalance can never settle it (depositToken/USDC never arrives). minAssets = debt
+        // ensures it reverts instead of completing with a zero deposit.
         vm.warp(block.timestamp + 1 weeks);
         vm.prank(owner);
         vm.expectRevert();
-        rebalancer.completeRebalance(0);
+        rebalancer.completeRebalance(0, debt);
 
         // Owner recovers: mHYPER returns to Midas, credit reversed, entry removed — all atomic.
-        uint256[] memory canceledRequests = new uint256[](1);
-        canceledRequests[0] = 0;
         vm.prank(owner);
-        rebalancer.cancelPendingRebalances(canceledRequests);
+        rebalancer.cancelRebalance(0, 0);
 
         assertEq(rebalancer.pendingCount(), 0, "entry removed");
         (pendingToJunior,) = rebalancer.pendingToStrats();
@@ -824,7 +823,7 @@ contract IsolatedVaultIntegration is IsolatedIntegrationDeploy {
         // First completeRebalance: finalize drains both proxies at once (1000e6), deposits only
         // 500e6 (capped at pending.baseAssets), leaves 500e6 raw USDC in the rebalancer.
         vm.prank(owner);
-        rebalancer.completeRebalance(0);
+        rebalancer.completeRebalance(0, 0);
 
         (toJunior,) = rebalancer.pendingToStrats();
         console2.log("Between: toJunior=%d   rebalancer.totalAssets=%d  strategy.totalAssets=%d", toJunior, rebalancer.totalAssets(), strategy.totalAssets());
@@ -837,7 +836,7 @@ contract IsolatedVaultIntegration is IsolatedIntegrationDeploy {
         // Second completeRebalance: shareToken cooldown is empty, 500e6 pre-loaded from sibling drain.
         // Skips finalize, deposits the remaining 500e6, clears the entry cleanly.
         vm.prank(owner);
-        rebalancer.completeRebalance(0);
+        rebalancer.completeRebalance(0, 0);
 
         (toJunior,) = rebalancer.pendingToStrats();
         console2.log("After:   toJunior=%d  rebalancer.totalAssets=%d  strategy.totalAssets=%d", toJunior, rebalancer.totalAssets(), strategy.totalAssets());

@@ -225,9 +225,6 @@ contract IsolatedIntegrationDeploy is Test {
         vm.stopPrank();
     }
 
-    function _debtToJunior() internal view returns (uint256 d) { (d,) = strategy.debts(); }
-    function _debtToSenior() internal view returns (uint256 d) { (, d) = strategy.debts(); }
-
     function _deployTranche(string memory symbol, string memory name) internal returns (Tranche) {
         Tranche trancheImpl = new Tranche();
         address proxy = address(new ERC1967Proxy(
@@ -244,6 +241,17 @@ contract IsolatedIntegrationDeploy is Test {
         ));
         vm.label(proxy, symbol);
         return Tranche(proxy);
+    }
+
+    // Debt toward a strat == that strat's deficit in imbalances() (debts() was removed).
+    function _debtToJunior() internal view returns (uint256) {
+        (uint256 deficitStratIdx, uint256 deficitAmount,,) = strategy.imbalances();
+        return deficitStratIdx == 0 ? deficitAmount : 0;
+    }
+
+    function _debtToSenior() internal view returns (uint256) {
+        (uint256 deficitStratIdx, uint256 deficitAmount,,) = strategy.imbalances();
+        return deficitStratIdx == 1 ? deficitAmount : 0;
     }
 }
 
@@ -529,11 +537,11 @@ contract IsolatedVaultIntegration is IsolatedIntegrationDeploy {
         uint256 juniorAssetsBefore = juniorStrat.totalAssets();
         uint256 seniorAssetsBefore = seniorStrat.totalAssets();
 
-        // Repay: moves seniorDebt from Spark strat (idx 0) → Midas strat (idx 1)
+        // Repay: moves borrowAmount from Spark strat (idx 0) → Midas strat (idx 1)
         // Source is Spark (instant) — no cooldown needed
         vm.startPrank(owner);
         acm.grantRole(UPDATER_STRAT_CONFIG_ROLE, owner);
-        rebalancer.initiateRebalance(0, 1, address(baseAsset), address(baseAsset), seniorDebt);
+        rebalancer.initiateRebalance(0, 1, address(baseAsset), address(baseAsset), borrowAmount);
         vm.stopPrank();
 
         assertEq(_debtToSenior(), 0, "Debt cleared after repayment");
@@ -561,7 +569,7 @@ contract IsolatedVaultIntegration is IsolatedIntegrationDeploy {
 
         vm.startPrank(owner);
         acm.grantRole(UPDATER_STRAT_CONFIG_ROLE, owner);
-        vm.expectRevert("NoDebt");
+        vm.expectRevert("NoDeficit");
         rebalancer.initiateRebalanceByDebt(address(baseAsset), address(baseAsset));
         vm.stopPrank();
     }
@@ -581,7 +589,7 @@ contract IsolatedVaultIntegration is IsolatedIntegrationDeploy {
         uint256 juniorAssetsBefore = juniorStrat.totalAssets();
         uint256 seniorAssetsBefore = seniorStrat.totalAssets();
 
-        // No manual direction or amount — rebalancer reads debts() and routes Midas(1)→Spark(0)
+        // No manual direction or amount
         vm.startPrank(owner);
         acm.grantRole(UPDATER_STRAT_CONFIG_ROLE, owner);
         rebalancer.initiateRebalanceByDebt(address(baseAsset), address(baseAsset));
@@ -619,7 +627,7 @@ contract IsolatedVaultIntegration is IsolatedIntegrationDeploy {
         uint256 juniorAssetsBefore = juniorStrat.totalAssets();
         uint256 seniorAssetsBefore = seniorStrat.totalAssets();
 
-        // No manual direction or amount — rebalancer reads debts() and routes Spark(0)→Midas(1)
+        // No manual direction or amount
         vm.startPrank(owner);
         acm.grantRole(UPDATER_STRAT_CONFIG_ROLE, owner);
         rebalancer.initiateRebalanceByDebt(address(baseAsset), address(baseAsset));
@@ -627,7 +635,6 @@ contract IsolatedVaultIntegration is IsolatedIntegrationDeploy {
 
         // Spark is liquid — rebalance completes in same tx, no pending
         assertEq(rebalancer.pendingCount(), 0, "No pending rebalance Spark is instant");
-        assertEq(_debtToSenior(), 0, "Debt cleared immediately");
         assertApproxEqAbs(seniorStrat.totalAssets(), seniorAssetsBefore + borrowAmount, 1, "Senior strat restored");
         assertApproxEqAbs(juniorStrat.totalAssets(), juniorAssetsBefore - borrowAmount, 1, "Junior strat decremented");
     }
@@ -645,13 +652,13 @@ contract IsolatedVaultIntegration is IsolatedIntegrationDeploy {
         srtVault.withdraw(borrowAmount, alice, alice);
         vm.stopPrank();
 
-        uint256 juniorDebtCap = _debtToJunior();
-        assertApproxEqAbs(juniorDebtCap, borrowAmount, 2, "Debt to junior recorded");
+        (, uint256 deficitAmount,,) = strategy.imbalances();
+        assertApproxEqAbs(deficitAmount, borrowAmount, 2, "Junior deficit recorded");
 
         vm.startPrank(owner);
         acm.grantRole(UPDATER_STRAT_CONFIG_ROLE, owner);
-        vm.expectRevert("ExceedsDebt");
-        rebalancer.initiateRebalance(1, 0, address(baseAsset), address(baseAsset), juniorDebtCap + 1);
+        vm.expectRevert("ExceedsDeficit");
+        rebalancer.initiateRebalance(1, 0, address(baseAsset), address(baseAsset), deficitAmount + 1);
         vm.stopPrank();
     }
 
@@ -669,7 +676,7 @@ contract IsolatedVaultIntegration is IsolatedIntegrationDeploy {
 
         vm.startPrank(owner);
         acm.grantRole(UPDATER_STRAT_CONFIG_ROLE, owner);
-        vm.expectRevert("ExceedsDebt");
+        vm.expectRevert("ExceedsDeficit");
         rebalancer.initiateRebalance(0, 1, address(baseAsset), address(baseAsset), seniorDebtCap + 1);
         vm.stopPrank();
     }
@@ -681,12 +688,18 @@ contract IsolatedVaultIntegration is IsolatedIntegrationDeploy {
         _depositToJrt(alice, DEPOSIT_AMOUNT);
         _depositToSrt(alice, DEPOSIT_AMOUNT);
 
+        // Create a junior deficit / senior surplus so the imbalance checks pass and execution
+        // reaches the withdrawToken == depositToken guard.
+        vm.prank(alice);
+        srtVault.withdraw(DEPOSIT_AMOUNT / 2, alice, alice);
+        (, uint256 deficitAmount,,) = strategy.imbalances();
+
         address otherToken = makeAddr("otherToken");
 
         vm.startPrank(owner);
         acm.grantRole(UPDATER_STRAT_CONFIG_ROLE, owner);
         vm.expectRevert("TokenMismatch");
-        rebalancer.initiateRebalance(1, 0, address(baseAsset), otherToken, DEPOSIT_AMOUNT / 2);
+        rebalancer.initiateRebalance(1, 0, address(baseAsset), otherToken, deficitAmount);
         vm.stopPrank();
     }
 
@@ -743,6 +756,11 @@ contract IsolatedVaultIntegration is IsolatedIntegrationDeploy {
     function test_Integration_CancelRebalance_TwoCanceled_NoDoubleCount() public {
         _depositToJrt(alice, DEPOSIT_AMOUNT);       // 1000 in Spark
         _depositToSrt(alice, DEPOSIT_AMOUNT * 2);   // 2000 in Midas
+
+        // SRT borrows all Spark liquidity -> junior deficit 1000 / senior surplus 1000, enough for
+        // two Midas->Spark rebalances of 500 each.
+        vm.prank(alice);
+        srtVault.withdraw(DEPOSIT_AMOUNT, alice, alice);
 
         // Two same-direction deferred rebalances (separate blocks -> separate cooldown requests).
         vm.startPrank(owner);
@@ -831,6 +849,11 @@ contract IsolatedVaultIntegration is IsolatedIntegrationDeploy {
     function test_Rebalancer_DoubleCompleteRebalance_SameShareToken_PermanentStateCorruptionFixed() public {
         _depositToJrt(alice, DEPOSIT_AMOUNT); // 1000e6 in Spark
         _depositToSrt(alice, DEPOSIT_AMOUNT * 2); // 2000e6 in Midas (senior, idx 1)
+
+        // SRT borrows all Spark liquidity -> junior deficit 1000 / senior surplus 1000, enough for
+        // two Midas->Spark rebalances of 500 each.
+        vm.prank(alice);
+        srtVault.withdraw(DEPOSIT_AMOUNT, alice, alice);
 
         vm.prank(owner);
         acm.grantRole(UPDATER_STRAT_CONFIG_ROLE, owner);
@@ -938,13 +961,11 @@ contract IsolatedVaultIntegration is IsolatedIntegrationDeploy {
         redemptionVault.fulfillRequest(0);
         unstakeCooldown.finalize(IERC20(address(mHYPER)), address(alice));
 
-        uint256 seniorDebt = _debtToSenior();
-
         // Enable Spark cooldowns, then rebalance Spark(0)->Midas(1) — the instant path.
         vm.startPrank(owner);
         acm.grantRole(UPDATER_STRAT_CONFIG_ROLE, owner);
         juniorStrat.setCooldowns(2 days, 1 days);
-        rebalancer.initiateRebalance(0, 1, address(baseAsset), address(baseAsset), seniorDebt);
+        rebalancer.initiateRebalance(0, 1, address(baseAsset), address(baseAsset), borrowAmount);
         vm.stopPrank();
 
         // Rebalance completed in the same tx — the cooldown did not trap the funds.

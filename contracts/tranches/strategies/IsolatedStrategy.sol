@@ -115,32 +115,6 @@ contract IsolatedStrategy is MultiStrategy, IIsolatedStrategy {
         return (juniorStrat.totalAssets(), seniorStrat.totalAssets());
     }
 
-    /// @notice Returns the net amount of assets that need to move between strategies.
-    /// @dev JR allocation ratio is derived from accounting NAV; liquidAllocationFloor may raise it.
-    ///      In-flight Rebalancer assets are credited to their destination strategy so that an
-    ///      ongoing rebalance zeroes out the corresponding debt without querying pending state.
-    ///      toSenior takes priority: if both would be non-zero (e.g. unreconciled losses),
-    ///      toJunior is zeroed.
-    function debts() public view override(IIsolatedStrategy, IRebalanceable) returns (uint256 toJunior, uint256 toSenior) {
-        require(address(accounting) != address(0), "Accounting not set");
-        (uint256 jrtNavT0, uint256 srtNavT0,) = accounting.totalAssetsT0();
-
-        uint256 navTotal = jrtNavT0 + srtNavT0;
-        if (navTotal == 0) return (0, 0);
-
-        uint256 strat1Ratio = Math.mulDiv(jrtNavT0, 1e18, navTotal);
-
-        uint256 jrtAssets = juniorStrat.totalAssets();
-        uint256 srtAssets = seniorStrat.totalAssets();
-        if (address(rebalancer) != address(0)) {
-            (uint256 pendingToJunior, uint256 pendingToSenior) = rebalancer.pendingToStrats();
-            jrtAssets += pendingToJunior;
-            srtAssets += pendingToSenior;
-        }
-
-        return _compute2StratsDebts(strat1Ratio, jrtAssets, srtAssets);
-    }
-
     /// @notice Returns the strategy with the largest deficit and the strategy with the largest surplus.
     /// @dev Returns the index of the strategy that needs assets most (has largest deficit relative to target),
     ///      the deficit amount, the index of the strategy with the most excess assets (largest surplus),

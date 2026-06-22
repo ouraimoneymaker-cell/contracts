@@ -135,9 +135,6 @@ contract IsolatedVaultDeploy is Test {
         vm.stopPrank();
     }
 
-    function _debtToJunior() internal view returns (uint256 d) { (d,) = strategy.debts(); }
-    function _debtToSenior() internal view returns (uint256 d) { (, d) = strategy.debts(); }
-
     function _deployTranche(string memory symbol, string memory name) internal returns (Tranche) {
         Tranche trancheImpl = new Tranche();
         address proxy = address(
@@ -156,5 +153,16 @@ contract IsolatedVaultDeploy is Test {
         );
         vm.label(proxy, symbol);
         return Tranche(proxy);
+    }
+
+    // Debt toward a strat == that strat's deficit in imbalances() (debts() was removed).
+    function _debtToJunior() internal view returns (uint256) {
+        (uint256 deficitStratIdx, uint256 deficitAmount,,) = strategy.imbalances();
+        return deficitStratIdx == 0 ? deficitAmount : 0;
+    }
+
+    function _debtToSenior() internal view returns (uint256) {
+        (uint256 deficitStratIdx, uint256 deficitAmount,,) = strategy.imbalances();
+        return deficitStratIdx == 1 ? deficitAmount : 0;
     }
 }

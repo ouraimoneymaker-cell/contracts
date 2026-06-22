@@ -258,29 +258,6 @@ abstract contract MultiStrategy is Strategy, IMultiStrategy, IRebalanceable {
         }
     }
 
-    /// @dev Computes rebalance debts given strat1's WAD allocation ratio and actual strategy assets.
-    ///      strat1Ratio is a WAD proportion (1e18 = 100%) of total assets that strat1 should hold.
-    ///      Raises strat1Ratio to liquidAllocationFloor when the floor exceeds the natural ratio.
-    ///      toStrat2 takes priority: if both would be non-zero (e.g. unreconciled losses), toStrat1 is zeroed.
-    function _compute2StratsDebts(
-        uint256 strat1Ratio,
-        uint256 strat1Assets,
-        uint256 strat2Assets
-    ) internal view returns (uint256 toStrat1, uint256 toStrat2) {
-        uint256 floor = liquidAllocationFloor;
-        uint256 s1Ratio = strat1Ratio;
-
-        if (floor > 0 && s1Ratio < floor) s1Ratio = floor;
-
-        uint256 navTotal = strat1Assets + strat2Assets;
-        uint256 strat1Target = Math.mulDiv(navTotal, s1Ratio, 1e18);
-        uint256 strat2Target = navTotal - Math.min(strat1Target, navTotal);
-        toStrat1 = Math.saturatingSub(strat1Target, strat1Assets);
-        toStrat2 = Math.saturatingSub(strat2Target, strat2Assets);
-
-        if (toStrat2 > 0) toStrat1 = 0;
-    }
-
     function supportsToken(address token) external view returns (bool) {
         return _supportedTokens[token];
     }

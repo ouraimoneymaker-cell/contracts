@@ -13,7 +13,6 @@ interface IRebalanceable {
     function withdrawForRebalance(uint256 stratIdx, address token, uint256 baseAssets, address receiver) external returns (uint256 sharesAmount);
     function depositForRebalance(uint256 stratIdx, address token, uint256 tokenAmount, uint256 baseAssets) external;
     function getStratShareToken(uint256 stratIdx) external view returns (address);
-    function debts() external view returns (uint256 toJunior, uint256 toSenior);
     function strats(uint256 stratIdx) external view returns (IStrategy);
 
     function imbalances() external view returns (

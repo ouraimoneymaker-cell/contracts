@@ -324,8 +324,8 @@ contract IsolatedVaultTest is IsolatedVaultDeploy {
         vm.startPrank(owner);
         acm.grantRole(keccak256("UPDATER_STRAT_CONFIG_ROLE"), owner);
 
-        // Repay: moves seniorDebt from junior strat (idx 0) → senior strat (idx 1)
-        rebalancer.initiateRebalance(0, 1, address(baseAsset), address(baseAsset), seniorDebt);
+        // Repay: moves withdrawAmount from junior strat (idx 0) → senior strat (idx 1)
+        rebalancer.initiateRebalance(0, 1, address(baseAsset), address(baseAsset), withdrawAmount);
         vm.stopPrank();
 
         assertEq(_debtToSenior(), 0, "Debt cleared after repayment");

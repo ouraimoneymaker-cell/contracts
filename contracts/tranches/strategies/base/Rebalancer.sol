@@ -100,7 +100,7 @@ contract Rebalancer is IRebalancer, AccessControlled {
         require(surplusAmount > 0, "NoSurplus");
         require(deficitStratIdx != surplusStratIdx, "NoRebalancePath");
 
-        _initiateRebalance(deficitStratIdx, surplusStratIdx, withdrawToken, depositToken, deficitAmount);
+        _initiateRebalance(surplusStratIdx, deficitStratIdx, withdrawToken, depositToken, deficitAmount);
     }
 
     function _initiateRebalance(

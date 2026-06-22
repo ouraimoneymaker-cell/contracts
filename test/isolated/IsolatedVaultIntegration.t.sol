@@ -736,6 +736,43 @@ contract IsolatedVaultIntegration is IsolatedIntegrationDeploy {
         assertApproxEqAbs(seniorStrat.totalAssets(), midasBefore, 2, "midas totalAssets restored after recovery");
     }
 
+    // Two deferred Midas->Spark rebalances, BOTH rejected by Midas. Cancelling only ONE must not
+    // double-count the other: finalize() drains BOTH proxies' shares into the rebalancer, but only
+    // entry 0's credit/entry is removed — entry 1 must remain counted exactly once in both
+    // pendingToStrats() and totalAssets().
+    function test_Integration_CancelRebalance_TwoCanceled_NoDoubleCount() public {
+        _depositToJrt(alice, DEPOSIT_AMOUNT);       // 1000 in Spark
+        _depositToSrt(alice, DEPOSIT_AMOUNT * 2);   // 2000 in Midas
+
+        // Two same-direction deferred rebalances (separate blocks -> separate cooldown requests).
+        vm.startPrank(owner);
+        acm.grantRole(UPDATER_STRAT_CONFIG_ROLE, owner);
+        rebalancer.initiateRebalance(1, 0, address(baseAsset), address(baseAsset), DEPOSIT_AMOUNT / 2);
+        vm.warp(block.timestamp + 1);
+        rebalancer.initiateRebalance(1, 0, address(baseAsset), address(baseAsset), DEPOSIT_AMOUNT / 2);
+        vm.stopPrank();
+
+        assertEq(rebalancer.pendingCount(), 2, "two pending rebalances");
+        (uint256 toJuniorBefore,) = rebalancer.pendingToStrats();
+        assertApproxEqAbs(toJuniorBefore, DEPOSIT_AMOUNT, 2, "both entries credit junior (1000)");
+        assertApproxEqAbs(rebalancer.totalAssets(), DEPOSIT_AMOUNT, 2, "totalAssets counts both (1000)");
+
+        // Midas rejects BOTH redemptions -> mHYPER returned to both cooldown proxies.
+        redemptionVault.rejectRequest(0);
+        redemptionVault.rejectRequest(1);
+        vm.warp(block.timestamp + 1 weeks);
+
+        // Cancel only ONE. finalize() inside drains BOTH proxies' shares into the rebalancer.
+        vm.prank(owner);
+        rebalancer.cancelRebalance(0, 0);
+
+        // Entry 1 must still be counted exactly once — no double counting from the shared drain.
+        assertEq(rebalancer.pendingCount(), 1, "one entry remains");
+        (uint256 toJuniorAfter,) = rebalancer.pendingToStrats();
+        assertApproxEqAbs(toJuniorAfter, DEPOSIT_AMOUNT / 2, 2, "only entry 1 credits junior (500), not double counted");
+        assertApproxEqAbs(rebalancer.totalAssets(), DEPOSIT_AMOUNT / 2, 2, "totalAssets counts only entry 1 (500)");
+    }
+
     // ─────────────────────────────────────────────────────────────────────────
     // Oracle-gated discrete accounting
     // ─────────────────────────────────────────────────────────────────────────

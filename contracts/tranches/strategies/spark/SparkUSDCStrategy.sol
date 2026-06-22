@@ -210,29 +210,45 @@ contract SparkUSDCStrategy is Strategy {
     function convertToAssets(
         address token,
         uint256 tokenAmount,
-        Math.Rounding /* rounding */
+        Math.Rounding rounding
     )
         public
         view
         override
         returns (uint256)
     {
-        if (token != address(USDC)) revert UnsupportedToken(token);
-        return tokenAmount;
+        if (token == address(spVault)) {
+            // spVault shares -> USDC (ERC4626). Ceil via previewMint (assets to mint), Floor via convertToAssets.
+            return rounding == Math.Rounding.Ceil
+                ? spVault.previewMint(tokenAmount)
+                : spVault.convertToAssets(tokenAmount);
+        }
+        if (token == address(USDC)) {
+            return tokenAmount;
+        }
+        revert UnsupportedToken(token);
     }
 
     function convertToTokens(
         address token,
         uint256 baseAssets,
-        Math.Rounding /* rounding */
+        Math.Rounding rounding
     )
         public
         view
         override
         returns (uint256)
     {
-        if (token != address(USDC)) revert UnsupportedToken(token);
-        return baseAssets;
+        if (token == address(spVault)) {
+            // USDC -> spVault shares (ERC4626). Ceil via previewWithdraw (shares to withdraw), Floor via convertToShares.
+            return rounding == Math.Rounding.Ceil
+                ? spVault.previewWithdraw(baseAssets)
+                : spVault.convertToShares(baseAssets);
+        }
+        if (token == address(USDC)) {
+            return baseAssets;
+        }
+        revert UnsupportedToken(token);
     }
 
     function ensureRedeemable(address caller, address token, uint256 baseAssets) external view {
@@ -242,8 +258,9 @@ contract SparkUSDCStrategy is Strategy {
     }
 
     function getSupportedTokens() external view returns (IERC20[] memory) {
-        IERC20[] memory tokens = new IERC20[](1);
+        IERC20[] memory tokens = new IERC20[](2);
         tokens[0] = USDC;
+        tokens[1] = IERC20(address(spVault));
         return tokens;
     }
 

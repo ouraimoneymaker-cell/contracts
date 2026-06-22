@@ -51,7 +51,7 @@ UTest.create({
         const usdcAfter = await USDC.balanceOf(deployer.address);
 
         $require.gt(usdcAfter, usdcBefore, 'SRT redeem delivers USDC immediately');
-        $require.gt((await strategy.debts()).toJunior, 0n, 'Debt recorded: SRT borrowed from Spark');
+        $require.gt((await debts()).toJunior, 0n, 'Debt recorded: SRT borrowed from Spark');
         l`SRT redeemed: USDC received cyan<${$bigint.toEther(usdcAfter - usdcBefore, 6)}>`;
     },
 
@@ -69,7 +69,7 @@ UTest.create({
         const usdcAfter = await USDC.balanceOf(deployer.address);
 
         $require.eq(usdcAfter, usdcBefore, 'No USDC arrives immediately — Midas is always async');
-        $require.gt((await strategy.debts()).toSenior, 0n, 'Debt recorded: JRT borrowed from Midas');
+        $require.gt((await debts()).toSenior, 0n, 'Debt recorded: JRT borrowed from Midas');
 
         const { pending } = await test.tranches.unstakeCooldown.balanceOf(mHYPER.address, deployer.address);
         $require.gt(pending, 0n, 'USDC queued in unstakeCooldown');
@@ -141,4 +141,14 @@ async function setAPRs(aprTarget: number, aprBase: number) {
     const block = await client.getBlock('latest');
     await feed.$receipt().updateRoundData(deployer, aprTarget * 10 ** 12, aprBase * 10 ** 12, block.timestamp);
     await (accounting as any).$receipt().onAprChanged(deployer);
+}
+
+// imbalances() reports the single deficit strat; map it back to the old debts() shape
+// (junior = strat 0, senior = strat 1) so the assertions read naturally.
+async function debts() {
+    const { deficitStratIdx, deficitAmount } = await strategy.imbalances();
+    return {
+        toJunior: deficitStratIdx === 0n ? deficitAmount : 0n,
+        toSenior: deficitStratIdx === 1n ? deficitAmount : 0n,
+    };
 }

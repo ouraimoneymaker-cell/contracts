@@ -345,7 +345,7 @@ contract MidasStrategy is Strategy {
         address token,
         uint256 tokenAmount,
         Math.Rounding rounding
-    ) public view returns (uint256) {
+    ) public view override  returns (uint256) {
         if (token == address(mToken)) {
             uint256 rate = getOracleRate();
             return Math.mulDiv(tokenAmount, rate, 10 ** (18 + shareTokenDecimals - baseAssetDecimals), rounding);
@@ -379,7 +379,7 @@ contract MidasStrategy is Strategy {
         address token,
         uint256 baseAssets,
         Math.Rounding rounding
-    ) public view returns (uint256) {
+    ) public view override returns (uint256) {
         if (token == address(mToken)) {
             uint256 rate = getOracleRate();
             return Math.mulDiv(baseAssets, 10 ** (18 + shareTokenDecimals - baseAssetDecimals), rate, rounding);

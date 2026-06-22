@@ -284,7 +284,7 @@ contract FigureStrategy is Strategy {
         address token,
         uint256 tokenAmount,
         Math.Rounding rounding
-    ) public view returns (uint256) {
+    ) public view override returns (uint256) {
         if (token == address(stakingVault)) {
             // PRIME -> wYLDS
             return rounding == Math.Rounding.Floor
@@ -316,7 +316,7 @@ contract FigureStrategy is Strategy {
         address token,
         uint256 baseAssets,
         Math.Rounding rounding
-    ) public view returns (uint256) {
+    ) public view override returns (uint256) {
         if (token == address(stakingVault)) {
             // USDC (= wYLDS) -> PRIME
             return rounding == Math.Rounding.Floor

@@ -217,7 +217,7 @@ contract SaturnStrategy is Strategy {
      * @param rounding The rounding direction
      * @return The equivalent amount in USDat
      */
-    function convertToAssets (address token, uint256 tokenAmount, Math.Rounding rounding) external view returns (uint256) {
+    function convertToAssets (address token, uint256 tokenAmount, Math.Rounding rounding) public view override returns (uint256) {
         if (token == address(sUSDat)) {
             if (rounding == Math.Rounding.Floor) {
                 return sUSDat.convertToAssets(tokenAmount);
@@ -247,7 +247,7 @@ contract SaturnStrategy is Strategy {
      * @param rounding The rounding direction
      * @return The equivalent amount in the requested token
      */
-    function convertToTokens (address token, uint256 baseAssets, Math.Rounding rounding) external view returns (uint256) {
+    function convertToTokens (address token, uint256 baseAssets, Math.Rounding rounding) public view override returns (uint256) {
         if (token == address(sUSDat)) {
             if (rounding == Math.Rounding.Floor) {
                 return sUSDat.convertToShares(baseAssets);

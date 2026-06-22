@@ -34,7 +34,7 @@ abstract contract Strategy is IStrategy, CDOComponent {
     // Exchange rate of 1 share in base asset terms, scaled to 1e18.
     // Converts 1 share (10**shareTokenDecimals) via convertToAssets, then normalises to 1e18.
     function getRate() external view virtual override returns (uint256) {
-        uint256 price = this.convertToAssets(_shareToken, 10 ** shareTokenDecimals, Math.Rounding.Floor);
+        uint256 price = convertToAssets(_shareToken, 10 ** shareTokenDecimals, Math.Rounding.Floor);
         return price * 10 ** (18 - baseAssetDecimals);
     }
 
@@ -88,4 +88,6 @@ abstract contract Strategy is IStrategy, CDOComponent {
         return type(uint256).max;
     }
 
+    function convertToAssets (address token, uint256 tokenAmount, Math.Rounding rounding) public view virtual returns (uint256 baseAssets);
+    function convertToTokens (address token, uint256 baseAssets, Math.Rounding rounding) public view virtual returns (uint256 tokenAmount);
 }

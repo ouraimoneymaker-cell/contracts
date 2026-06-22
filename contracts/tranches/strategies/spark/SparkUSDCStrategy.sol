@@ -212,8 +212,9 @@ contract SparkUSDCStrategy is Strategy {
         uint256 tokenAmount,
         Math.Rounding /* rounding */
     )
-        external
+        public
         view
+        override
         returns (uint256)
     {
         if (token != address(USDC)) revert UnsupportedToken(token);
@@ -225,8 +226,9 @@ contract SparkUSDCStrategy is Strategy {
         uint256 baseAssets,
         Math.Rounding /* rounding */
     )
-        external
+        public
         view
+        override
         returns (uint256)
     {
         if (token != address(USDC)) revert UnsupportedToken(token);

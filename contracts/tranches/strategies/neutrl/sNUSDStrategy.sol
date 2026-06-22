@@ -167,7 +167,7 @@ contract sNUSDStrategy is Strategy {
      * @param rounding The rounding direction to use for the conversion (floor or ceiling)
      * @return The equivalent amount in NUSD
      */
-    function convertToAssets(address token, uint256 tokenAmount, Math.Rounding rounding) external view returns (uint256) {
+    function convertToAssets(address token, uint256 tokenAmount, Math.Rounding rounding) public view override returns (uint256) {
         if (token == address(sNUSD)) {
             return rounding == Math.Rounding.Floor
                 ? sNUSD.previewRedeem(tokenAmount)  // aka convertToAssets(tokenAmount)
@@ -189,7 +189,7 @@ contract sNUSDStrategy is Strategy {
      * @param rounding The rounding direction to use for the conversion (floor or ceiling)
      * @return The equivalent amount in the requested token (sNUSD shares or NUSD)
      */
-    function convertToTokens(address token, uint256 baseAssets, Math.Rounding rounding) external view returns (uint256) {
+    function convertToTokens(address token, uint256 baseAssets, Math.Rounding rounding) public view override returns (uint256) {
         if (token == address(sNUSD)) {
             return rounding == Math.Rounding.Floor
                 ? sNUSD.previewDeposit(baseAssets) // aka convertToShares(baseAssets)

@@ -168,16 +168,18 @@ abstract contract MultiStrategy is Strategy, IMultiStrategy, IRebalanceable {
     }
 
     function convertToAssets(address token, uint256 tokenAmount, Math.Rounding rounding)
-        external
+        public
         view
+        override(IStrategy, Strategy)
         returns (uint256)
     {
         return converters[token].convertToAssets(token, tokenAmount, rounding);
     }
 
     function convertToTokens(address token, uint256 baseAssets, Math.Rounding rounding)
-        external
+        public
         view
+        override(IStrategy, Strategy)
         returns (uint256)
     {
         return converters[token].convertToTokens(token, baseAssets, rounding);

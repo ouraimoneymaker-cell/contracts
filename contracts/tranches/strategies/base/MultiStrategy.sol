@@ -120,12 +120,13 @@ abstract contract MultiStrategy is Strategy, IMultiStrategy, IRebalanceable {
         emit AccountingSet(address(accounting_));
     }
 
-    function withdrawForRebalance(uint256 stratIdx, address token, uint256 baseAssets, address receiver) external onlyRebalancer returns (uint256 tokenAmount){
+    function withdrawForRebalance(uint256 stratIdx, address token, uint256 baseAssets, address receiver) external onlyRebalancer returns (uint256 sharesAmount){
         IStrategy strat = strats[stratIdx];
-        tokenAmount = strat.convertToTokens(token, baseAssets, Math.Rounding.Ceil);
-
-        // Update tokenAmount to the actual withdrawn amount returned by the strategy (may differ due to rounding/fees).
-        tokenAmount = strat.withdraw(address(0), token, tokenAmount, baseAssets, receiver, receiver, true);
+        // Convert base assets to the amount of withdrawal token needed
+        uint256 tokenAmount = strat.convertToTokens(token, baseAssets, Math.Rounding.Ceil);
+        // Calculate the equivalent share token amount for the requested base assets (returned for tracking)
+        sharesAmount = strat.convertToTokens(strat.shareToken(), baseAssets, Math.Rounding.Ceil);
+        strat.withdraw(address(0), token, tokenAmount, baseAssets, receiver, receiver, true);
     }
 
     function depositForRebalance(uint256 stratIdx, address token, uint256 tokenAmount, uint256 baseAssets) external onlyRebalancer {

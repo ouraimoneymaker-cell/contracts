@@ -138,7 +138,9 @@ contract IsolatedVaultTest is IsolatedVaultDeploy {
         // Junior strat should be fully drained, remainder from senior
         assertEq(juniorConsumed, DEPOSIT_AMOUNT, "All junior liquidity should be consumed first");
         assertEq(seniorConsumed, withdrawAmount - DEPOSIT_AMOUNT, "Senior strat covers the remainder");
-        assertApproxEqAbs(_debtToJunior(), DEPOSIT_AMOUNT, 1e3, "Debt should equal full junior amount borrowed");
+        // Junior drained below the 30% liquid allocation floor, so imbalances() caps its deficit at
+        // the floor target (0.3 * navTotal = 0.3 * 1500 = 450), not the full 1000 borrowed.
+        assertApproxEqAbs(_debtToJunior(), DEPOSIT_AMOUNT * 45 / 100, 1e3, "Junior deficit capped at liquid allocation floor");
     }
 
     // ─────────────────────────────────────────────────────────────────────────

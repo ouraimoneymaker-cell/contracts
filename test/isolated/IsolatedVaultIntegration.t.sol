@@ -378,7 +378,9 @@ contract IsolatedVaultIntegration is IsolatedIntegrationDeploy {
 
         // Junior strat (Spark) fully drained
         assertApproxEqAbs(juniorStrat.totalAssets(), 0, 1, "Junior strat (Spark) fully drained");
-        assertApproxEqAbs(_debtToJunior(), DEPOSIT_AMOUNT, 2, "Debt equals full junior amount borrowed");
+        // Junior is drained below the 30% liquid allocation floor, so imbalances() caps its deficit at
+        // the floor target (0.3 * navTotal = 0.3 * 1500 = 450), not the full 1000 borrowed.
+        assertApproxEqAbs(_debtToJunior(), DEPOSIT_AMOUNT * 45 / 100, 2, "Junior deficit capped at liquid allocation floor");
 
         // Senior strat (Midas) provided the remainder
         uint256 remainder = withdrawAmount - DEPOSIT_AMOUNT;
@@ -755,10 +757,10 @@ contract IsolatedVaultIntegration is IsolatedIntegrationDeploy {
     // pendingToStrats() and totalAssets().
     function test_Integration_CancelRebalance_TwoCanceled_NoDoubleCount() public {
         _depositToJrt(alice, DEPOSIT_AMOUNT);       // 1000 in Spark
-        _depositToSrt(alice, DEPOSIT_AMOUNT * 2);   // 2000 in Midas
+        _depositToSrt(alice, DEPOSIT_AMOUNT * 4);   // 4000 in Midas (large enough that the 30% floor target covers the rebalances)
 
-        // SRT borrows all Spark liquidity -> junior deficit 1000 / senior surplus 1000, enough for
-        // two Midas->Spark rebalances of 500 each.
+        // SRT borrows all Spark liquidity -> junior drops below the floor; floor target (0.3 * 4000 navTotal
+        // = 1200) gives ~1200 of junior deficit / senior surplus, enough for two Midas->Spark rebalances of 500 each.
         vm.prank(alice);
         srtVault.withdraw(DEPOSIT_AMOUNT, alice, alice);
 
@@ -848,10 +850,10 @@ contract IsolatedVaultIntegration is IsolatedIntegrationDeploy {
 
     function test_Rebalancer_DoubleCompleteRebalance_SameShareToken_PermanentStateCorruptionFixed() public {
         _depositToJrt(alice, DEPOSIT_AMOUNT); // 1000e6 in Spark
-        _depositToSrt(alice, DEPOSIT_AMOUNT * 2); // 2000e6 in Midas (senior, idx 1)
+        _depositToSrt(alice, DEPOSIT_AMOUNT * 4); // 4000e6 in Midas (senior, idx 1)
 
-        // SRT borrows all Spark liquidity -> junior deficit 1000 / senior surplus 1000, enough for
-        // two Midas->Spark rebalances of 500 each.
+        // SRT borrows all Spark liquidity -> junior drops below the floor; floor target (0.3 * 4000 navTotal
+        // = 1200) gives ~1200 of junior deficit / senior surplus, enough for two Midas->Spark rebalances of 500 each.
         vm.prank(alice);
         srtVault.withdraw(DEPOSIT_AMOUNT, alice, alice);
 

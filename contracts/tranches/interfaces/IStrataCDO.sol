@@ -58,4 +58,3 @@ interface IStrataCDO {
 interface IStrataCDOSetters {
     function setExitFees (uint256 feeJrt, uint256 feeSrt) external;
 }
-

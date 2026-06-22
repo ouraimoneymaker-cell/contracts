@@ -575,21 +575,23 @@ export abstract class DeploymentsBase<T extends ICdoDeploymentsBase = any> {
             : accountingType === 'dys'
                 ? DYSAccounting
                 : DiscreteAccounting;
-        const contractOptions = this.cdoInfo.ContractVersions?.accountingOptions;
-        const useBenchmark = contractOptions?.useBenchmark ?? false;
-        const args = accountingType === 'dys'
-            ? [ decimals, useBenchmark ] as [ bigint, boolean ]
-            : [ decimals ] as [ bigint ];
+        const args = accountingType === 'continuous'
+            ? [ decimals ] as [ bigint ]
+            : accountingType === 'dys'
+                ? [ decimals, false, false ] as [ bigint, boolean, boolean ]
+                : accountingType === 'isolated'
+                    ? [ decimals, true ] as [ bigint, boolean ]
+                    : [ decimals, false ] as [ bigint, boolean ];
 
+        const accountingOptions = this.cdoInfo.ContractVersions?.accountingOptions;
+        const useBenchmark = accountingOptions?.useBenchmark ?? false;
+        const useRatesForReconciliation = accountingOptions?.useRatesForReconciliation ?? false;
         const { contract: accounting } = await this.ds.ensureWithProxy(Contract as typeof Accounting, {
             id: `${this.pfx}Accounting`,
-            initialize: [
-                this.owner.address,
-                acm.address,
-                cdo,
-                feed.address,
-            ],
-            arguments: args,
+            initialize: [ this.owner.address, acm.address, cdo, feed.address ],
+            arguments: (accountingType === 'dys'
+                ? [ decimals, useBenchmark, false, useRatesForReconciliation ]
+                : args) as [ bigint ],
         });
         return accounting;
     }

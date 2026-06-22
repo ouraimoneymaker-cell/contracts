@@ -30,10 +30,6 @@ contract MidasStrategyTest is Test {
 
     address public deployer = address(this);
 
-    // USDC has 6 decimals, mToken has 18 decimals
-    // RATE_SCALE = 10^(18 + 18 - 6) = 10^30
-    uint256 constant RATE_SCALE = 1e30;
-
     function setUp() public {
         vm.warp(100_000);
 
@@ -195,14 +191,9 @@ contract MidasStrategyTest is Test {
         assertEq(stale, latestNav, 'Should return latestNav when oracle is stale');
     }
 
-    // ========================================
-    // RATE_SCALE Tests
-    // ========================================
-
-    function test_RATE_SCALE() public view {
-        // baseAsset is MockBaseAsset with 6 decimals
-        // RATE_SCALE = 10^(18 + 18 - 6) = 10^30
-        assertEq(strategy.RATE_SCALE(), 1e30, 'RATE_SCALE should be 1e30 for 6-decimal baseAsset');
+    function test_rateScale() public view {
+        // shareTokenDecimals=18, baseAssetDecimals=6 → scale = 10^(18+18-6) = 10^30
+        assertEq(10 ** (18 + strategy.shareTokenDecimals() - strategy.baseAssetDecimals()), 1e30);
     }
 
     // ========================================

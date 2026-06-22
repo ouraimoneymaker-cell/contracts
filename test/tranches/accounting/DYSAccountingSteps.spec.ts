@@ -8,6 +8,9 @@ import { DYSAccounting } from '@0xc/hardhat/DYSAccounting/DYSAccounting';
 
 const test = $hh.create('ethena', {
     cdoInfo: {
+        // Distinct pfx so this DYS deployment doesn't share the `USDeAccounting` proxy/layout
+        // record with the discrete ethena specs (which would trip the storage-layout upgrade check).
+        pfx: 'USDeDys',
         ContractVersions: {
             accounting: 'dys',
             accountingOptions: {

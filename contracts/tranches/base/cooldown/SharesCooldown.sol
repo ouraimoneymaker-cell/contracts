@@ -124,7 +124,10 @@ contract SharesCooldown is ISharesCooldown, CooldownBase {
             if (
                 requestsCount > 0 &&
                 requests[requestsCount - 1].unlockAt == unlockAt &&
-                requests[requestsCount - 1].metaKey == bytes12(0)
+                areBytesEqual(
+                    strategyOptions,
+                    requestMeta[address(vault)][to][requests[requestsCount - 1].metaKey].strategyOptions
+                )
             ) {
                 // is requested within current block
                 TRequest storage last = requests[requestsCount - 1];

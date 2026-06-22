@@ -26,7 +26,7 @@ contract sNUSDStrategy is Strategy {
     event CooldownsChanged(uint256 jrt, uint256 srt);
 
 
-    constructor(IERC4626 sNUSD_) {
+    constructor(IERC4626 sNUSD_) Strategy(sNUSD_.asset(), address(sNUSD_)) {
         sNUSD = sNUSD_;
         NUSD = IERC20(sNUSD_.asset());
     }
@@ -167,7 +167,7 @@ contract sNUSDStrategy is Strategy {
      * @param rounding The rounding direction to use for the conversion (floor or ceiling)
      * @return The equivalent amount in NUSD
      */
-    function convertToAssets(address token, uint256 tokenAmount, Math.Rounding rounding) external view returns (uint256) {
+    function convertToAssets(address token, uint256 tokenAmount, Math.Rounding rounding) public view override returns (uint256) {
         if (token == address(sNUSD)) {
             return rounding == Math.Rounding.Floor
                 ? sNUSD.previewRedeem(tokenAmount)  // aka convertToAssets(tokenAmount)
@@ -189,7 +189,7 @@ contract sNUSDStrategy is Strategy {
      * @param rounding The rounding direction to use for the conversion (floor or ceiling)
      * @return The equivalent amount in the requested token (sNUSD shares or NUSD)
      */
-    function convertToTokens(address token, uint256 baseAssets, Math.Rounding rounding) external view returns (uint256) {
+    function convertToTokens(address token, uint256 baseAssets, Math.Rounding rounding) public view override returns (uint256) {
         if (token == address(sNUSD)) {
             return rounding == Math.Rounding.Floor
                 ? sNUSD.previewDeposit(baseAssets) // aka convertToShares(baseAssets)
@@ -236,5 +236,9 @@ contract sNUSDStrategy is Strategy {
         bool isDisabled = sNUSDCooldownJrt_ == 0 && sNUSDCooldownSrt_ == 0;
         erc20Cooldown.setCooldownDisabled(sNUSD, isDisabled);
         emit CooldownsChanged(sNUSDCooldownJrt_, sNUSDCooldownSrt_);
+    }
+
+    function supportsToken(address token) external view returns (bool) {
+        return token == address(sNUSD) || token == address(NUSD);
     }
 }

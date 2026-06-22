@@ -50,7 +50,7 @@ contract FigureStrategy is Strategy {
         IStakingVault stakingVault_,
         IYieldVault yieldVault_,
         IERC20 usdc_
-    ) {
+    ) Strategy(address(usdc_), address(stakingVault_)) {
         stakingVault = stakingVault_;
         yieldVault = yieldVault_;
         usdc = usdc_;
@@ -284,7 +284,7 @@ contract FigureStrategy is Strategy {
         address token,
         uint256 tokenAmount,
         Math.Rounding rounding
-    ) public view returns (uint256) {
+    ) public view override returns (uint256) {
         if (token == address(stakingVault)) {
             // PRIME -> wYLDS
             return rounding == Math.Rounding.Floor
@@ -316,7 +316,7 @@ contract FigureStrategy is Strategy {
         address token,
         uint256 baseAssets,
         Math.Rounding rounding
-    ) public view returns (uint256) {
+    ) public view override returns (uint256) {
         if (token == address(stakingVault)) {
             // USDC (= wYLDS) -> PRIME
             return rounding == Math.Rounding.Floor
@@ -392,5 +392,9 @@ contract FigureStrategy is Strategy {
         bool isDisabled = primeCooldownJrt_ == 0 && primeCooldownSrt_ == 0;
         erc20Cooldown.setCooldownDisabled(stakingVault, isDisabled);
         emit CooldownsChanged(primeCooldownJrt_, primeCooldownSrt_);
+    }
+
+    function supportsToken(address token) external override view returns (bool) {
+        return token == address(stakingVault) || token == address(yieldVault) || token == address(usdc);
     }
 }

@@ -28,7 +28,7 @@ contract Rebalancer is IRebalancer, AccessControlled {
         address shareToken;     // underlying protocol share token registered in unstakeCooldown (e.g. mHYPER for Midas)
         address depositToken;
         uint256 baseAssets;
-        uint256 tokenAmount;
+        uint256 sharesAmount;
     }
 
     IRebalanceable public strategy;
@@ -114,7 +114,7 @@ contract Rebalancer is IRebalancer, AccessControlled {
         require(withdrawToken == depositToken, "TokenMismatch");
 
         uint256 balBefore = IERC20(depositToken).balanceOf(address(this));
-        uint256 tokenAmount = strategy.withdrawForRebalance(fromStratIdx, withdrawToken, baseAssets, address(this));
+        uint256 sharesAmount = strategy.withdrawForRebalance(fromStratIdx, withdrawToken, baseAssets, address(this));
         uint256 received = IERC20(depositToken).balanceOf(address(this)) - balBefore;
 
         if (received > 0) {
@@ -131,7 +131,7 @@ contract Rebalancer is IRebalancer, AccessControlled {
                 shareToken: shareToken,
                 depositToken: depositToken,
                 baseAssets: baseAssets,
-                tokenAmount: tokenAmount
+                sharesAmount: sharesAmount
             }));
             _pendingToStrat[toStratIdx] += baseAssets;
 
@@ -202,11 +202,11 @@ contract Rebalancer is IRebalancer, AccessControlled {
         uint256 recovered = IERC20(shareToken).balanceOf(address(this));
         require(recovered >= minShares, "InsufficientRecovery");
 
-        uint256 tokenAmount = Math.min(recovered, pending.tokenAmount);
+        uint256 sharesAmount = Math.min(recovered, pending.sharesAmount);
 
         // Return them to the source strat, restoring its (balanceOf-based) totalAssets so the credit
         // reversals below net to zero change in total NAV.
-        IERC20(shareToken).safeTransfer(address(strategy.strats(fromStratIdx)), tokenAmount);
+        IERC20(shareToken).safeTransfer(address(strategy.strats(fromStratIdx)), sharesAmount);
 
         // Reduce by the expected pending baseAssets
         _pendingToStrat[pending.toStratIdx] -= pending.baseAssets;

@@ -72,15 +72,35 @@ contract IsolatedStrategy is MultiStrategy, IIsolatedStrategy {
     }
 
     function _depositStratIndex(address tranche, address token, uint256 baseAssets) internal view override returns (uint256) {
-        (uint256 toJunior, uint256 toSenior) = debts();
+        (
+            uint256 deficitStratIdx,
+            uint256 deficitAmount,
+            uint256 surplusStratIdx,
+            uint256 surplusAmount
+        ) = imbalances();
 
-        if (toJunior > 0 && baseAssets <= toJunior && perStrategyTokens[address(juniorStrat)][token]) {
-            return 0;
-        }
-        if (toSenior > 0 && baseAssets <= toSenior && perStrategyTokens[address(seniorStrat)][token]) {
-            return 1;
+        if (deficitStratIdx == JRT_IDX &&
+            baseAssets <= deficitAmount &&
+            surplusStratIdx == SRT_IDX &&
+            surplusAmount > 0 &&
+            perStrategyTokens[address(juniorStrat)][token]) {
+
+            // Junior has deficit AND Senior has surplus
+            return JRT_IDX;
         }
 
+        if (
+            deficitStratIdx == SRT_IDX &&
+            baseAssets <= deficitAmount &&
+            surplusStratIdx == JRT_IDX &&
+            surplusAmount > 0 &&
+            perStrategyTokens[address(seniorStrat)][token]) {
+
+            // Senior has deficit AND Junior has surplus
+            return SRT_IDX;
+        }
+
+        // Otherwise deposit to the tranche's default strategy
         return _depositStratIndex(tranche);
     }
 
@@ -119,6 +139,60 @@ contract IsolatedStrategy is MultiStrategy, IIsolatedStrategy {
         }
 
         return _compute2StratsDebts(strat1Ratio, jrtAssets, srtAssets);
+    }
+
+    /// @notice Returns the strategy with the largest deficit and the strategy with the largest surplus.
+    /// @dev Returns the index of the strategy that needs assets most (has largest deficit relative to target),
+    ///      the deficit amount, the index of the strategy with the most excess assets (largest surplus),
+    ///      and the surplus amount. If no deficit/surplus exists, returns (0, 0, 0, 0).
+    /// @return deficitStratIdx Index of the strategy with the largest deficit (0=junior, 1=senior)
+    /// @return deficitAmount Amount of assets the deficit strategy needs
+    /// @return surplusStratIdx Index of the strategy with the largest surplus (0=junior, 1=senior)
+    /// @return surplusAmount Amount of excess assets the surplus strategy holds
+    function imbalances() public view returns (
+        uint256 deficitStratIdx,
+        uint256 deficitAmount,
+        uint256 surplusStratIdx,
+        uint256 surplusAmount
+    ) {
+        require(address(accounting) != address(0), "Accounting not set");
+        (uint256 jrtNavT0, uint256 srtNavT0,) = accounting.totalAssetsT0();
+
+        uint256 navTotal = jrtNavT0 + srtNavT0;
+        if (navTotal == 0) return (0, 0, 0, 0);
+
+        uint256 jrtAssets = juniorStrat.totalAssets();
+        uint256 srtAssets = seniorStrat.totalAssets();
+
+        if (address(rebalancer) != address(0)) {
+            (uint256 pendingToJunior, uint256 pendingToSenior) = rebalancer.pendingToStrats();
+            jrtAssets += pendingToJunior;
+            srtAssets += pendingToSenior;
+        }
+
+        // Calculate deficits/surpluses for each strategy
+        uint256 jrtDeficit = jrtNavT0 > jrtAssets ? jrtNavT0 - jrtAssets : 0;
+        uint256 jrtSurplus = jrtAssets > jrtNavT0 ? jrtAssets - jrtNavT0 : 0;
+        uint256 srtDeficit = srtNavT0 > srtAssets ? srtNavT0 - srtAssets : 0;
+        uint256 srtSurplus = srtAssets > srtNavT0 ? srtAssets - srtNavT0 : 0;
+
+        // Determine which strategy has the largest deficit
+        if (jrtDeficit >= srtDeficit) {
+            deficitStratIdx = JRT_IDX;
+            deficitAmount = jrtDeficit;
+        } else {
+            deficitStratIdx = SRT_IDX;
+            deficitAmount = srtDeficit;
+        }
+
+        // Determine which strategy has the largest surplus
+        if (jrtSurplus >= srtSurplus) {
+            surplusStratIdx = JRT_IDX;
+            surplusAmount = jrtSurplus;
+        } else {
+            surplusStratIdx = SRT_IDX;
+            surplusAmount = srtSurplus;
+        }
     }
 
     function shareToken() public pure override(IStrategy, Strategy) returns (address) {

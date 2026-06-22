@@ -62,13 +62,22 @@ contract Rebalancer is IRebalancer, AccessControlled {
         uint256 baseAssets
     ) external onlyRole(UPDATER_STRAT_CONFIG_ROLE) {
         require(fromStratIdx != toStratIdx, "SameStrat");
-        (uint256 toJunior, uint256 toSenior) = strategy.debts();
 
-        if (fromStratIdx == 1 && toStratIdx == 0 && toJunior > 0) {
-            require(baseAssets <= toJunior, "ExceedsDebt");
-        } else if (fromStratIdx == 0 && toStratIdx == 1 && toSenior > 0) {
-            require(baseAssets <= toSenior, "ExceedsDebt");
-        }
+        (
+            uint256 deficitStratIdx,
+            uint256 deficitAmount,
+            uint256 surplusStratIdx,
+            uint256 surplusAmount
+        ) = strategy.imbalances();
+
+        require(baseAssets > 0, "ZeroAmount");
+        require(deficitAmount > 0, "NoDeficit");
+        require(surplusAmount > 0, "NoSurplus");
+        require(baseAssets <= deficitAmount, "ExceedsDeficit");
+        require(baseAssets <= surplusAmount, "ExceedsSurplus");
+
+        require(fromStratIdx == surplusStratIdx, "InvalidFromIndex");
+        require(toStratIdx == deficitStratIdx, "InvalidToIndex");
 
         _initiateRebalance(fromStratIdx, toStratIdx, withdrawToken, depositToken, baseAssets);
     }
@@ -79,13 +88,19 @@ contract Rebalancer is IRebalancer, AccessControlled {
         address withdrawToken,
         address depositToken
     ) external onlyRole(UPDATER_STRAT_CONFIG_ROLE) {
-        (uint256 toJunior, uint256 toSenior) = strategy.debts();
-        require(toJunior > 0 || toSenior > 0, "NoDebt");
-        if (toJunior >= toSenior) {
-            _initiateRebalance(1, 0, withdrawToken, depositToken, toJunior);
-        } else {
-            _initiateRebalance(0, 1, withdrawToken, depositToken, toSenior);
-        }
+
+        (
+            uint256 deficitStratIdx,
+            uint256 deficitAmount,
+            uint256 surplusStratIdx,
+            uint256 surplusAmount
+        ) = strategy.imbalances();
+
+        require(deficitAmount > 0, "NoDeficit");
+        require(surplusAmount > 0, "NoSurplus");
+        require(deficitStratIdx != surplusStratIdx, "NoRebalancePath");
+
+        _initiateRebalance(deficitStratIdx, surplusStratIdx, withdrawToken, depositToken, deficitAmount);
     }
 
     function _initiateRebalance(

@@ -15,4 +15,11 @@ interface IRebalanceable {
     function getStratShareToken(uint256 stratIdx) external view returns (address);
     function debts() external view returns (uint256 toJunior, uint256 toSenior);
     function strats(uint256 stratIdx) external view returns (IStrategy);
+
+    function imbalances() external view returns (
+        uint256 deficitStratIdx,
+        uint256 deficitAmount,
+        uint256 surplusStratIdx,
+        uint256 surplusAmount
+    );
 }

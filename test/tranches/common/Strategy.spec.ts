@@ -26,7 +26,8 @@ UTest.create({
         const test = $hh.create(key as TCDOKey, {
             forked: TestHelper.forked ?? 24808600,
             cdoInfo: {
-                pfx: `HHBasicSuite${key}`
+                pfx: `HHBasicSuite${key}`,
+                ...(TestHelper.cdoInfo ?? {}),
             },
             fresh: true
         });

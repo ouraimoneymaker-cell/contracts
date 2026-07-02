@@ -25,7 +25,7 @@ export const SaturnTranche = <ICDO> {
         sharesCooldown: [
             { covPct: 15, feeBps: 0, lock: '28days' },
             { covPct: 30, feeBps: 10, lock: '14days' },
-            { covPct: 0, feeBps: 20, lock: 0 },
+            { covPct: 0, feeBps: 20, lock: '7days' },
         ],
         sUSDatCooldown: 0,
     },

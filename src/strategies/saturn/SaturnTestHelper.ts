@@ -18,6 +18,17 @@ export class SaturnTestHelper implements ITestHelper {
 
     static forked = 24925000;
 
+    static cdoInfo = {
+        jrt: {
+            sharesCooldown: [
+                { covPct: 15, feeBps: 0, lock: '28days' },
+                { covPct: 30, feeBps: 10, lock: '14days' },
+                // No default shares lock in test env
+                { covPct: 0, feeBps: 20, lock: 0 },
+            ]
+        },
+    }
+
     constructor (public test: $hh.Test<SaturnDeployments>) {}
 
     async getStrategyTokensMain() {

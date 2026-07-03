@@ -926,7 +926,6 @@ contract IsolatedVaultIntegration is IsolatedIntegrationDeploy {
         uint256 aliceBalBefore = baseAsset.balanceOf(alice);
         uint256 t = block.timestamp;
 
-        // Before the fix this reverted (IsolatedStrategy has no isJrt()), DoSing every withdrawal.
         vm.prank(alice);
         jrtVault.withdraw(withdrawAmount, alice, alice);
 
@@ -936,11 +935,12 @@ contract IsolatedVaultIntegration is IsolatedIntegrationDeploy {
         ICooldown.TBalanceState memory state = erc20Cooldown.balanceOf(IERC20(address(baseAsset)), alice);
         assertEq(state.pending, withdrawAmount, "Full Spark withdrawal pending in cooldown");
         assertEq(state.claimable, 0, "Nothing claimable yet");
-        // isJrt() is unavailable on the IsolatedStrategy parent, so the catch applies the SRT cooldown.
-        assertEq(state.nextUnlockAt, t + srtCooldown, "SRT cooldown applied (not JRT)");
+        // isJrt() resolves through the MultiStrategy passthrough, so a JRT withdrawal correctly
+        // applies the JRT cooldown (the old try/catch mis-applied the SRT one on the parent revert).
+        assertEq(state.nextUnlockAt, t + jrtCooldown, "JRT cooldown applied");
 
         // After the cooldown elapses, alice claims the full amount.
-        vm.warp(t + srtCooldown + 1);
+        vm.warp(t + jrtCooldown + 1);
         erc20Cooldown.finalize(IERC20(address(baseAsset)), alice);
         assertEq(baseAsset.balanceOf(alice) - aliceBalBefore, withdrawAmount, "Alice claims the full amount after cooldown");
     }

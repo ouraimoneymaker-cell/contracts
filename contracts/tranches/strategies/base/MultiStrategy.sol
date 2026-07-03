@@ -140,6 +140,14 @@ abstract contract MultiStrategy is Strategy, IMultiStrategy, IRebalanceable {
         return strats[stratIdx].shareToken();
     }
 
+    /// @notice Passthrough to the CDO's isJrt.
+    /// @dev A sub-strategy's cdo is this MultiStrategy, so it resolves the tranche side by
+    /// callign cdo.isJrt(); forward that to the real CDO so sub-strategies need no
+    /// awareness that they sit behind a composite strategy.
+    function isJrt(address tranche) external view returns (bool) {
+        return cdo.isJrt(tranche);
+    }
+
     function reduceReserve(address token, uint256 tokenAmount, address receiver) external onlyCDO {
         uint256 len = strats.length;
         for (uint256 i; i < len; i++) {

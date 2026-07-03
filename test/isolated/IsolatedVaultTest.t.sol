@@ -578,6 +578,25 @@ contract IsolatedVaultTest is IsolatedVaultDeploy {
         assertEq(baseAsset.balanceOf(address(juniorStrat)), juniorBefore, "Junior strat should not receive this deposit");
     }
 
+    // isJrt passthrough — composite strategy forwards to the real CDO
+
+    // A sub-strategy's `cdo` is this composite MultiStrategy, so strategy.isJrt must
+    // forward to the real CDO and return the same tranche classification.
+    function test_IsJrt_PassthroughForwardsToCDO() public {
+        assertTrue(strategy.isJrt(address(jrtVault)), "JRT vault classified as junior");
+        assertFalse(strategy.isJrt(address(srtVault)), "SRT vault classified as senior");
+
+        assertEq(strategy.isJrt(address(jrtVault)), cdo.isJrt(address(jrtVault)), "JRT passthrough matches CDO");
+        assertEq(strategy.isJrt(address(srtVault)), cdo.isJrt(address(srtVault)), "SRT passthrough matches CDO");
+    }
+
+    // The CDO reverts with InvalidTranche for a non-tranche address; the passthrough surfaces it.
+    function test_IsJrt_RevertsForUnknownTranche() public {
+        address stranger = makeAddr("stranger");
+        vm.expectRevert(abi.encodeWithSignature("InvalidTranche(address)", stranger));
+        strategy.isJrt(stranger);
+    }
+
     // ─────────────────────────────────────────────────────────────────────────
     // Helpers
     // ─────────────────────────────────────────────────────────────────────────

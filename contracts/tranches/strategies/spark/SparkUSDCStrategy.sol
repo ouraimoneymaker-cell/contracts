@@ -123,14 +123,10 @@ contract SparkUSDCStrategy is Strategy {
 
         uint256 cooldownSeconds = 0;
         if (!shouldSkipCooldown && tranche != address(0) && (usdcCooldownJrt != 0 || usdcCooldownSrt != 0)) {
-            // cdo may be an IsolatedStrategy parent that does not implement isJrt(); fall back to the
-            // SRT cooldown instead of reverting, which would DoS every withdrawal.
-            // tranche == address(0) (the rebalancer path) skips the cooldown entirely.
-            try cdo.isJrt(tranche) returns (bool isJrt) {
-                cooldownSeconds = isJrt ? usdcCooldownJrt : usdcCooldownSrt;
-            } catch {
-                cooldownSeconds = usdcCooldownSrt;
-            }
+            // tranche == address(0) (the rebalancer path) skips the cooldown entirely. For a real
+            // withdrawal cdo.isJrt() resolves the tranche side: directly on a StrataCDO, or via the
+            // MultiStrategy passthrough when this strat sits behind a composite (isolated) strategy.
+            cooldownSeconds = cdo.isJrt(tranche) ? usdcCooldownJrt : usdcCooldownSrt;
         }
         erc20Cooldown.transfer(USDC, sender, receiver, baseAssets, cooldownSeconds);
 

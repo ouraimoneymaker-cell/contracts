@@ -136,7 +136,7 @@ contract SharesCooldown is ISharesCooldown, CooldownBase {
             } else {
                 // Generate unique key if options provided
                 if (strategyOptions.length > 0) {
-                    uint96 nonce = _metaKeyNonce[address(vault)][to]++;
+                    uint96 nonce = ++_metaKeyNonce[address(vault)][to];
                     metaKey = bytes12(uint96(nonce));
                     requestMeta[address(vault)][to][metaKey] = TRequestMeta({
                         strategyOptions: strategyOptions

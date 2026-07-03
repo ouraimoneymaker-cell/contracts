@@ -113,7 +113,9 @@ export namespace $erc20 {
     }
 
     class Tools {
-        @memd.deco.memoize({ keyResolver: x => x.address, maxAge: 2 })
+        // Use a low maxAge because HH resets can redeploy tokens with different decimals.
+        // (i) Redeployments may reuse the same address when the EOA nonce is reset.
+        @memd.deco.memoize({ keyResolver: x => x.address, maxAge: 0.5 })
         static async decimals (erc20: ERC20) {
             return await erc20.decimals();
         }

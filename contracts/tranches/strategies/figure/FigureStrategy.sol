@@ -98,7 +98,7 @@ contract FigureStrategy is Strategy {
         uint256 tokenAmount,
         uint256 baseAssets,
         address owner
-    ) external onlyCDO returns (uint256) {
+    ) public override onlyCDO returns (uint256) {
         SafeERC20.safeTransferFrom(IERC20(token), owner, address(this), tokenAmount);
 
         if (token == address(usdc)) {
@@ -135,7 +135,7 @@ contract FigureStrategy is Strategy {
         uint256 baseAssets,
         address sender,
         address receiver
-    ) external onlyCDO returns (uint256) {
+    ) public override onlyCDO returns (uint256) {
         return withdrawInner(tranche, token, tokenAmount, baseAssets, sender, receiver, false);
     }
 
@@ -150,7 +150,7 @@ contract FigureStrategy is Strategy {
         address sender,
         address receiver,
         bool shouldSkipCooldown
-    ) external onlyCDO returns (uint256) {
+    ) public override onlyCDO returns (uint256) {
         return withdrawInner(tranche, token, tokenAmount, baseAssets, sender, receiver, shouldSkipCooldown);
     }
 

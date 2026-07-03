@@ -38,28 +38,32 @@ abstract contract Strategy is IStrategy, CDOComponent {
         return price * 10 ** (18 - baseAssetDecimals);
     }
 
+    /// @notice Deposits with strategy-specific options.
+    /// @dev Defaults to the plain deposit flow; overrides must enforce onlyCDO.
     function deposit (
-        address /*tranche*/,
-        address /*token*/,
-        uint256 /*tokenAmount*/,
-        uint256 /*baseAssets*/,
-        address /*owner*/,
+        address tranche,
+        address token,
+        uint256 tokenAmount,
+        uint256 baseAssets,
+        address owner,
         bytes memory /*options*/
     ) external virtual returns (uint256) {
-        revert ("NotImplemented");
+        return deposit(tranche, token, tokenAmount, baseAssets, owner);
     }
 
+    /// @notice Withdraws with strategy-specific options.
+    /// @dev Defaults to the plain withdraw flow; overrides must enforce onlyCDO.
     function withdraw (
-        address /*tranche*/,
-        address /*token*/,
-        uint256 /*tokenAmount*/,
-        uint256 /*baseAssets*/,
-        address /*sender*/,
-        address /*receiver*/,
-        bool /*shouldSkipCooldown*/,
+        address tranche,
+        address token,
+        uint256 tokenAmount,
+        uint256 baseAssets,
+        address sender,
+        address receiver,
+        bool shouldSkipCooldown,
         bytes memory /*options*/
     ) external virtual returns (uint256) {
-        revert ("NotImplemented");
+        return withdraw(tranche, token, tokenAmount, baseAssets, sender, receiver, shouldSkipCooldown);
     }
 
     /**
@@ -90,4 +94,29 @@ abstract contract Strategy is IStrategy, CDOComponent {
 
     function convertToAssets (address token, uint256 tokenAmount, Math.Rounding rounding) public view virtual returns (uint256 baseAssets);
     function convertToTokens (address token, uint256 baseAssets, Math.Rounding rounding) public view virtual returns (uint256 tokenAmount);
+
+    function deposit (
+        address tranche,
+        address token,
+        uint256 tokenAmount,
+        uint256 baseAssets,
+        address owner
+    ) public virtual returns (uint256);
+    function withdraw (
+        address tranche,
+        address token,
+        uint256 tokenAmount,
+        uint256 baseAssets,
+        address sender,
+        address receiver
+    ) public virtual returns (uint256);
+    function withdraw (
+        address tranche,
+        address token,
+        uint256 tokenAmount,
+        uint256 baseAssets,
+        address sender,
+        address receiver,
+        bool shouldSkipCooldown
+    ) public virtual returns (uint256);
 }

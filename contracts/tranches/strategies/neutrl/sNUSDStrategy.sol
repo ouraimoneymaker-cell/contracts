@@ -60,7 +60,13 @@ contract sNUSDStrategy is Strategy {
      * @param owner The address of the asset owner from whom to transfer tokens
      * @return The amount of base assets received after deposit
      */
-    function deposit(address tranche, address token, uint256 tokenAmount, uint256 baseAssets, address owner) external onlyCDO returns (uint256) {
+    function deposit(
+        address tranche,
+        address token,
+        uint256 tokenAmount,
+        uint256 baseAssets,
+        address owner
+    ) public override onlyCDO returns (uint256) {
         SafeERC20.safeTransferFrom(IERC20(token), owner, address(this), tokenAmount);
 
         if (token == address(NUSD)) {
@@ -88,11 +94,26 @@ contract sNUSDStrategy is Strategy {
      * @param sender The account that initiated the withdrawal
      * @return The amount of tokens withdrawn (shares for sNUSD, baseAssets for NUSD)
      */
-    function withdraw(address tranche, address token, uint256 tokenAmount, uint256 baseAssets, address sender, address receiver) external onlyCDO returns (uint256) {
+    function withdraw(
+        address tranche,
+        address token,
+        uint256 tokenAmount,
+        uint256 baseAssets,
+        address sender,
+        address receiver
+    ) public override onlyCDO returns (uint256) {
         return withdrawInner(tranche, token, tokenAmount, baseAssets, sender, receiver, false);
     }
 
-    function withdraw(address tranche, address token, uint256 tokenAmount, uint256 baseAssets, address sender, address receiver, bool shouldSkipCooldown) external onlyCDO returns (uint256) {
+    function withdraw(
+        address tranche,
+        address token,
+        uint256 tokenAmount,
+        uint256 baseAssets,
+        address sender,
+        address receiver,
+        bool shouldSkipCooldown
+    ) public override onlyCDO returns (uint256) {
         return withdrawInner(tranche, token, tokenAmount, baseAssets, sender, receiver, shouldSkipCooldown);
     }
 

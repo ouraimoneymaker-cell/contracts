@@ -7,16 +7,16 @@ import { $erc20 } from './utils/$erc20';
 import { l } from 'dequanto/utils/$logger';
 import { $bigint } from 'dequanto/utils/$bigint';
 
-await $hh.test.deploy();
-let { jrtVault, sUSDe,  } = $hh.test.tranches;
-let alice = await $hh.test.createAccount('alice');
+let test = await $hh.deploy('ethena');
+let { jrtVault, sUSDe,  } = test.tranches;
+let alice = await test.createAccount('alice');
 let USDE_INITIAL = 500;
 
 UTest.create({
     async $before () {
-        let { client } = $hh.test;
-        let { sUSDe, USDe, strategy, jrtVault, srtVault, feed, accounting } = $hh.test.tranches;
-        let { deployer } = $hh.test;
+        let { client } = test;
+        let { sUSDe, USDe, strategy, jrtVault, srtVault, feed, accounting } = test.tranches;
+        let { deployer } = test;
         // Disable default cooldowns
         await sUSDe.$receipt().setCooldownDuration(deployer, 0);
         await strategy.$receipt().setCooldowns(deployer, 0n, 0n);
@@ -40,13 +40,13 @@ UTest.create({
 
         await $erc4626.deposit(jrtVault, alice, USDE_INITIAL);
 
-        await $hh.test.snapshot('meta-vault');
+        await test.snapshot('meta-vault');
     },
     async $after () {
-        await $hh.test.reset();
+        await test.wipe();
     },
     async $teardown () {
-        await $hh.test.reset('meta-vault');
+        await test.reset('meta-vault');
     },
     async 'ERC4626 standard' () {
         return UTest.create({
@@ -73,7 +73,7 @@ UTest.create({
         })
     },
     async 'maxWithdraw' () {
-        let bob = await $hh.test.createAccount('bob');
+        let bob = await test.createAccount('bob');
         let assets = 33;
         await $erc4626.mint(sUSDe, bob, assets);
         await $erc4626.depositMeta(jrtVault, sUSDe.address, bob, assets);

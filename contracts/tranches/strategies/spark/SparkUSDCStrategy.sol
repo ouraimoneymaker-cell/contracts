@@ -58,7 +58,7 @@ contract SparkUSDCStrategy is Strategy {
         /* baseAssets */
         address owner
     )
-        external
+        public override
         onlyCDO
         returns (uint256)
     {
@@ -85,7 +85,7 @@ contract SparkUSDCStrategy is Strategy {
         uint256 baseAssets,
         address sender,
         address receiver
-    ) external onlyCDO returns (uint256) {
+    ) public override onlyCDO returns (uint256) {
         return _withdrawInner(tranche, token, tokenAmount, baseAssets, sender, receiver, false);
     }
 
@@ -97,7 +97,7 @@ contract SparkUSDCStrategy is Strategy {
         address sender,
         address receiver,
         bool shouldSkipCooldown
-    ) external onlyCDO returns (uint256) {
+    ) public override onlyCDO returns (uint256) {
         return _withdrawInner(
             tranche, token, tokenAmount, baseAssets, sender, receiver, shouldSkipCooldown
         );

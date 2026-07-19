@@ -1187,17 +1187,10 @@ contract DYSAccounting is IAccounting, CDOComponent {
     }
 
     /// @notice Determines if reconciliation should occur based on NAV changes
-    /// @dev Reconciliation is triggered when the absolute difference between NAV values exceeds
-    ///      the dust threshold and the initial NAV is non-zero. The threshold is set to 1000 wei
-    ///      to avoid unnecessary reconciliation due to roundings while still capturing
-    ///      meaningful changes.
     /// @param navT0 The NAV at time T0 (previous state)
     /// @param navT1 The NAV at time T1 (current state)
     /// @return bool True if reconciliation should occur, false otherwise
     function _shouldReconcile (uint256 navT0, uint256 navT1) internal pure returns (bool) {
-        uint256 diff = navT1 > navT0
-            ? navT1 - navT0
-            : navT0 - navT1;
-        return diff > 1_000 && navT0 > 0;
+        return navT0 != navT1;
     }
 }

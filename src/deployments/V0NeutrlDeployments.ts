@@ -236,6 +236,7 @@ export class V0NeutrlDeployments {
         const acm = await this.ensureACM();
         const info = this.neutrlInfo;
         let { contract: jrtVault } = await this.ds.ensureWithProxy(Tranche, {
+            arguments: [false],
             id: 'NUSDJrt',
             initialize: [
                 this.owner.address,
@@ -247,6 +248,7 @@ export class V0NeutrlDeployments {
             ]
         });
         let { contract: srtVault } = await this.ds.ensureWithProxy(Tranche, {
+            arguments: [false],
             id: 'NUSDSrt',
             initialize: [
                 this.owner.address,

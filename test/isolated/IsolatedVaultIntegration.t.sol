@@ -113,7 +113,7 @@ contract IsolatedIntegrationDeploy is Test {
         vm.label(address(oracle), "Oracle");
         depositVault = new MockDepositVault(mHYPER);
         vm.label(address(depositVault), "DepositVault");
-        redemptionVault = new MockRedemptionVault(mHYPER, baseAsset);
+        redemptionVault = new MockRedemptionVault(mHYPER, baseAsset, address(0));
         redemptionVault.setInstantEnabled(true);
         redemptionVault.setOracle(oracle);
         vm.label(address(redemptionVault), "RedemptionVault");
@@ -226,7 +226,7 @@ contract IsolatedIntegrationDeploy is Test {
     }
 
     function _deployTranche(string memory symbol, string memory name) internal returns (Tranche) {
-        Tranche trancheImpl = new Tranche();
+        Tranche trancheImpl = new Tranche(false);
         address proxy = address(new ERC1967Proxy(
             address(trancheImpl),
             abi.encodeWithSelector(

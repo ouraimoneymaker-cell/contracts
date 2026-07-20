@@ -155,6 +155,11 @@ contract Accounting is IAccounting, CDOComponent {
         (jrtNavT1, srtNavT1) = calcEffectiveNav(jrtNavT1, srtNavT1);
     }
 
+    /// @notice Returns current amounts; continuous accounting has no projection.
+    function totalAssetsUnprojected () external view returns (uint256 jrtNavUnprojected, uint256 srtNavUnprojected, uint256 reserveNavUnprojected) {
+        return totalAssets();
+    }
+
     /// @notice Returns the updated total assets for each tranche and the reserve
     /// @dev This method is used by the Tranches to get their updated total assets for the current block
     /// @dev Actively reads NAV from the strategy.

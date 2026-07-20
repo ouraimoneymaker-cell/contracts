@@ -173,6 +173,12 @@ contract DiscreteAccounting is IAccounting, CDOComponent {
         (jrtNavT1Projected, srtNavT1) = calcEffectiveNav(jrtNavT1Projected, srtNavT1);
     }
 
+    /// @notice Returns projected or reconciled amounts without projection unwind.
+    /// @dev Unprojected redemption pricing is not supported. Use DYSAccounting if projection unwind is required.
+    function totalAssetsUnprojected () external view returns (uint256 jrtNavUnprojected, uint256 srtNavUnprojected, uint256 reserveNavUnprojected) {
+        return totalAssets();
+    }
+
     /// @notice Returns the updated total assets for each tranche and the reserve
     /// @dev This method is used by the Tranches to get their updated total assets for the current block
     /// @dev The strategy must return NAV with new rewards, using accounting's current NAV and timestamp.

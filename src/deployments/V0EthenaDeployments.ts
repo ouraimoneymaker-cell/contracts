@@ -243,6 +243,7 @@ export class V0EthenaDeployments {
         const acm = await this.ensureACM();
         const info = this.ethenaInfo;
         let { contract: jrtVault } = await this.ds.ensureWithProxy(Tranche, {
+            arguments: [false],
             id: 'USDeJrt',
             initialize: [
                 this.owner.address,
@@ -254,6 +255,7 @@ export class V0EthenaDeployments {
             ]
         });
         let { contract: srtVault } = await this.ds.ensureWithProxy(Tranche, {
+            arguments: [false],
             id: 'USDeSrt',
             initialize: [
                 this.owner.address,

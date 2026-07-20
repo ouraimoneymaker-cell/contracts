@@ -57,6 +57,12 @@ contract DYSAccounting is IAccounting, CDOComponent {
     ///         and uses the rate-based senior true-up formula instead of the proportional nav-time formula.
     bool public immutable useRatesForReconciliation;
 
+    /// @notice When true, Junior covers paid-out projected Senior assets unwound at reconciliation.
+    bool public immutable useJuniorCoversPaidSrtProjection;
+
+    /// @notice When true, redemptions exclude unreconciled projected gains.
+    bool public immutable useConservativeRedemptionPrice;
+
     /// @dev The oracle to fetch the latest APR floor and APR base.
     IAprPairFeed public aprPairFeed;
 
@@ -156,6 +162,9 @@ contract DYSAccounting is IAccounting, CDOComponent {
 
     uint256 public srtProjectedPnLTime;
 
+    /// @notice Track paid-out projected amount during the current epoch
+    uint256 public srtPaidProjected;
+
     /// @notice Accumulated benchmark Senior PnL during the current epoch
     uint256 public srtPnLBenchmark;
 
@@ -204,11 +213,20 @@ contract DYSAccounting is IAccounting, CDOComponent {
     event FeeRetentionChanged(uint256 feeJrtRetention, uint256 feeSrtRetention);
     event FloorRateChanged(uint256 floorRate);
 
-    constructor(uint256 navDecimals, bool useBenchmarkProjection_, bool useNavAtReconciliation_, bool useRatesForReconciliation_) {
+    constructor(
+        uint256 navDecimals,
+        bool useBenchmarkProjection_,
+        bool useNavAtReconciliation_,
+        bool useRatesForReconciliation_,
+        bool useJuniorCoversPaidSrtProjection_,
+        bool useConservativeRedemptionPrice_
+    ) {
         ONE_ASSET = 10 ** navDecimals;
         useBenchmarkProjection = useBenchmarkProjection_;
         useNavAtReconciliation = useNavAtReconciliation_;
         useRatesForReconciliation = useRatesForReconciliation_;
+        useJuniorCoversPaidSrtProjection = useJuniorCoversPaidSrtProjection_;
+        useConservativeRedemptionPrice = useConservativeRedemptionPrice_;
     }
 
     function initialize(
@@ -263,7 +281,7 @@ contract DYSAccounting is IAccounting, CDOComponent {
         jrtNavTime += jrAssets * dt;
         navTime += systemAssets * dt;
         navTimeNet += nav * dt;
-        srtProjectedPnLTime += srtPnLProjected * dt;
+        srtProjectedPnLTime += Math.saturatingSub(srtPnLProjected, srtPaidProjected) * dt;
         lastAccrual = block.timestamp;
     }
 
@@ -330,6 +348,52 @@ contract DYSAccounting is IAccounting, CDOComponent {
             );
         (jrtNavT1Projected, srtNavT1) = calcEffectiveNav(jrtNavT1Projected, srtNavT1);
         return (jrtNavT1Projected, srtNavT1, reserveNavT1);
+    }
+
+    /// @notice Returns the updated total assets excluding projection for each tranche and the reserve
+    function totalAssetsUnprojected()
+        public
+        view
+        returns (
+            uint256 jrtNavT1Real,
+            uint256 srtNavT1,
+            uint256 reserveNavT1
+        )
+    {
+        uint256 navT1 = cdo.totalStrategyAssets(nav, _navAnchor());
+        bool isReconciliation = _shouldReconcile(nav, navT1);
+        (
+            ,
+            jrtNavT1Real,
+            srtNavT1,
+            reserveNavT1
+        ) = calculateNAVSplit(
+                nav,
+                jrtNavProjected,
+                jrtBaseNav,
+                srtBaseNav,
+                reserveNav,
+                navT1
+            );
+
+        if (isReconciliation) {
+            // Reconciliation already replaces projected NAV with realized NAV.
+            (jrtNavT1Real, srtNavT1) = calcEffectiveNav(jrtNavT1Real, srtNavT1);
+            return (jrtNavT1Real, srtNavT1, reserveNavT1);
+        }
+
+        uint256 storedLiveProjection = Math.saturatingSub(srtPnLProjected, srtPaidProjected);
+        uint256 freshProjection = srtNavT1 > srtBaseNav
+            ? srtNavT1 - srtBaseNav
+            : 0;
+
+        uint256 projUndo = Math.min(storedLiveProjection + freshProjection, srtNavT1);
+
+        uint256 srtNet = srtNavT1 - projUndo;
+        uint256 jrtNet = jrtNavT1Real + projUndo;
+
+        (jrtNet, srtNet) = calcEffectiveNav(jrtNet, srtNet);
+        return (jrtNet, srtNet, reserveNavT1);
     }
 
     /// @notice Returns the current saved real total assets
@@ -452,6 +516,45 @@ contract DYSAccounting is IAccounting, CDOComponent {
                 srtAssetsOut
             );
         }
+        if (srtAssetsOut > 0 && srtPnLProjected > 0) {
+            if (useConservativeRedemptionPrice) {
+                // Conservative redemptions pay only net Senior assets
+                // Return the unpaid projection to Junior real NAV
+                uint256 srtNetNav = Math.saturatingSub(srtBaseNav, srtPnLProjected);
+                uint256 unpaidProjection = Math.mulDiv(
+                    srtAssetsOut,
+                    srtPnLProjected,
+                    srtNetNav
+                );
+                unpaidProjection = Math.min(unpaidProjection, srtPnLProjected);
+                srtPnLProjected -= unpaidProjection;
+                // srtBaseNav includes Senior projection funded from jrtBaseNav
+                srtBaseNav -= unpaidProjection;
+
+                jrtBaseNav += unpaidProjection;
+                jrtNavProjected = Math.max(jrtNavProjected, jrtBaseNav);
+            } else {
+                // Paid projection = srtAssetsOut * liveProjection / srtGrossNav
+                srtPaidProjected += Math.mulDiv(
+                    srtAssetsOut,
+                    srtPnLProjected - srtPaidProjected,
+                    srtBaseNav
+                );
+            }
+        }
+        if (useConservativeRedemptionPrice && jrtAssetsOut > 0 && jrtNavProjected > jrtBaseNav && jrtBaseNav > 0) {
+            uint256 jrtProjection = jrtNavProjected - jrtBaseNav;
+            uint256 unpaidProjection = Math.mulDiv(
+                jrtAssetsOut,
+                jrtProjection,
+                jrtBaseNav
+            );
+
+            unpaidProjection = Math.min(unpaidProjection, jrtProjection);
+            jrtNavProjected -= unpaidProjection;
+            jrtNavProjected = Math.max(jrtNavProjected, jrtBaseNav);
+        }
+
         jrtBaseNav = jrtBaseNav + jrtAssetsIn - jrtAssetsOut;
         jrtNavProjected = jrtNavProjected + jrtAssetsIn - jrtAssetsOut;
         srtBaseNav = srtBaseNav + srtAssetsIn - srtAssetsOut;
@@ -730,6 +833,25 @@ contract DYSAccounting is IAccounting, CDOComponent {
             srtPnLRealized = 0;
         }
 
+        // Make Junior cover paid-out projected Senior assets charged to the remaining Senior NAV.
+        // Cap srtPaidProjected by the paid projection actually included in `projUndo`.
+        if (useJuniorCoversPaidSrtProjection && projUndo > 0) {
+            uint256 paidProjectedUnwound = projUndo == srtPnLProjected
+                ? srtPaidProjected
+                // Here, pre-unwind srtNavT0' < srtPnLProjected.
+                // Recover pre-unwind srtNavT0' as srtNavT0 + projUndo.
+                : Math.saturatingSub(srtNavT0 + projUndo + srtPaidProjected, srtPnLProjected);
+
+            if (srtPnLRealized < int256(paidProjectedUnwound)) {
+                // Only adjust if realized PnL does not already cover it
+                if (srtPnLRealized > 0) {
+                    srtPnLRealized = int256(paidProjectedUnwound);
+                } else {
+                    srtPnLRealized += int256(paidProjectedUnwound);
+                }
+            }
+        }
+
         // Cap Senior loss to available safe assets
         if (srtPnLRealized < -int256(srtSafe)) {
             srtPnLRealized = -int256(srtSafe);
@@ -835,6 +957,7 @@ contract DYSAccounting is IAccounting, CDOComponent {
             // At reconciliation, the true-up was already applied, so reset
             srtPnLProjected = 0;
             srtPnLBenchmark = 0;
+            srtPaidProjected = 0;
             srtNavTime = 0;
             jrtNavTime = 0;
             navTime = 0;

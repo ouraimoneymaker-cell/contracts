@@ -233,7 +233,7 @@ contract SparkUSDCDeploy is Test {
     }
 
     function _deployTranche(string memory name, string memory symbol) internal returns (Tranche) {
-        Tranche trancheImpl = new Tranche();
+        Tranche trancheImpl = new Tranche(false);
         address proxy = address(
             new ERC1967Proxy(
                 address(trancheImpl),

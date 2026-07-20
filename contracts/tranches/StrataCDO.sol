@@ -114,6 +114,18 @@ contract StrataCDO is IErrors, IStrataCDO, IStrataCDOSetters, AccessControlled {
         return srtAssets;
     }
 
+    /// @notice Calculates the unprojected total assets for a specific tranche
+    /// @dev Uses accounting's unprojected asset split when supported.
+    /// @param tranche The address of the tranche (junior or senior) to return unprojected assets for
+    /// @return The unprojected total assets allocated to the specified tranche
+    function totalAssetsUnprojected(address tranche) public view returns (uint256) {
+        (uint256 jrtAssets, uint256 srtAssets, ) = accounting.totalAssetsUnprojected();
+        if (isJrt(tranche)) {
+            return jrtAssets;
+        }
+        return srtAssets;
+    }
+
     /// @notice Returns the current total assets held in the strategy
     /// @dev This method retrieves the fresh amount of assets directly from the strategy contract
     /// @return uint256 The current total assets in the strategy
@@ -127,6 +139,12 @@ contract StrataCDO is IErrors, IStrataCDO, IStrataCDOSetters, AccessControlled {
 
     function pricePerShare(address tranche) public view returns (uint256) {
         uint256 assets = totalAssets(tranche);
+        uint256 supply = ITranche(tranche).totalSupply();
+        return calculatePricePerShare(assets, supply, baseAssetDecimals);
+    }
+
+    function pricePerShareUnprojected(address tranche) public view returns (uint256) {
+        uint256 assets = totalAssetsUnprojected(tranche);
         uint256 supply = ITranche(tranche).totalSupply();
         return calculatePricePerShare(assets, supply, baseAssetDecimals);
     }

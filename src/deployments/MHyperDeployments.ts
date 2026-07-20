@@ -24,6 +24,7 @@ import { MockERC20 } from '@0xc/hardhat/MockERC20/MockERC20';
 import { MidasCooldownRequestImpl } from '@0xc/hardhat/MidasCooldownRequestImpl/MidasCooldownRequestImpl';
 import { MockUSDe } from '@0xc/hardhat/MockUSDe/MockUSDe';
 import { AprPairFeed } from '@0xc/hardhat/AprPairFeed/AprPairFeed';
+import { MockMidasCooldownInstantImpl } from '@0xc/hardhat/MockMidasCooldownInstantImpl/MockMidasCooldownInstantImpl';
 
 
 type TUnderlyingContracts = {
@@ -100,13 +101,18 @@ export class MHyperDeployments extends DeploymentsBase<{
             const midasDepositVault = await this.ds.ensureContract(MockDepositVault, {
                 arguments: [ mHYPER.address ]
             });
+
+            const oracle = await this.ds.ensureContract(MockOracle);
             const midasRedemptionVault = await this.ds.ensureContract(MockRedemptionVault, {
                 arguments: [
                     mHYPER.address,
-                    USDC.address
+                    USDC.address,
+                    oracle.address,
                 ]
             });
-            const oracle = await this.ds.ensureContract(MockOracle);
+            if (this.cdoInfo?.ContractVersions?.unstakeImpl === 'MockInstant') {
+                await midasRedemptionVault.$receipt().setInstantEnabled(this.deployer, true);
+            }
 
             return {
                 base: USDC as any,
@@ -145,7 +151,10 @@ export class MHyperDeployments extends DeploymentsBase<{
 
     async ensureUnstakeImplemenetations(): Promise<{ token: TEth.Address; impl: IBeaconProxy }[]> {
         let { USDC, mHYPER, redemptionVault  } = await this.ensureUnderlying();
-        const { contractBeaconProxy: midasCooldownRequestImpl } = await this.ds.ensureWithBeacon(MidasCooldownRequestImpl, {
+        let Contract = this.cdoInfo?.ContractVersions?.unstakeImpl === 'MockInstant'
+            ? MockMidasCooldownInstantImpl
+            : MidasCooldownRequestImpl
+        const { contractBeaconProxy: midasCooldownRequestImpl } = await this.ds.ensureWithBeacon(Contract, {
             id: `${this.pfx}CooldownRequestBeacon`,
             arguments: [ USDC.address, mHYPER.address, redemptionVault.address ],
             initialize: [$address.ZERO, $address.ZERO]

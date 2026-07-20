@@ -28,7 +28,7 @@ import { l } from 'dequanto/utils/$logger';
 import { CDOLens } from '@0xc/hardhat/CDOLens/CDOLens';
 import { TwoStepConfigManager } from '@0xc/hardhat/TwoStepConfigManager/TwoStepConfigManager';
 import { ContractBase } from 'dequanto/contracts/ContractBase';
-import { Constructor } from 'dequanto/utils/types';
+import { Constructor, ParametersFromSecond } from 'dequanto/utils/types';
 import { SharesCooldown } from '@0xc/hardhat/SharesCooldown/SharesCooldown';
 import { IStrategy } from '@0xc/hardhat/IStrategy/IStrategy';
 import { SafeAccount } from 'dequanto/models/TAccount';
@@ -139,6 +139,10 @@ export abstract class DeploymentsBase<T extends ICdoDeploymentsBase = any> {
             for (let key in this.params.cdoInfo) {
                 let values = this.params.cdoInfo[key];
                 let current = info[key];
+                if (typeof current !== 'object' || (values != null && typeof values !== 'object')) {
+                    info[key] = values;
+                    continue;
+                }
                 info[key] = {
                     ...current,
                     ...values
@@ -332,8 +336,10 @@ export abstract class DeploymentsBase<T extends ICdoDeploymentsBase = any> {
 
         const acm = await this.ensureACM();
         const info = this.cdoInfo;
+        const useConservativeRedemptionPrice = info.ContractVersions?.accountingOptions?.useConservativeRedemptionPrice ?? false;
         let { contract: jrtVault } = await this.ds.ensureWithProxy(Tranche, {
             id: `${this.pfx}Jrt`,
+            arguments: [useConservativeRedemptionPrice],
             initialize: [
                 this.owner.address,
                 acm.address,
@@ -345,6 +351,7 @@ export abstract class DeploymentsBase<T extends ICdoDeploymentsBase = any> {
         });
         let { contract: srtVault } = await this.ds.ensureWithProxy(Tranche, {
             id: `${this.pfx}Srt`,
+            arguments: [useConservativeRedemptionPrice],
             initialize: [
                 this.owner.address,
                 acm.address,
@@ -568,7 +575,7 @@ export abstract class DeploymentsBase<T extends ICdoDeploymentsBase = any> {
         const acm = await this.ensureACM();
         const { feed } = await this.ensureFeeds();
         const { base } = await this.ensureUnderlying();
-        const decimals = await base.decimals();
+        const decimals:bigint = await base.decimals();
         const accountingType = this.cdoInfo.ContractVersions?.accounting;
         const Contract = accountingType === 'continuous'
             ? Accounting
@@ -584,13 +591,27 @@ export abstract class DeploymentsBase<T extends ICdoDeploymentsBase = any> {
                     : [ decimals, false ] as [ bigint, boolean ];
 
         const accountingOptions = this.cdoInfo.ContractVersions?.accountingOptions;
+
         const useBenchmark = accountingOptions?.useBenchmark ?? false;
         const useRatesForReconciliation = accountingOptions?.useRatesForReconciliation ?? false;
+        const useNavAtReconciliation = accountingOptions?.useNavAtReconciliation ?? false;
+        const useJuniorCoversPaidSrtProjection = accountingOptions?.useJuniorCoversPaidSrtProjection ?? true;
+        const useConservativeRedemptionPrice = accountingOptions?.useConservativeRedemptionPrice ?? false;
+
+        const dysAccounting = [
+            decimals,
+            useBenchmark,
+            useNavAtReconciliation,
+            useRatesForReconciliation,
+            useJuniorCoversPaidSrtProjection,
+            useConservativeRedemptionPrice
+        ] as ParametersFromSecond<DYSAccounting['$constructor']>
+
         const { contract: accounting } = await this.ds.ensureWithProxy(Contract as typeof Accounting, {
             id: `${this.pfx}Accounting`,
             initialize: [ this.owner.address, acm.address, cdo, feed.address ],
             arguments: (accountingType === 'dys'
-                ? [ decimals, useBenchmark, false, useRatesForReconciliation ]
+                ? dysAccounting
                 : args) as [ bigint ],
         });
         return accounting;

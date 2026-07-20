@@ -68,10 +68,12 @@ UTest.create({
 
         const { contract: accounting } = await ds.ensureWithProxy(DYSAccounting, {
             arguments: [
-                18n,
-                false,
-                true,
-                true
+                18n,   // navDecimals
+                false, // useBenchmarkProjection_
+                true,  // useNavAtReconciliation_
+                true,  // useRatesForReconciliation_
+                false, // useJuniorCoversPaidSrtProjection_
+                false, // useConservativeRedemptionPrice_
             ],
             initialize: [
                 deployer.address,
@@ -230,11 +232,15 @@ UTest.create({
                 // NAV gain = 750 * 0.50 = 375
                 // total NAV = 1125
                 //
-                // avg SRT NAV = (500 * 0.5 + 250 * 0.5) = 375
-                // SRT gain = 375 * 0.25 = 93.75
-                // SRT = 250 + 93.75 = 343.75
-                // JRT = 1125 - 343.75 = 781.25
-                await expectApprox(781.25, 343.75);
+                // srtPaidProjected = 250 * 12.5 / 512.5 = 6.0975609756
+                // liveProjected = 12.5 - 6.0975609756 = 6.4024390244
+                // srtNavTime = 500 * 0.5 + 262.5 * 0.5 = 381.25
+                // srtProjectedPnLTime = 6.4024390244 * 0.5 = 3.2012195122
+                // srtNavTimeReal = 381.25 - 3.2012195122 = 378.0487804878
+                // SRT gain = 378.0487804878 * 0.50 * 0.50 = 94.5121951220
+                // SRT = 250 + 94.5121951220 = 344.5121951220
+                // JRT = 1125 - 344.5121951220 = 780.4878048780
+                await expectApprox(780.4878048780, 344.5121951220);
             },
             async 'junior deposit does not increase senior rate reward'() {
                 await deposit(500, 500);

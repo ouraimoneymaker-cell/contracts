@@ -63,9 +63,10 @@ contract MockRedemptionVault {
     address public requestRedeemer;
 
 
-    constructor(MockMToken _mToken, MockBaseAsset _baseAsset) {
+    constructor(MockMToken _mToken, MockBaseAsset _baseAsset, MockOracle _oracle) {
         mToken = _mToken;
         baseAsset = _baseAsset;
+        oracle = _oracle;
         instantEnabled = false;
     }
 

@@ -94,13 +94,13 @@ abstract contract MultiStrategy is Strategy, IMultiStrategy, IRebalanceable {
     /// @param navT0 The cached total assets from the accounting
     /// @param timestamp The last reconciliation timestamp used to check for new rewards
     /// @return total The sum of all strategy assets if new rewards are detected, otherwise returns navT0
-    /// @dev Returns navT0 if any strategy reports no new rewards (nav == 0), signaling the accounting
+    /// @dev Returns navT0 if any strategy reports no new rewards (nav == type(uint256).max), signaling the accounting
     ///      contract to continue NAV projection. When all strategies report new rewards, returns the
     ///      updated total, triggering full reconciliation in the accounting contract.
     function totalAssets(uint256 navT0, uint256 timestamp) public view returns (uint256 total) {
         for (uint256 i; i < strats.length; i++) {
-            uint256 nav = strats[i].totalAssets(0, timestamp);
-            if (nav == 0) {
+            uint256 nav = strats[i].totalAssets(type(uint256).max, timestamp);
+            if (nav == type(uint256).max) {
                 return navT0;
             }
             total += nav;

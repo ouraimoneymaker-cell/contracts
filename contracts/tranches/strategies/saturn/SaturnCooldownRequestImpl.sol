@@ -1,16 +1,10 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity ^0.8.28;
 
-import {
-    Initializable
-} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
-import {
-    SafeERC20
-} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import {
-    IERC721Receiver
-} from "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {IERC721Receiver} from "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
 import {IUnstakeHandler} from "../../interfaces/cooldown/IUnstakeHandler.sol";
 import {IsUSDat} from "./IsUSDat.sol";
 
@@ -34,7 +28,7 @@ import {IsUSDat} from "./IsUSDat.sol";
  *
  * Note: Saturn's withdrawal queue has no fixed SLA. Processing typically takes ~7 days.
  */
-contract SaturnCooldownRequestImpl is IUnstakeHandler, Initializable, IERC721Receiver  {
+contract SaturnCooldownRequestImpl is IUnstakeHandler, Initializable, IERC721Receiver {
     IsUSDat public immutable sUSDat;
     IERC20 public immutable USDat;
 
@@ -44,7 +38,6 @@ contract SaturnCooldownRequestImpl is IUnstakeHandler, Initializable, IERC721Rec
     uint256 public requestedAt;
     uint256 public requestedAmount;
     uint256 public requestId;
-
 
     bool public pending;
 
@@ -57,10 +50,7 @@ contract SaturnCooldownRequestImpl is IUnstakeHandler, Initializable, IERC721Rec
         USDat = IERC20(sUSDat_.asset());
     }
 
-    function initialize(
-        address handler_,
-        address user_
-    ) public virtual initializer {
+    function initialize(address handler_, address user_) public virtual initializer {
         user = user_;
         handler = handler_;
     }
@@ -104,9 +94,11 @@ contract SaturnCooldownRequestImpl is IUnstakeHandler, Initializable, IERC721Rec
     function finalize() external returns (uint256 amount) {
         require(msg.sender == handler, "NotAuthorized");
 
-        // claim() reverts if no processed requests exist (NothingToClaim).
+        // claimBatch() reverts if the request is not processable.
         // This is the desired behavior — UnstakeCooldown wraps in try/catch.
-        sUSDat.claim();
+        uint256[] memory requestIds = new uint256[](1);
+        requestIds[0] = requestId;
+        sUSDat.claimBatch(requestIds);
 
         amount = USDat.balanceOf(address(this));
         if (amount > 0) {
@@ -153,12 +145,11 @@ contract SaturnCooldownRequestImpl is IUnstakeHandler, Initializable, IERC721Rec
      *         that the receiver can accept the NFT when the receiver's code.length > 0, which is
      *         the case for this contract.
      */
-    function onERC721Received(
-        address operator,
-        address from,
-        uint256 tokenId,
-        bytes calldata data
-    ) external override returns (bytes4) {
+    function onERC721Received(address operator, address from, uint256 tokenId, bytes calldata data)
+        external
+        override
+        returns (bytes4)
+    {
         return IERC721Receiver.onERC721Received.selector;
     }
 }

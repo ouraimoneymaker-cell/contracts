@@ -146,8 +146,8 @@ contract IsolatedStrategy is MultiStrategy, IIsolatedStrategy {
 
         if (liquidAllocationFloor > 0) {
             uint256 target = Math.mulDiv(jrtNavT0 + srtNavT0, liquidAllocationFloor, 1e18);
-            if (jrtAssets < target) {
-                // Override accounting NAVs to maintain the liquid allocation floor for Junior
+            if (jrtNavT0 < target) {
+                // Raise Junior's target to the liquid allocation floor without reducing its entitlement.
                 srtNavT0 = jrtNavT0 + srtNavT0 - target;
                 jrtNavT0 = target;
             }

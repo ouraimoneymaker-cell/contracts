@@ -378,9 +378,9 @@ contract IsolatedVaultIntegration is IsolatedIntegrationDeploy {
 
         // Junior strat (Spark) fully drained
         assertApproxEqAbs(juniorStrat.totalAssets(), 0, 1, "Junior strat (Spark) fully drained");
-        // Junior is drained below the 30% liquid allocation floor, so imbalances() caps its deficit at
-        // the floor target (0.3 * navTotal = 0.3 * 1500 = 450), not the full 1000 borrowed.
-        assertApproxEqAbs(_debtToJunior(), DEPOSIT_AMOUNT * 45 / 100, 2, "Junior deficit capped at liquid allocation floor");
+        // Junior's accounting entitlement is above the 30% liquid allocation floor, so imbalances()
+        // reports the full entitlement deficit instead of capping it at the floor target.
+        assertApproxEqAbs(_debtToJunior(), DEPOSIT_AMOUNT, 2, "Junior deficit follows entitlement above floor");
 
         // Senior strat (Midas) provided the remainder
         uint256 remainder = withdrawAmount - DEPOSIT_AMOUNT;

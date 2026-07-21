@@ -11,6 +11,8 @@ import { IsolatedStrategy } from '@0xc/hardhat/IsolatedStrategy/IsolatedStrategy
 import { SparkUSDCStrategy } from '@0xc/hardhat/SparkUSDCStrategy/SparkUSDCStrategy';
 import { MidasStrategy } from '@0xc/hardhat/MidasStrategy/MidasStrategy';
 import { Rebalancer } from '@0xc/hardhat/Rebalancer/Rebalancer';
+import { $erc4626 } from '../utils/$erc4626';
+import { $test } from '../utils/$test';
 
 const test = $hh.create('spkMhyperIso');
 
@@ -184,6 +186,40 @@ UTest.create({
         $require.eq(await rebalancer.pendingCount(), 0n, 'No pending rebalances');
         l`Async rebalance complete: debt cyan<${$bigint.toEther(debtBefore, 6)}> → 0`;
     },
+    async 'Liquid allocation floor rebalancing' () {
+        strategy.$receipt().setLiquidAllocationFloor(deployer, BigInt(0.3e18));
+
+        await test.snapshot('imbalances');
+        return UTest.create({
+            async $teardown () {
+                await test.reset('imbalances');
+            },
+            async 'Junior deficit uses entitlement when it is above the floor' () {
+                await $erc4626.deposit(jrtVault, deployer, 1000);
+                await $erc4626.deposit(srtVault, deployer, 1000);
+                await $erc4626.withdraw(srtVault, deployer, 800);
+
+                const jrtStratAssets = await juniorStrat.totalAssets();
+                $test.compare(jrtStratAssets, 200, 6);
+
+                const imbalances = await strategy.imbalances();
+                $require.eq(imbalances.deficitStratIdx, 0n);
+                $test.compare(imbalances.deficitAmount, 800, 6);
+            },
+            async 'Junior deficit uses the floor target when entitlement is below the floor' () {
+                await $erc4626.deposit(jrtVault, deployer, 100);
+                await $erc4626.deposit(srtVault, deployer, 1000);
+                await $erc4626.withdraw(srtVault, deployer, 50);
+
+                const jrtStratAssets = await juniorStrat.totalAssets();
+                $test.compare(jrtStratAssets, 50, 6);
+                const target = (1000 + 50) * .3;
+                const imbalances = await strategy.imbalances();
+                $require.eq(imbalances.deficitStratIdx, 0n);
+                $test.compare(imbalances.deficitAmount, target - 50, 6);
+            },
+        })
+    }
 });
 
 

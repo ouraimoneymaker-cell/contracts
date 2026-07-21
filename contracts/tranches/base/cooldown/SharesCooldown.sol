@@ -188,7 +188,7 @@ contract SharesCooldown is ISharesCooldown, CooldownBase {
     function finalize(ITranche vault, address token, address user) external returns (uint256 claimed) {
         return finalize(vault, token, user, block.timestamp);
     }
-    function finalize(ITranche vault, address token, address user, uint256 at) public returns (uint256 claimed) {
+    function finalize(ITranche vault, address token, address user, uint256 at) public nonReentrant returns (uint256 claimed) {
         if (token == address(0)) {
             claimed = _finalizeAll(address(vault), user, address(0), at, bytes(""));
         } else {
@@ -208,7 +208,7 @@ contract SharesCooldown is ISharesCooldown, CooldownBase {
     /// @param token The output asset to redeem for all claimable requests.
     /// @param user The request owner (must be msg.sender).
     /// @return claimed The total shares redeemed.
-    function finalizeWithTokenOverride(IERC20 vault, address token, address user) external onlyUser(user) returns (uint256 claimed) {
+    function finalizeWithTokenOverride(IERC20 vault, address token, address user) external onlyUser(user) nonReentrant returns (uint256 claimed) {
         claimed = _finalizeAll(address(vault), user, token, block.timestamp, bytes(""));
         emit Finalized(vault, user, claimed);
         return claimed;
@@ -221,7 +221,7 @@ contract SharesCooldown is ISharesCooldown, CooldownBase {
     /// @param user The request owner (must be msg.sender).
     /// @param strategyOptions Custom strategy options for redemption.
     /// @return claimed The total shares redeemed.
-    function finalizeWithOverrides(IERC20 vault, address token, address user, bytes calldata strategyOptions) external onlyUser(user) returns (uint256 claimed) {
+    function finalizeWithOverrides(IERC20 vault, address token, address user, bytes calldata strategyOptions) external onlyUser(user) nonReentrant returns (uint256 claimed) {
         claimed = _finalizeAll(address(vault), user, token, block.timestamp, strategyOptions);
         emit Finalized(vault, user, claimed);
         return claimed;
@@ -235,7 +235,7 @@ contract SharesCooldown is ISharesCooldown, CooldownBase {
     /// @param user The request owner (must be msg.sender).
     /// @param strategyOptions Custom strategy options for redemption (empty to use request's original options).
     /// @return claimed The shares redeemed.
-    function finalizeRequest(IERC20 vault, uint256 idx, address token, address user, bytes calldata strategyOptions) external onlyUser(user) returns (uint256 claimed) {
+    function finalizeRequest(IERC20 vault, uint256 idx, address token, address user, bytes calldata strategyOptions) external onlyUser(user) nonReentrant returns (uint256 claimed) {
         claimed = _finalizeRequest(address(vault), idx, user, token, strategyOptions);
         emit Finalized(vault, user, claimed);
         return claimed;
@@ -262,7 +262,7 @@ contract SharesCooldown is ISharesCooldown, CooldownBase {
         uint256 i,
         TFinalizeWithFeeGuard calldata guard,
         bytes calldata strategyOptions
-    ) external onlyUser(user) returns (uint256 claimed) {
+    ) external onlyUser(user) nonReentrant returns (uint256 claimed) {
         TRequest[] storage requests = activeRequests[address(vault)][user];
         uint256 len = requests.length;
         require(i < len, "OutOfRange");
@@ -315,7 +315,7 @@ contract SharesCooldown is ISharesCooldown, CooldownBase {
     /// @param user The recipient address of the redemption request (must be msg.sender)
     /// @param i The index of the request in the user's active requests array
     /// @param guard Optional user-provided guard rails to enforce expected values
-    function cancel(IERC20 vault, address user, uint256 i, TCancelGuard calldata guard) external onlyUser(user) {
+    function cancel(IERC20 vault, address user, uint256 i, TCancelGuard calldata guard) external onlyUser(user) nonReentrant {
 
         TRequest[] storage requests = activeRequests[address(vault)][user];
         uint256 len = requests.length;
@@ -460,7 +460,6 @@ contract SharesCooldown is ISharesCooldown, CooldownBase {
             : req.token;
 
         claimed = req.shares;
-        redeem(ITranche(vault), token, claimed, user, options);
 
         if (req.metaKey != bytes12(0)) {
             delete requestMeta[vault][user][req.metaKey];
@@ -469,6 +468,8 @@ contract SharesCooldown is ISharesCooldown, CooldownBase {
             requests[idx] = requests[len - 1];
         }
         requests.pop();
+
+        redeem(ITranche(vault), token, claimed, user, options);
         return claimed;
     }
 
@@ -528,9 +529,9 @@ contract SharesCooldown is ISharesCooldown, CooldownBase {
                 continue;
             }
             bytes memory options = requestMeta[address(vault)][user][req.metaKey].strategyOptions;
-            if (strategyOptions.length == 0 && options.length > 0) {
+            bool redeemUnbatched = strategyOptions.length == 0 && options.length > 0;
+            if (redeemUnbatched) {
                 claimedUnbatched += req.shares;
-                redeem(ITranche(vault), tokenToRedeem, req.shares, user, options);
             } else {
                 // Batch shares for redemption with empty or overriden options
                 claimed += req.shares;
@@ -545,6 +546,9 @@ contract SharesCooldown is ISharesCooldown, CooldownBase {
             requests.pop();
             unchecked {
                 len--;
+            }
+            if (redeemUnbatched) {
+                redeem(ITranche(vault), tokenToRedeem, req.shares, user, options);
             }
         }
         if (claimed > 0) {

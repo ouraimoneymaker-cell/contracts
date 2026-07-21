@@ -1209,7 +1209,7 @@ contract DYSAccounting is IAccounting, CDOComponent {
     ///                 - If Junior cannot cover the full 5 USDC, it transfers up to its safe assets
     function setFloorRate(uint256 rate) external onlyOwner {
         require(rate <= 0.01e18, "FloorRateTooHigh"); // max 1%/day
-        updateAccountingInner(cdo.totalStrategyAssets(nav, navTimestamp));
+        updateAccountingInner(cdo.totalStrategyAssets(nav, _navAnchor()));
         floorRate = rate;
 
         windowStartSrtNav = srtBaseNav;

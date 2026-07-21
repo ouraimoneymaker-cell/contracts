@@ -56,15 +56,6 @@ contract IsolatedStrategy is MultiStrategy, IIsolatedStrategy {
         emit LiquidAllocationFloorSet(floor_);
     }
 
-    function setStrats(IStrategy juniorStrat_, IStrategy seniorStrat_) external onlyOwner {
-        juniorStrat = juniorStrat_;
-        seniorStrat = seniorStrat_;
-        IStrategy[] memory strats_ = new IStrategy[](2);
-        strats_[JRT_IDX] = juniorStrat_;
-        strats_[SRT_IDX] = seniorStrat_;
-        _setStrats(strats_);
-        emit StratsSet(address(juniorStrat_), address(seniorStrat_));
-    }
 
     // JRT deposits go to junior strat (index 0), SRT to senior strat (index 1).
     function _depositStratIndex(address tranche) internal view override returns (uint256) {

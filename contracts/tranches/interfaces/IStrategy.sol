@@ -61,7 +61,8 @@ interface IStrategy is ICDOComponent {
     function getSupportedTokens () external view returns (IERC20[] memory);
     function ensureRedeemable(address caller, address metaToken, uint256 baseAssets) external view;
 
-    function depositFeeBps(address tokenIn) external view returns (uint256 feeBps);
+
+    function depositFeeBps(address tranche, address tokenIn, uint256 tokenAmount) external view returns (uint256 feeBps);
 
     function maxWithdraw(address tranche, address tokenIn, uint256 tokenAmount) external view returns (uint256 assets);
     function maxDeposit(address tranche, address tokenIn, uint256 tokenAmount) external view returns (uint256 assets);

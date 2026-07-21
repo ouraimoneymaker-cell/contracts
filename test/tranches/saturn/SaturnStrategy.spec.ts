@@ -224,7 +224,7 @@ UTest.create({
         await $tranche.deposit(srtVault, deployer, base, 10_000);
 
         // Check Saturn' exit fee
-        const fee = await strategy.depositFeeBps();
+        const fee = await strategy.depositFeeBps(jrtVault.address, base.address, BigInt(10_000e18));
         $require.eq(await jrtVault.totalAssets(), BigInt(10_000e6 * (1 - Number(fee) / 10000)));
         $require.eq(await srtVault.totalAssets(), BigInt(10_000e6 * (1 - Number(fee) / 10000)));
 

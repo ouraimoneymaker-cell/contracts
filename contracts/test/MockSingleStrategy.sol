@@ -104,6 +104,7 @@ contract MockSingleStrategy is IStrategy {
     }
 
     function depositFeeBps(address) external pure returns (uint256) { return 0; }
+    function depositFeeBps(address,address,uint256) external pure returns (uint256) { return 0; }
 
     function getCDOAddress() external pure returns (address) { return address(0); }
 

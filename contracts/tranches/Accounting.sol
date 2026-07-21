@@ -448,7 +448,11 @@ contract Accounting is IAccounting, CDOComponent {
 
 
     function calculateRiskPremium () internal view returns (UD60x18){
-        UD60x18 tvlRatio = UD60x18.wrap(srtBaseNav == 0 ? 0 : (srtBaseNav * 1e18 / (srtBaseNav + jrtBaseNav)));
+        (
+            uint256 jrtEffective,
+            uint256 srtEffective
+        ) = calcEffectiveNav(jrtBaseNav, srtBaseNav);
+        UD60x18 tvlRatio = UD60x18.wrap(srtEffective == 0 ? 0 : (srtEffective * 1e18 / (srtEffective + jrtEffective)));
         UD60x18 riskPremium = calculateRiskPremiumInner(riskX, riskY, riskK, tvlRatio);
         return riskPremium;
     }

@@ -1054,8 +1054,13 @@ contract DYSAccounting is IAccounting, CDOComponent {
     }
 
     function calculateRiskPremium() internal view returns (UD60x18) {
+        (
+            uint256 jrtEffective,
+            uint256 srtEffective
+        ) = calcEffectiveNav(jrtNavProjected, srtBaseNav);
+
         UD60x18 tvlRatio = UD60x18.wrap(
-            srtBaseNav == 0 ? 0 : ((srtBaseNav * 1e18) / (srtBaseNav + jrtNavProjected))
+            srtEffective == 0 ? 0 : ((srtEffective * 1e18) / (srtEffective + jrtEffective))
         );
         UD60x18 riskPremium = calculateRiskPremiumInner(
             riskX,

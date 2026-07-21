@@ -567,7 +567,27 @@ UTest.create({
                 await mine('1year');
                 await distribute('1year', 0.50, 0);
                 await expectApprox(1000, 500);
-            }
+            },
+            async 'floor window per day at -1% floor for senior and -2% for underlying protocol'() {
+                // Disable RiskPremium for this floor test so the Senior loss matches the raw rate loss.
+                // With the default riskX=50%, a -2% daily rate loss becomes only -1% for Senior,
+                // because srtFactor = 1 - riskPremium = 50%.
+                await accounting.storage.$set('riskX', 0);
+
+                await accounting.$receipt().setFloorRate(deployer, BigInt(0.01e18));
+                await deposit(500, 1000);
+
+                await mine('1day');
+                await deposit(0, 1000);
+
+                // 2% loss a day = -730%
+                await distribute('1day', -7.30, -7.30);
+                await forceReconciliation();
+
+                // max senior daily loss = 2000 * 1% = 20
+                // total loss = 2500 * 2% = 50
+                await expectApprox(500 - 30, 1980);
+            },
         })
     }
 })

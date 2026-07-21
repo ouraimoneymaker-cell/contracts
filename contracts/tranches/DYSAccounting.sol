@@ -258,7 +258,9 @@ contract DYSAccounting is IAccounting, CDOComponent {
         windowNetFlows = 0;
         floorRate = 0;
         valuationPrice = 1e18;
-        if (useNavAtReconciliation) lastReconciliation = block.timestamp;
+        if (useNavAtReconciliation) {
+            lastReconciliation = block.timestamp;
+        }
         if (useRatesForReconciliation) {
             strategyRate = cdo_.strategy().getRate();
         }
@@ -970,6 +972,9 @@ contract DYSAccounting is IAccounting, CDOComponent {
                 uint256 newRate = cdo.strategy().getRate();
                 if (newRate > 0) strategyRate = newRate;
             }
+            if (useNavAtReconciliation) {
+                lastReconciliation = block.timestamp;
+            }
 
             // Floor window rollover
             if (block.timestamp >= windowEnd) {
@@ -994,7 +999,6 @@ contract DYSAccounting is IAccounting, CDOComponent {
         }
 
         updateIndex();
-        if (useNavAtReconciliation && navT1 != nav) lastReconciliation = block.timestamp;
         nav = navT1;
         navTimestamp = block.timestamp;
         lastAccrual = block.timestamp;

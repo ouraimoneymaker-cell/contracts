@@ -194,7 +194,7 @@ contract Rebalancer is IRebalancer, AccessControlled {
             pendingRebalances[idx] = pendingRebalances[last];
         }
         pendingRebalances.pop();
-        emit RebalanceCompleted(pending.fromStratIdx, pending.toStratIdx, pending.baseAssets);
+        emit RebalanceCompleted(pending.fromStratIdx, pending.toStratIdx, baseAssets);
     }
 
     /// @notice Cancels a pending rebalance when the underlying redemption is canceled by the protocol.

@@ -195,7 +195,7 @@ contract IsolatedIntegrationDeploy is Test {
         );
 
         // 11. Rebalancer
-        Rebalancer rebalancerImpl = new Rebalancer();
+        Rebalancer rebalancerImpl = new Rebalancer(4, 100e6);
         rebalancer = Rebalancer(address(new ERC1967Proxy(
             address(rebalancerImpl),
             abi.encodeWithSelector(Rebalancer.initialize.selector, owner, address(acm), address(strategy), address(unstakeCooldown))

@@ -236,8 +236,12 @@ export class SpkMhyperIsoDeployments extends DeploymentsBase<{
         });
 
         // Rebalancer: executes cross-strat rebalances (immediate for Spark, deferred for Midas).
+        const minRebalanceBaseAssets = this.isTestnet()
+            ? BigInt(1e6)
+            : BigInt(50e6)
         const { contract: rebalancer } = await this.ds.ensureWithProxy(Rebalancer, {
             id: `${this.pfx}Rebalancer`,
+            arguments: [4n, minRebalanceBaseAssets],
             initialize: [
                 this.owner.address,
                 acm.address,

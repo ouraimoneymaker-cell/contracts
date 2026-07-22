@@ -100,7 +100,7 @@ contract IsolatedVaultDeploy is Test {
 
         // 8. deploy rebalancer
         MockUnstakeCooldown mockUnstakeCooldown = new MockUnstakeCooldown();
-        Rebalancer rebalancerImpl = new Rebalancer();
+        Rebalancer rebalancerImpl = new Rebalancer(4, 100e18);
         rebalancer = Rebalancer(address(new ERC1967Proxy(
             address(rebalancerImpl),
             abi.encodeWithSelector(Rebalancer.initialize.selector, owner, address(acm), address(strategy), address(mockUnstakeCooldown))

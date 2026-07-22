@@ -2,6 +2,7 @@
 pragma solidity ^0.8.28;
 
 import { IStrategy } from "./IStrategy.sol";
+import {IAccounting} from "./IAccounting.sol";
 import { ITranche } from "./ITranche.sol";
 import { ISharesCooldown } from "./cooldown/ISharesCooldown.sol";
 
@@ -15,7 +16,7 @@ interface IStrataCDO {
         ERC4626
     }
 
-
+    function accounting() external view returns (IAccounting);
     function strategy() external view returns (IStrategy);
     function sharesCooldown() external view returns (ISharesCooldown);
 

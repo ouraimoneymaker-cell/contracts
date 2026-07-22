@@ -113,7 +113,7 @@ contract IsolatedIntegrationDeploy is Test {
         vm.label(address(oracle), "Oracle");
         depositVault = new MockDepositVault(mHYPER);
         vm.label(address(depositVault), "DepositVault");
-        redemptionVault = new MockRedemptionVault(mHYPER, baseAsset, address(0));
+        redemptionVault = new MockRedemptionVault(mHYPER, baseAsset, oracle);
         redemptionVault.setInstantEnabled(true);
         redemptionVault.setOracle(oracle);
         vm.label(address(redemptionVault), "RedemptionVault");
@@ -189,10 +189,13 @@ contract IsolatedIntegrationDeploy is Test {
             owner,
             address(acm),
             IStrataCDO(address(cdo)),
-            IStrategy(address(juniorStrat)),
-            IStrategy(address(seniorStrat)),
             3e17 // juniorAllocationFloor: 30%
         );
+        IsolatedStrategy(address(strategy)).configureStrategies(
+            IStrategy(address(juniorStrat)),
+            IStrategy(address(seniorStrat))
+        );
+
 
         // 11. Rebalancer
         Rebalancer rebalancerImpl = new Rebalancer(4, 100e6);
@@ -213,7 +216,6 @@ contract IsolatedIntegrationDeploy is Test {
 
         acm.grantRole(PAUSER_ROLE, owner);
 
-        strategy.setAccounting(IAccounting(address(accounting)));
         cdo.configure(
             IAccounting(address(accounting)),
             IStrategy(address(strategy)),

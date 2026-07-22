@@ -74,4 +74,6 @@ interface IStrategy is ICDOComponent {
     // Returns the exchange rate of 1 share in base asset terms, scaled to 1e18.
     // For MultiStrategy, it should return the senior sub-strategy rate.
     function getRate() external view returns (uint256);
+
+    function configure () external;
 }

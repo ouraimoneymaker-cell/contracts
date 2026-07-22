@@ -119,4 +119,8 @@ abstract contract Strategy is IStrategy, CDOComponent {
         address receiver,
         bool shouldSkipCooldown
     ) public virtual returns (uint256);
+
+    function configure () external virtual onlyCDO {
+        // No default configuration
+    }
 }

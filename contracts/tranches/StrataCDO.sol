@@ -381,6 +381,7 @@ contract StrataCDO is IErrors, IStrataCDO, IStrataCDOSetters, AccessControlled {
         jrtVault = jrtVault_;
         srtVault = srtVault_;
 
+        strategy_.configure();
         jrtVault_.configure();
         srtVault_.configure();
     }

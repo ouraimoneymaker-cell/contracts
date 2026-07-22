@@ -19,6 +19,7 @@ import { MockSingleStrategy } from "../../contracts/test/MockSingleStrategy.sol"
 import { MockUnstakeCooldown } from "../../contracts/test/MockUnstakeCooldown.sol";
 import { IUnstakeCooldown } from "../../contracts/tranches/interfaces/cooldown/ICooldown.sol";
 import { Rebalancer } from "../../contracts/tranches/strategies/base/Rebalancer.sol";
+import { MultiStrategy } from "../../contracts/tranches/strategies/base/MultiStrategy.sol";
 import { IERC20Metadata } from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 
 contract IsolatedVaultDeploy is Test {
@@ -68,35 +69,38 @@ contract IsolatedVaultDeploy is Test {
         srtVault = _deployTranche("SRT", "Senior Tranche");
 
 
-        // 5. deploy strats
-        juniorStrat = new MockSingleStrategy(baseAsset);
-        seniorStrat = new MockSingleStrategy(baseAsset);
-        vm.label(address(juniorStrat), "JuniorStrat");
-        vm.label(address(seniorStrat), "SeniorStrat");
-
-        // 6. deploy apr feed
+        // 5. deploy apr feed
         aprFeed = new MockAprPairFeed();
         vm.label(address(aprFeed), "MockAprPairFeed");
 
-        // 7. deploy isolated strategy
+        // 6. deploy isolated strategy
         IsolatedStrategy strategyImpl = new IsolatedStrategy();
         strategy = IsolatedStrategy(
             address(
                 new ERC1967Proxy(
                     address(strategyImpl),
                     abi.encodeWithSelector(
-                        IsolatedStrategy.initialize.selector,
+                        MultiStrategy.initialize.selector,
                         owner,
                         address(acm),
                         IStrataCDO(address(cdo)),
-                        juniorStrat,
-                        seniorStrat,
                         3e17 // juniorAllocationFloor: 30%
                     )
                 )
             )
         );
         vm.label(address(strategy), "IsolatedStrategy");
+
+        // 7. deploy strats
+        juniorStrat = new MockSingleStrategy(baseAsset, address(strategy));
+        seniorStrat = new MockSingleStrategy(baseAsset, address(strategy));
+        vm.label(address(juniorStrat), "JuniorStrat");
+        vm.label(address(seniorStrat), "SeniorStrat");
+
+        strategy.configureStrategies(
+            juniorStrat,
+            seniorStrat
+        );
 
         // 8. deploy rebalancer
         MockUnstakeCooldown mockUnstakeCooldown = new MockUnstakeCooldown();
@@ -128,7 +132,6 @@ contract IsolatedVaultDeploy is Test {
 
         acm.grantRole(PAUSER_ROLE, owner);
 
-        strategy.setAccounting(IAccounting(address(accounting)));
         cdo.configure(IAccounting(address(accounting)), IStrategy(address(strategy)), ITranche(address(jrtVault)), ITranche(address(srtVault)));
         cdo.setActionStates(address(0), true, true);
 

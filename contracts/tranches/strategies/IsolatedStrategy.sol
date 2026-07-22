@@ -31,17 +31,14 @@ contract IsolatedStrategy is MultiStrategy, IIsolatedStrategy {
         _srtWithdrawOrderPacked = IndexPackerLib.pack2(JRT_IDX, SRT_IDX);
     }
 
-    function initialize(
-        address owner_,
-        address acm_,
-        IStrataCDO cdo_,
+    function configureStrategies(
         IStrategy juniorStrat_,
-        IStrategy seniorStrat_,
-        uint256 liquidAllocationFloor_
-    ) external initializer {
-        AccessControlled_init(owner_, acm_);
-        cdo = cdo_;
-        liquidAllocationFloor = liquidAllocationFloor_;
+        IStrategy seniorStrat_
+    ) external onlyOwner {
+        require(address(juniorStrat) == address(0), "SubStrategiesConfigured");
+        require(juniorStrat_.getCDOAddress() == address(this), "InvalidStrategyCDO");
+        require(seniorStrat_.getCDOAddress() == address(this), "InvalidStrategyCDO");
+
         juniorStrat = juniorStrat_;
         seniorStrat = seniorStrat_;
         IStrategy[] memory strats_ = new IStrategy[](2);

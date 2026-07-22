@@ -75,7 +75,7 @@ contract CDOLens is OwnableUpgradeable {
     }
 
     function getAPRsBreakdownInner (IStrataCDOApi cdo) internal view returns (TAPRsBreakdown memory) {
-        IAccountingApi accounting = cdo.accounting();
+        IAccountingApi accounting = IAccountingApi(address(cdo.accounting()));
 
         IAprPairFeed feed = accounting.aprPairFeed();
 
@@ -260,8 +260,8 @@ interface IAccountingApi is IAccounting {
     function riskK () external view returns (UD60x18);
     function reserveBps () external view returns (uint256);
 }
-interface IStrataCDOApi is IStrataCDO{
-    function accounting() external view returns (IAccountingApi);
+interface IStrataCDOApi is IStrataCDO {
+
 }
 
 interface IChainlinkPriceFeed {

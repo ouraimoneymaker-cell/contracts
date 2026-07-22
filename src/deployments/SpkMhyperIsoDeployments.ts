@@ -163,21 +163,15 @@ export class SpkMhyperIsoDeployments extends DeploymentsBase<{
     ): Promise<{ strategy: IsolatedStrategy }> {
         const { USDC, DAI, USDS, spVault, mHYPER, depositVault, redemptionVault, oracle } = await this.ensureUnderlying();
 
-        // IsolatedStrategy must exist before sub-strats (they reference it as their parent),
-        // but strat addresses aren't known until both sub-strats are deployed.
-        // Deploy the proxy without calling initialize by presenting a stripped ABI to the
-        // deployment framework (which requires the exact initialize arg count). After bith
-        // sub-strats are deployed we call initialize().
-        class IsolatedStrategyDeferInit extends IsolatedStrategy {
-            constructor(...args: ConstructorParameters<typeof IsolatedStrategy>) {
-                super(...args);
-                this.abi = this.abi.filter((x: any) => x.name !== 'initialize') as any;
-            }
-        }
-
-        const { contract: strategyProxy } = await this.ds.ensureWithProxy(IsolatedStrategyDeferInit as any, {
+        const { contract: strategyProxy } = await this.ds.ensureWithProxy(IsolatedStrategy, {
             id: `${this.pfx}IsolatedStrategy`,
             arguments: [],
+            initialize: [
+                this.owner.address,
+                acm.address,
+                cdo.address,
+                300000000000000000n, // juniorAllocationFloor: 30% (0.3e18 WAD)
+            ]
         });
         // Use the full binding for all subsequent calls so initialize() is available.
         const strategy = new IsolatedStrategy(strategyProxy.address, this.ds.client);
@@ -219,18 +213,14 @@ export class SpkMhyperIsoDeployments extends DeploymentsBase<{
 
         // Both sub-strats are ready — initialize IsolatedStrategy.
         await this.ds.configure(strategy, {
-            title: 'Initialize IsolatedStrategy',
+            title: 'Configure IsolatedStrategy Strategies',
             // cdo() is set during initialize and safe to read before init (no array access).
-            shouldUpdate: async () => $address.eq(await strategy.cdo(), $address.ZERO),
+            shouldUpdate: async () => $address.eq(await strategy.juniorStrat(), $address.ZERO),
             updater: async () => {
-                await strategy.$receipt().initialize(
+                await strategy.$receipt().configureStrategies(
                     this.owner,
-                    this.owner.address,
-                    acm.address,
-                    cdo.address,
                     juniorStrat.address,
                     seniorStrat.address,
-                    300000000000000000n, // juniorAllocationFloor: 30% (0.3e18 WAD)
                 );
             },
         });
@@ -255,15 +245,6 @@ export class SpkMhyperIsoDeployments extends DeploymentsBase<{
             shouldUpdate: async () => $address.eq(await strategy.rebalancer(), $address.ZERO),
             updater: async () => {
                 await strategy.$receipt().setRebalancer(this.owner, rebalancer.address);
-            },
-        });
-
-        const accounting = await this.ensureAccounting(cdo.address);
-        await this.ds.configure(strategy, {
-            title: 'Set Accounting on IsolatedStrategy',
-            shouldUpdate: async () => $address.eq(await strategy.accounting(), $address.ZERO),
-            updater: async () => {
-                await strategy.$receipt().setAccounting(this.owner, accounting.address);
             },
         });
 

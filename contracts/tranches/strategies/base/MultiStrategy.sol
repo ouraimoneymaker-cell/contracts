@@ -6,6 +6,7 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {IMultiStrategy} from "../../interfaces/IMultiStrategy.sol";
 import {IStrategy} from "../../interfaces/IStrategy.sol";
+import {IStrataCDO} from "../../interfaces/IStrataCDO.sol";
 import {IRebalancer, IRebalanceable} from "../../interfaces/IRebalancer.sol";
 import {IAccounting} from "../../interfaces/IAccounting.sol";
 import {Strategy} from "../../Strategy.sol";
@@ -29,11 +30,30 @@ abstract contract MultiStrategy is Strategy, IMultiStrategy, IRebalanceable {
 
     event StratNavSnapshot(uint256[] navs);
     event RebalancerSet(address indexed rebalancer);
-    event AccountingSet(address indexed accounting);
 
     modifier onlyRebalancer() {
         if (msg.sender != address(rebalancer)) revert InvalidCaller(msg.sender);
         _;
+    }
+
+    function initialize(
+        address owner_,
+        address acm_,
+        IStrataCDO cdo_,
+        uint256 liquidAllocationFloor_
+    ) external virtual initializer {
+        MultiStrategy_init(owner_, acm_, cdo_, liquidAllocationFloor_);
+    }
+    function MultiStrategy_init(
+        address owner_,
+        address acm_,
+        IStrataCDO cdo_,
+        uint256 liquidAllocationFloor_
+    ) internal onlyInitializing {
+        AccessControlled_init(owner_, acm_);
+        cdo = cdo_;
+        require(address(cdo_.accounting()) == address(0), "CdoAlreadyConfigured");
+        liquidAllocationFloor = liquidAllocationFloor_;
     }
 
     function _depositStratIndex(address tranche) internal view virtual returns (uint256);
@@ -111,14 +131,14 @@ abstract contract MultiStrategy is Strategy, IMultiStrategy, IRebalanceable {
     }
 
     function setRebalancer(IRebalancer rebalancer_) external onlyOwner {
+        if (address(rebalancer) != address(0)) {
+            require(rebalancer.totalAssets() == 0, "CurrentRebalancerActive");
+        }
+        require(rebalancer_.totalAssets() == 0, "NewRebalancerActive");
         rebalancer = rebalancer_;
         emit RebalancerSet(address(rebalancer_));
     }
 
-    function setAccounting(IAccounting accounting_) external onlyOwner {
-        accounting = accounting_;
-        emit AccountingSet(address(accounting_));
-    }
 
     function withdrawForRebalance(uint256 stratIdx, address token, uint256 baseAssets, address receiver) external onlyRebalancer returns (uint256 sharesAmount){
         IStrategy strat = strats[stratIdx];
@@ -268,5 +288,10 @@ abstract contract MultiStrategy is Strategy, IMultiStrategy, IRebalanceable {
 
     function supportsToken(address token) external view returns (bool) {
         return _supportedTokens[token];
+    }
+
+    function configure () external override(IStrategy, Strategy) onlyCDO {
+        accounting = cdo.accounting();
+        require(address(accounting) != address(0), "UnconfiguredCDO");
     }
 }

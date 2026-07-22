@@ -667,6 +667,14 @@ contract DiscreteAccounting is IAccounting, CDOComponent {
         aprSrt = UD60x18Ext.max(aprTarget_, aprSrt1);
     }
 
+    function syncAprs() internal {
+        (bool modified, UD60x18 aprTarget_, UD60x18 aprBase_) = fetchAprs();
+        if (modified) {
+            emit AprDataChangedViaPush(aprTarget_, aprBase_);
+        } else {
+            updateAprSrt(aprTarget_, aprBase_);
+        }
+    }
     /// @dev Calculates the desired gain based on the change in target index over a period
     /// @return The calculated gain (positive) or loss (negative) as an int256
     function calculateGain (uint256 navT0, uint256 targetIndexT1, uint256 targetIndexT0) internal pure returns (int256) {
@@ -695,13 +703,7 @@ contract DiscreteAccounting is IAccounting, CDOComponent {
     // Trigger fetching new APRs to update srtTargetIndex
     function onAprChanged () external onlyRole(UPDATER_FEED_ROLE)  {
         updateAccountingInner(cdo.totalStrategyAssets(nav, _navAnchor()));
-        (bool modified, UD60x18 aprTarget_, UD60x18 aprBase_) = fetchAprs();
-        if (modified) {
-            emit AprDataChangedViaPush(aprTarget_, aprBase_);
-        } else {
-            // If APRs are unchanged, recalculate aprSrt using old APRs and the post-accounting TVL ratio
-            updateAprSrt(aprTarget_, aprBase_);
-        }
+        syncAprs();
     }
 
     /// @notice Sets the risk premium parameters used in calculating the risk-adjusted APR
@@ -724,21 +726,16 @@ contract DiscreteAccounting is IAccounting, CDOComponent {
         updateAprSrt(aprTarget, aprBase);
     }
 
-    /// @notice Sets the APRs Feed contract for fetching APR target and APR base
-    /// @dev This feed provides the external APR values used in calculations
-    /// @param aprPairFeed_ The address of the new APRs Feed contract
-    /// @dev Only callable by the protocol owner
-    /// @dev IMPORTANT: When changing the APR feed, the Owner MUST execute onAprChanged() atomically
-    ///      BEFORE and AFTER calling this function:
-    ///      1. Call onAprChanged() BEFORE setAprPairFeed() to finalize the old SRT index period
-    ///      2. Call setAprPairFeed() to update the feed address
-    ///      3. Call onAprChanged() AFTER setAprPairFeed() to start the new period with updated APRs
-    ///      This ensures proper index continuity and prevents accounting discrepancies.
+    /// @notice Sets the APR feed contract for fetching APR target and APR base.
+    /// @dev Finalizes accounting with the current feed before switching, then starts the new APR period.
+    /// @param aprPairFeed_ The address of the new APR feed contract.
     function setAprPairFeed (IAprPairFeed aprPairFeed_) external onlyOwner {
-        // integrity check
         require(aprPairFeed_.decimals() == APR_FEED_DECIMALS, "InvalidFeed");
+        updateAccountingInner(cdo.totalStrategyAssets(nav, _navAnchor()));
+        syncAprs();
         aprPairFeed = aprPairFeed_;
         emit AprPairFeedChanged(address(aprPairFeed_));
+        syncAprs();
     }
 
     /// @notice Sets the percentage of gains allocated to the reserve

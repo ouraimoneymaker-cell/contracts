@@ -53,6 +53,7 @@ abstract contract MultiStrategy is Strategy, IMultiStrategy, IRebalanceable {
         AccessControlled_init(owner_, acm_);
         cdo = cdo_;
         require(address(cdo_.accounting()) == address(0), "CdoAlreadyConfigured");
+        require(liquidAllocationFloor_ <= 1e18, "InvalidLiquidAllocationFloor");
         liquidAllocationFloor = liquidAllocationFloor_;
     }
 

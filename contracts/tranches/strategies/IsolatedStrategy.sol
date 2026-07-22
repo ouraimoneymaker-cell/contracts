@@ -49,6 +49,7 @@ contract IsolatedStrategy is MultiStrategy, IIsolatedStrategy {
     }
 
     function setLiquidAllocationFloor(uint256 floor_) external onlyOwner {
+        require(floor_ <= 1e18, "InvalidLiquidAllocationFloor");
         liquidAllocationFloor = floor_;
         emit LiquidAllocationFloorSet(floor_);
     }

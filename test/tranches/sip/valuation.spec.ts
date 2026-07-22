@@ -1,6 +1,5 @@
 import { UTest } from 'atma-utest'
 import { $hh } from '../utils/$hh';
-import { DiscreteAccounting } from '@0xc/hardhat/DiscreteAccounting/DiscreteAccounting';
 import { $erc4626 } from '../utils/$erc4626';
 import { $require } from 'dequanto/utils/$require';
 import { $test } from '../utils/$test';
@@ -9,20 +8,21 @@ import { $address } from 'dequanto/utils/$address';
 import { $bigint } from 'dequanto/utils/$bigint';
 import { $strata } from '../utils/$strata';
 import { $ethena } from '../utils/$ethena';
-
+import { DYSAccounting } from '@0xc/hardhat/DYSAccounting/DYSAccounting';
+import { TEth } from 'dequanto/models/TEth';
+import { $accounting } from '../utils/$accounting';
 
 
 const test = await $hh.deploy('ethena', {
     cdoInfo: {
-        ContractVersions: { accounting: 'discrete' }
+        ContractVersions: { accounting: 'continuous' }
     },
-    fresh: true,
 });
 
-const accounting = test.tranches.accounting as any as DiscreteAccounting;
+const accounting = test.tranches.accounting as any as DYSAccounting;
 const { deployer, client } = test;
-const { cdo, jrtVault, srtVault, USDe, sUSDe, feed } = test.tranches;
-
+const { cdo, jrtVault, srtVault, sUSDe } = test.tranches;
+const alice = await test.createAccount('alice');
 
 UTest.create({
 
@@ -39,7 +39,7 @@ UTest.create({
         await test.wipe();
     },
 
-    async 'should drop to 0.50$ moving the JRT liquidity to SRT at 50:50 coverage'() {
+    async 'applies 0.50 valuation loss by shifting Junior liquidity to Senior at 50:50 coverage'() {
         await $erc4626.deposit(jrtVault, deployer, 100);
         await $erc4626.deposit(srtVault, deployer, 100);
         $require.eq(await jrtVault.totalAssets(), BigInt(100e18));
@@ -111,8 +111,7 @@ UTest.create({
         $require.eq(await srtVault.totalAssets(), BigInt(100e18));
     },
 
-    async 'should check redemptions'() {
-        const alice = await test.createAccount('alice');
+    async 'handles redemptions during valuation loss'() {
         await $erc4626.deposit(jrtVault, alice, 10_000);
         await $erc4626.deposit(srtVault, alice, 5);
 
@@ -151,8 +150,7 @@ UTest.create({
             , `Remains 10_000$ in junior's base NAV minus senior coverage and redemption`
         );
     },
-    async 'should deplete junior' () {
-        const alice = await test.createAccount('alice');
+    async 'depletes Junior to the buffer during severe valuation loss' () {
         await $erc4626.deposit(jrtVault, alice, 10);
         await $erc4626.deposit(srtVault, alice, 100);
         await $erc4626.deposit(srtVault, deployer, 3);
@@ -165,7 +163,7 @@ UTest.create({
             async $teardown () {
                 await test.reset('redeem-sr');
             },
-            async 'alice should redeem 100%' () {
+            async 'allows Alice to redeem 100% of Senior shares' () {
                 const srRedeemed = await $erc4626.redeem(srtVault, alice, '100%');
                 $test.eqDiff(srRedeemed, BigInt(109e18), BigInt(.5e18));
                 const [
@@ -183,7 +181,7 @@ UTest.create({
                 $require.eq(srtNav, BigInt(3e18), `SRT base NAV should be 3 Assets (100 redeemed of of 103)`);
                 $require.eq(srtAssets, jrtNav + srtNav - jrtAssets, `SRT should contain all from JRT minus 1 buffer asset`);
             },
-            async 'alice should redeem 50%' () {
+            async 'allows Alice to redeem 50% of Senior shares' () {
                 const srRedeemed = await $erc4626.redeem(srtVault, alice, '50%');
                 $test.eqDiff(srRedeemed, BigInt(109e18 / 2), BigInt(.5e18));
                 const [
@@ -202,5 +200,129 @@ UTest.create({
                 $require.eq(srtAssets, jrtNav + srtNav - jrtAssets, `SRT should contain all from JRT minus 1 buffer asset`);
             },
         });
+    },
+
+    async 'sets Senior maxDeposit to zero after depositing the full remaining capacity' () {
+        await t.deposit(alice, 800_000, 10_000_000);
+        await cdo.$receipt().setValuationPrice(deployer, BigInt(.99e18));
+        await cdo.$receipt().setActionStates(deployer, srtVault.address, true, true);
+
+        $test.compare(
+            await accounting.maxDeposit(false),
+            1_548_821.548
+        );
+        await t.deposit(alice, 0, 1_548_821.548);
+        $test.compare(
+            await accounting.maxDeposit(false),
+            0
+        );
+    },
+    async 'keeps the minimum Junior/Senior ratio stable after new Senior deposits' () {
+        await t.deposit(alice, 200, 100);
+        $test.compare(
+            await accounting.maxDeposit(false),
+            $accounting.maxDepositSenior(200, 100, 0.06)
+        );
+
+        await cdo.$receipt().setValuationPrice(deployer, BigInt(.5e18));
+        await cdo.$receipt().setActionStates(deployer, srtVault.address, true, true);
+
+        $test.compare(
+            await accounting.maxDeposit(false),
+            $accounting.maxDepositSenior(100, 200, 0.06)
+        );
+
+        await t.deposit(alice, 50, 100);
+        $test.compare(
+            await accounting.maxDeposit(false),
+            $accounting.maxDepositSenior(150, 300, 0.06)
+        );
+    },
+    async 'keeps prices stable across Senior deposits and withdrawals within one valuation period' () {
+        await t.deposit(alice, 200, 100);
+
+        await cdo.$receipt().setValuationPrice(deployer, BigInt(0.25e18));
+        await t.comparePrices(0.005, 2.99);
+
+        await cdo.$receipt().setValuationPrice(deployer, BigInt(1e18));
+        await t.comparePrices(1, 1);
+
+        await cdo.$receipt().setValuationPrice(deployer, BigInt(0.5e18));
+
+        // Short-lived valuation loss is treated as a temporary protected state with actions paused.
+        // If actions are later re-enabled, the loss becomes the active market regime: deposits and
+        // redemptions settle at the current valuation, and any future recovery belongs to all holders.
+        await cdo.$receipt().setActionStates(deployer, srtVault.address, true, true);
+        await t.comparePrices(0.5, 2);
+
+        await t.deposit(alice, 0, 100);
+        await t.comparePrices(0.5, 2);
+
+        await t.withdraw(alice, 0, 100);
+        await t.comparePrices(0.5, 2);
+
+        await cdo.$receipt().setValuationPrice(deployer, BigInt(0.25e18));
+        await t.comparePrices(0.005, 2.99);
+
+        await cdo.$receipt().setValuationPrice(deployer, BigInt(1e18));
+        await t.comparePrices(0.833333, 1.333333);
+    },
+
+    async 'handles Senior withdrawals after Senior deposits during valuation loss' () {
+        await t.deposit(alice, 200, 100);
+        await cdo.$receipt().setValuationPrice(deployer, BigInt(0.5e18));
+        await cdo.$receipt().setActionStates(deployer, srtVault.address, true, true);
+
+        await t.deposit(alice, 0, 1000);
+        await t.compareNavs(100, 1200);
+        await t.withdraw(alice, 0, 1150);
     }
 })
+
+namespace t {
+    export async function deposit(depositor: TEth.IAccount, jrtAssets: number, srtAssets: number) {
+        jrtAssets > 0 && await $erc4626.deposit(jrtVault, depositor, jrtAssets);
+        srtAssets > 0 && await $erc4626.deposit(srtVault, depositor, srtAssets);
+    }
+    export async function withdraw(depositor: TEth.IAccount, jrtAssets: number, srtAssets: number) {
+        jrtAssets > 0 && await $erc4626.withdraw(jrtVault, depositor, jrtAssets);
+        srtAssets > 0 && await $erc4626.withdraw(srtVault, depositor, srtAssets);
+    }
+    export async function comparePrices(jrtPrice: number, srtPrice: number, msg?: string) {
+        const [jrtPriceFact, srtPriceFact] = await Promise.all([
+            cdo.pricePerShare(jrtVault.address),
+            cdo.pricePerShare(srtVault.address),
+        ]);
+        const jrtPriceFactEth = $bigint.toEther(jrtPriceFact);
+        const srtPriceFactEth = $bigint.toEther(srtPriceFact);
+        $test.compare(
+            jrtPriceFactEth,
+            jrtPrice,
+            18,
+            `JRT price | ${jrtPrice}, ${srtPrice} != ${jrtPriceFactEth}, ${srtPriceFactEth} ${msg ?? ''}`
+        );
+        $test.compare(
+            srtPriceFactEth,
+            srtPrice,
+            18,
+            `SRT price | ${jrtPrice}, ${srtPrice} != ${jrtPriceFactEth}, ${srtPriceFactEth} ${msg ?? ''}`
+        );
+    }
+    export async function compareNavs(jrtNav: number, srtNav: number, msg?: string) {
+        const navs = await accounting.totalAssets();
+        const jrtNavFactEth = $bigint.toEther(navs.jrtNavT1Projected ?? (navs as any).jrtNavT1 /* continuous accounting */);
+        const srtNavFactEth = $bigint.toEther(navs.srtNavT1);
+        $test.compare(
+            jrtNavFactEth,
+            jrtNav,
+            18,
+            `JRT price | ${jrtNav}, ${srtNav} != ${jrtNavFactEth}, ${srtNavFactEth} ${msg ?? ''}`
+        );
+        $test.compare(
+            srtNavFactEth,
+            srtNav,
+            18,
+            `SRT price | ${jrtNav}, ${srtNav} != ${jrtNavFactEth}, ${srtNavFactEth} ${msg ?? ''}`
+        );
+    }
+}

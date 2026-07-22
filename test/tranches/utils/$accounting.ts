@@ -28,4 +28,11 @@ export namespace $accounting {
         let return_ = gain / b1_ * YEAR / seconds * 100;
         return $number.round(return_, 2);
     }
+
+
+    export function maxDepositSenior (jrtNav: number, srtNav: number, ratio: number) {
+        const maxSrt = jrtNav / ratio;
+        const maxDeposit = maxSrt - srtNav;
+        return maxDeposit;
+    }
 }

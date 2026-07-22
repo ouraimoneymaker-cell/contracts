@@ -191,6 +191,12 @@ contract DYSAccounting is IAccounting, CDOComponent {
     /// @notice Timestamp of the last oracle-detected NAV change; used as time anchor when useNavAtReconciliation is true
     uint256 public lastReconciliation;
 
+    /// @notice Gross Senior NAV deposited during valuation loss and self-funded by Senior.
+    uint256 public srtFundedGrossNav;
+
+    /// @notice Portion of funded Senior NAV that covers its own valuation loss.
+    uint256 public srtFundNav;
+
     error InvalidNavSplit(
         uint256 navT1,
         uint256 jrtAssets,
@@ -446,6 +452,7 @@ contract DYSAccounting is IAccounting, CDOComponent {
         navTimestamp = block.timestamp;
         jrtNavProjected += jrtAmountIn;
         jrtBaseNav += jrtAmountIn;
+        srtFundNav += _trackSrtFundNavIn(srtAmountIn);
         srtBaseNav += srtAmountIn;
         windowNetFlows += int256(srtAmountIn);
 
@@ -508,7 +515,26 @@ contract DYSAccounting is IAccounting, CDOComponent {
         uint256 srtAssetsOut
     ) external onlyCDO {
         _accrueAssetTime();
+        srtFundNav += _trackSrtFundNavIn(srtAssetsIn);
+
+
         if (valuationPrice < 1e18 && srtAssetsOut > 0) {
+            uint256 fundedFundOut;
+            if (srtFundedGrossNav > 0) {
+                (, uint256 srtNavEffective) = calcEffectiveNav(jrtBaseNav, srtBaseNav);
+                uint256 fundedGrossOut = Math.min(
+                    srtAssetsOut,
+                    Math.mulDiv(srtAssetsOut, srtFundedGrossNav, srtNavEffective)
+                );
+                fundedFundOut = Math.min(
+                    srtFundNav,
+                    Math.mulDiv(fundedGrossOut, 1e18 - valuationPrice, valuationPrice)
+                );
+                srtFundedGrossNav -= fundedGrossOut;
+                srtFundNav -= fundedFundOut;
+            }
+
+            uint256 jrtAssetsOutEffective = jrtAssetsOut;
             (jrtAssetsOut, srtAssetsOut) = AccountingLib.splitValuatedNavOut(
                 jrtBaseNav,
                 srtBaseNav,
@@ -517,6 +543,16 @@ contract DYSAccounting is IAccounting, CDOComponent {
                 jrtAssetsOut,
                 srtAssetsOut
             );
+            uint256 jrtCoverage = jrtAssetsOut - jrtAssetsOutEffective;
+            // Use the Senior-funded top-up to reduce Junior's realized coverage loss.
+            // Cap it by remaining Senior base capacity to avoid over-withdrawing Senior NAV.
+            uint256 remainingSrtCapacity = Math.saturatingSub(srtBaseNav + srtAssetsIn, srtAssetsOut);
+            uint256 coveredByFund = Math.min(
+                Math.min(Math.mulDiv(fundedFundOut, valuationPrice, 1e18), jrtCoverage),
+                remainingSrtCapacity
+            );
+            jrtAssetsOut -= coveredByFund;
+            srtAssetsOut += coveredByFund;
         }
         if (srtAssetsOut > 0 && srtPnLProjected > 0) {
             if (useConservativeRedemptionPrice) {
@@ -1265,6 +1301,7 @@ contract DYSAccounting is IAccounting, CDOComponent {
         bool valuationLossEntered = isValuationLossPeriod == false && price < 1e18;
         // Allow the valuation price in range 0.0001-1
         require(0.0001e18 <= price && price <= 1e18, "InvalidValuationPrice");
+        _resyncsrtFundNav(price);
         valuationPrice = price;
         valuationUpdatedAt = uint64(block.timestamp);
         if (valuationLossEntered) {
@@ -1280,6 +1317,27 @@ contract DYSAccounting is IAccounting, CDOComponent {
         require(period <= 1 days, "GracePeriodTooLong");
         valuationGracePeriod = period;
         emit ValuationGracePeriodChanged(period);
+    }
+
+    function _trackSrtFundNavIn(uint256 amount) internal returns (uint256 srtFundAmountIn) {
+        if (amount == 0 || valuationPrice == 1e18) {
+            return 0;
+        }
+        srtFundAmountIn = Math.mulDiv(amount, 1e18 - valuationPrice, valuationPrice);
+        srtFundedGrossNav += amount;
+    }
+
+    function _resyncsrtFundNav(uint128 price) internal {
+        uint256 fundedGrossNav = srtFundedGrossNav;
+        if (fundedGrossNav == 0) {
+            return;
+        }
+        if (price == 1e18) {
+            srtFundedGrossNav = 0;
+            srtFundNav = 0;
+            return;
+        }
+        srtFundNav = Math.mulDiv(fundedGrossNav, 1e18 - price, price);
     }
 
     /// @notice Adjusts Junior and Senior NAVs when the base asset is trading below par (valuation loss)
@@ -1311,6 +1369,7 @@ contract DYSAccounting is IAccounting, CDOComponent {
             return (jrtFact, srtFact);
         }
         uint256 extraNeeded = srtFact * (1e18 - valuationPrice) / valuationPrice;
+        extraNeeded = Math.saturatingSub(extraNeeded, srtFundNav);
         uint256 extraTaken = Math.min(
             Math.saturatingSub(jrtFact, ONE_ASSET),
             extraNeeded

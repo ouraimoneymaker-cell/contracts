@@ -101,6 +101,12 @@ contract Accounting is IAccounting, CDOComponent {
     ///      to prevent front-running and allow for proper loss validation
     uint64 public valuationGracePeriod;
 
+    /// @notice Gross Senior NAV deposited during valuation loss and self-funded by Senior.
+    uint256 public srtFundedGrossNav;
+
+    /// @notice Portion of funded Senior NAV that covers its own valuation loss.
+    uint256 public srtFundNav;
+
     error InvalidNavSplit(uint256 navT1, uint256 jrtAssets, uint256 srtAssets, uint256 reserveAssets);
     error ReserveTooLow(uint256 reserveNav, uint256 requestedNav);
 
@@ -213,6 +219,7 @@ contract Accounting is IAccounting, CDOComponent {
         reserveNav = reserveNav - amount;
         nav = nav + jrtAmountIn + srtAmountIn - amount;
         jrtBaseNav += jrtAmountIn;
+        srtFundNav += _trackSrtFundNavIn(srtAmountIn);
         srtBaseNav += srtAmountIn;
 
         // Fetch APRs and force recalculate aprSrt, as JRT and SRT TVLs may have changed.
@@ -285,7 +292,25 @@ contract Accounting is IAccounting, CDOComponent {
         uint256 srtAssetsIn,
         uint256 srtAssetsOut
     ) external onlyCDO {
+        srtFundNav += _trackSrtFundNavIn(srtAssetsIn);
+
         if (valuationPrice < 1e18 && srtAssetsOut > 0) {
+            uint256 fundedFundOut;
+            if (srtFundedGrossNav > 0) {
+                (, uint256 srtNavEffective) = calcEffectiveNav(jrtBaseNav, srtBaseNav);
+                uint256 fundedGrossOut = Math.min(
+                    srtAssetsOut,
+                    Math.mulDiv(srtAssetsOut, srtFundedGrossNav, srtNavEffective)
+                );
+                fundedFundOut = Math.min(
+                    srtFundNav,
+                    Math.mulDiv(fundedGrossOut, 1e18 - valuationPrice, valuationPrice)
+                );
+                srtFundedGrossNav -= fundedGrossOut;
+                srtFundNav -= fundedFundOut;
+            }
+
+            uint256 jrtAssetsOutEffective = jrtAssetsOut;
             (jrtAssetsOut, srtAssetsOut) = AccountingLib.splitValuatedNavOut(
                 jrtBaseNav,
                 srtBaseNav,
@@ -294,6 +319,16 @@ contract Accounting is IAccounting, CDOComponent {
                 jrtAssetsOut,
                 srtAssetsOut
             );
+            uint256 jrtCoverage = jrtAssetsOut - jrtAssetsOutEffective;
+            // Use the Senior-funded top-up to reduce Junior's realized coverage loss.
+            // Cap it by remaining Senior base capacity to avoid over-withdrawing Senior NAV.
+            uint256 remainingSrtCapacity = Math.saturatingSub(srtBaseNav + srtAssetsIn, srtAssetsOut);
+            uint256 coveredByFund = Math.min(
+                Math.min(Math.mulDiv(fundedFundOut, valuationPrice, 1e18), jrtCoverage),
+                remainingSrtCapacity
+            );
+            jrtAssetsOut -= coveredByFund;
+            srtAssetsOut += coveredByFund;
         }
         jrtBaseNav = jrtBaseNav + jrtAssetsIn - jrtAssetsOut;
         srtBaseNav = srtBaseNav + srtAssetsIn - srtAssetsOut;
@@ -607,6 +642,7 @@ contract Accounting is IAccounting, CDOComponent {
         bool valuationLossEntered = isValuationLossPeriod == false && price < 1e18;
         // Allow the valuation price in range 0.0001-1
         require(0.0001e18 <= price && price <= 1e18, "InvalidValuationPrice");
+        _resyncSrtFundNav(price);
         valuationPrice = price;
         valuationUpdatedAt = uint64(block.timestamp);
         if (valuationLossEntered) {
@@ -623,11 +659,33 @@ contract Accounting is IAccounting, CDOComponent {
         emit ValuationGracePeriodChanged(period);
     }
 
+    function _trackSrtFundNavIn(uint256 amount) internal returns (uint256 srtFundAmountIn) {
+        if (amount == 0 || valuationPrice == 1e18) {
+            return 0;
+        }
+        srtFundAmountIn = Math.mulDiv(amount, 1e18 - valuationPrice, valuationPrice);
+        srtFundedGrossNav += amount;
+    }
+
+    function _resyncSrtFundNav(uint128 price) internal {
+        uint256 fundedGrossNav = srtFundedGrossNav;
+        if (fundedGrossNav == 0) {
+            return;
+        }
+        if (price == 1e18) {
+            srtFundedGrossNav = 0;
+            srtFundNav = 0;
+            return;
+        }
+        srtFundNav = Math.mulDiv(fundedGrossNav, 1e18 - price, price);
+    }
+
     function calcEffectiveNav (uint256 jrtFact, uint256 srtFact) internal view returns (uint256 jrtEffective, uint256 srtEffective) {
         if (valuationPrice == 1e18) {
             return (jrtFact, srtFact);
         }
         uint256 extraNeeded = srtFact * (1e18 - valuationPrice) / valuationPrice;
+        extraNeeded = Math.saturatingSub(extraNeeded, srtFundNav);
         uint256 extraTaken = Math.min(
             Math.saturatingSub(jrtFact, ONE_ASSET),
             extraNeeded

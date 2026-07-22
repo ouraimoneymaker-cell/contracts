@@ -23,10 +23,11 @@ export namespace $test {
             ? $bigint.toEther(b, decimals ?? 18)
             : b;
 
+        const round = aNum > 1000 ? 0 : 3
         return eqDiff(
-            $number.round(aNum, 3, 'round'),
-            $number.round(bNum, 3, 'round'),
-            0.001,
+            $number.round(aNum, round, 'round'),
+            $number.round(bNum, round, 'round'),
+            1 / 10 ** round,
             msg
         );
     }

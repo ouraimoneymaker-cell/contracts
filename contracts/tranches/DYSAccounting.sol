@@ -80,6 +80,9 @@ contract DYSAccounting is IAccounting, CDOComponent {
 
     uint256 public reserveBps;
 
+    /// @notice High-water mark used to charge performance fees only on new NAV gains.
+    uint256 public feeWatermarkNav;
+
     /// @dev Latest balances at T0 (latest protocol interrogation)
     uint256 public nav;
     uint256 public jrtBaseNav;
@@ -444,6 +447,7 @@ contract DYSAccounting is IAccounting, CDOComponent {
             revert ReserveTooLow(amount, jrtAmountIn + srtAmountIn);
         }
         reserveNav = reserveNav - amount;
+        adjustFeeWatermark(jrtAmountIn + srtAmountIn, amount);
         nav = nav + jrtAmountIn + srtAmountIn - amount;
         navTimestamp = block.timestamp;
         jrtNavProjected += jrtAmountIn;
@@ -592,6 +596,7 @@ contract DYSAccounting is IAccounting, CDOComponent {
         jrtBaseNav = jrtBaseNav + jrtAssetsIn - jrtAssetsOut;
         jrtNavProjected = jrtNavProjected + jrtAssetsIn - jrtAssetsOut;
         srtBaseNav = srtBaseNav + srtAssetsIn - srtAssetsOut;
+        adjustFeeWatermark(jrtAssetsIn + srtAssetsIn, jrtAssetsOut + srtAssetsOut);
         nav = nav + jrtAssetsIn + srtAssetsIn - jrtAssetsOut - srtAssetsOut;
         windowNetFlows += int256(srtAssetsIn) - int256(srtAssetsOut);
         navTimestamp = block.timestamp;
@@ -615,6 +620,14 @@ contract DYSAccounting is IAccounting, CDOComponent {
             windowNetFlows -= int256(amountToReserve);
         }
         emit FeeAccrued(isJrt, amountToReserve, amount - amountToReserve);
+    }
+
+    function adjustFeeWatermark(uint256 assetsIn, uint256 assetsOut) internal {
+        if (assetsIn > assetsOut) {
+            feeWatermarkNav += assetsIn - assetsOut;
+        } else if (assetsOut > assetsIn) {
+            feeWatermarkNav = Math.saturatingSub(feeWatermarkNav, assetsOut - assetsIn);
+        }
     }
 
     /*****************************************************************************
@@ -720,9 +733,13 @@ contract DYSAccounting is IAccounting, CDOComponent {
 
         uint256 gain_dTAbs = uint256(gain_dT);
 
-        // Decrease Projected Gain by expected performance fee
-        if (reserveBps > 0) {
-            uint256 reserve_dT = (gain_dTAbs * reserveBps) / PERCENTAGE_100;
+        // Decrease projected gain by the expected performance fee only above the high-water mark.
+        if (reserveBps > 0 && navT0 + gain_dTAbs > feeWatermarkNav) {
+            uint256 feeableGain = Math.min(
+                gain_dTAbs,
+                navT0 + gain_dTAbs - feeWatermarkNav
+            );
+            uint256 reserve_dT = (feeableGain * reserveBps) / PERCENTAGE_100;
             gain_dTAbs -= reserve_dT;
         }
 
@@ -786,8 +803,9 @@ contract DYSAccounting is IAccounting, CDOComponent {
 
         // Reserve allocation
         uint256 reserve_dT = 0;
-        if (pnl > 0 && reserveBps > 0) {
-            reserve_dT = uint256(pnl) * reserveBps / PERCENTAGE_100;
+        if (pnl > 0 && navT1 > feeWatermarkNav && reserveBps > 0) {
+            uint256 feeableGain = navT1 - feeWatermarkNav;
+            reserve_dT = feeableGain * reserveBps / PERCENTAGE_100;
             pnl -= int256(reserve_dT);
         }
         reserveNavT1 = reserveNavT0 + reserve_dT;
@@ -1005,6 +1023,9 @@ contract DYSAccounting is IAccounting, CDOComponent {
             }
             if (useNavAtReconciliation) {
                 lastReconciliation = block.timestamp;
+            }
+            if (navT1 > feeWatermarkNav) {
+                feeWatermarkNav = navT1;
             }
 
             // Floor window rollover

@@ -280,7 +280,8 @@ UTest.create({
             const reserveNavEth = $bigint.toEther(reserveNav, 6);
             const jrtNav = await jrtVault.totalAssets();
 
-            $test.eqDiff(gain * $bigint.toEther(reserveBps, 18), reserveNavEth, .01, `Invalid reserve nav`);
+            $require.gt(reserveBps, BigInt(0.01e18));
+            $test.eqDiff(0, reserveNavEth, .01, `No performance fee under the watermark`);
 
             // We have recovered the loss;
             // however, for 2 seconds Junior has paid Senior the APR, and we have collected the reserve fee

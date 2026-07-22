@@ -41,6 +41,10 @@ contract DiscreteAccounting is IAccounting, CDOComponent {
     uint256 public srtTargetIndex;
 
     uint256 public reserveBps;
+
+    /// @notice High-water mark used to charge performance fees only on new NAV gains.
+    uint256 public feeWatermarkNav;
+
     uint256 constant PERCENTAGE_100 = 1e18;
     uint256 constant RESERVE_BPS_MAX = 0.2e18;
 
@@ -236,6 +240,7 @@ contract DiscreteAccounting is IAccounting, CDOComponent {
             revert ReserveTooLow(amount, jrtAmountIn + srtAmountIn);
         }
         reserveNav = reserveNav - amount;
+        adjustFeeWatermark(jrtAmountIn + srtAmountIn, amount);
         nav = nav + jrtAmountIn + srtAmountIn - amount;
         navTimestamp = block.timestamp;
         jrtNavProjected += jrtAmountIn;
@@ -348,6 +353,7 @@ contract DiscreteAccounting is IAccounting, CDOComponent {
         jrtBaseNav = jrtBaseNav + jrtAssetsIn - jrtAssetsOut;
         jrtNavProjected = jrtNavProjected + jrtAssetsIn - jrtAssetsOut;
         srtBaseNav = srtBaseNav + srtAssetsIn - srtAssetsOut;
+        adjustFeeWatermark(jrtAssetsIn + srtAssetsIn, jrtAssetsOut + srtAssetsOut);
         nav = nav + jrtAssetsIn + srtAssetsIn - jrtAssetsOut - srtAssetsOut;
         navTimestamp = block.timestamp;
         (bool modified, UD60x18 aprTarget_, UD60x18 aprBase_) = fetchAprs();
@@ -369,6 +375,14 @@ contract DiscreteAccounting is IAccounting, CDOComponent {
             srtBaseNav -= amountToReserve;
         }
         emit FeeAccrued(isJrt, amountToReserve, amount - amountToReserve);
+    }
+
+    function adjustFeeWatermark(uint256 assetsIn, uint256 assetsOut) internal {
+        if (assetsIn > assetsOut) {
+            feeWatermarkNav += assetsIn - assetsOut;
+        } else if (assetsOut > assetsIn) {
+            feeWatermarkNav = Math.saturatingSub(feeWatermarkNav, assetsOut - assetsIn);
+        }
     }
 
     /// @notice Calculates the updated Net Asset Values (NAVs) for Junior, Senior tranches, and Reserve
@@ -437,8 +451,9 @@ contract DiscreteAccounting is IAccounting, CDOComponent {
 
         // #1 Final new reserve
         uint256 reserve_dT = 0;
-        if (gain_dTAbs > 0 && reserveBps > 0) {
-            reserve_dT = gain_dTAbs * reserveBps / PERCENTAGE_100;
+        if (navT1 > feeWatermarkNav && reserveBps > 0) {
+            uint256 feeableGain = navT1 - feeWatermarkNav;
+            reserve_dT = feeableGain * reserveBps / PERCENTAGE_100;
             gain_dTAbs -= reserve_dT;
         }
         reserveNavT1 = reserveNavT0 + reserve_dT;
@@ -533,9 +548,13 @@ contract DiscreteAccounting is IAccounting, CDOComponent {
 
         uint256 gain_dTAbs = uint256(gain_dT);
 
-        // #1 Decrease Projected Gain by expected peformance fee, but do not increase real reserve.
-        if (reserveBps > 0) {
-            uint256 reserve_dT = gain_dTAbs * reserveBps / PERCENTAGE_100;
+        // Decrease projected gain by the expected performance fee only above the high-water mark.
+        if (reserveBps > 0 && navT0 + gain_dTAbs > feeWatermarkNav) {
+            uint256 feeableGain = Math.min(
+                gain_dTAbs,
+                navT0 + gain_dTAbs - feeWatermarkNav
+            );
+            uint256 reserve_dT = (feeableGain * reserveBps) / PERCENTAGE_100;
             gain_dTAbs -= reserve_dT;
         }
 
@@ -589,6 +608,9 @@ contract DiscreteAccounting is IAccounting, CDOComponent {
         ) = calculateNAVSplit(nav, jrtNavProjected, jrtBaseNav, srtBaseNav, reserveNav, navT1);
         updateIndex();
         if (useNavAtReconciliation && navT1 != nav) lastReconciliation = block.timestamp;
+        if (navT1 != nav && navT1 > feeWatermarkNav) {
+            feeWatermarkNav = navT1;
+        }
         nav = navT1;
         navTimestamp = block.timestamp;
         srtBaseNav = srtNavT1;

@@ -41,6 +41,10 @@ contract Accounting is IAccounting, CDOComponent {
 
 
     uint256 public reserveBps;
+
+    /// @notice High-water mark used to charge performance fees only on new NAV gains.
+    uint256 public feeWatermarkNav;
+
     uint256 constant PERCENTAGE_100 = 1e18;
     uint256 constant RESERVE_BPS_MAX = 0.2e18;
 
@@ -217,6 +221,7 @@ contract Accounting is IAccounting, CDOComponent {
             revert ReserveTooLow(amount, jrtAmountIn + srtAmountIn);
         }
         reserveNav = reserveNav - amount;
+        adjustFeeWatermark(jrtAmountIn + srtAmountIn, amount);
         nav = nav + jrtAmountIn + srtAmountIn - amount;
         jrtBaseNav += jrtAmountIn;
         srtFundNav += _trackSrtFundNavIn(srtAmountIn);
@@ -332,6 +337,7 @@ contract Accounting is IAccounting, CDOComponent {
         }
         jrtBaseNav = jrtBaseNav + jrtAssetsIn - jrtAssetsOut;
         srtBaseNav = srtBaseNav + srtAssetsIn - srtAssetsOut;
+        adjustFeeWatermark(jrtAssetsIn + srtAssetsIn, jrtAssetsOut + srtAssetsOut);
         nav = nav + jrtAssetsIn + srtAssetsIn - jrtAssetsOut - srtAssetsOut;
         (bool modified, UD60x18 aprTarget_, UD60x18 aprBase_) = fetchAprs();
         if (modified == false) {
@@ -351,6 +357,14 @@ contract Accounting is IAccounting, CDOComponent {
             srtBaseNav -= amountToReserve;
         }
         emit FeeAccrued(isJrt, amountToReserve, amount - amountToReserve);
+    }
+
+    function adjustFeeWatermark(uint256 assetsIn, uint256 assetsOut) internal {
+        if (assetsIn > assetsOut) {
+            feeWatermarkNav += assetsIn - assetsOut;
+        } else if (assetsOut > assetsIn) {
+            feeWatermarkNav = Math.saturatingSub(feeWatermarkNav, assetsOut - assetsIn);
+        }
     }
 
     /// @notice Calculates the updated Net Asset Values (NAVs) for Junior, Senior tranches, and Reserve
@@ -407,8 +421,9 @@ contract Accounting is IAccounting, CDOComponent {
 
         // #1 Final new reserve
         uint256 reserve_dT = 0;
-        if (gain_dTAbs > 0 && reserveBps > 0) {
-            reserve_dT = gain_dTAbs * reserveBps / PERCENTAGE_100;
+        if (navT1 > feeWatermarkNav && reserveBps > 0) {
+            uint256 feeableGain = navT1 - feeWatermarkNav;
+            reserve_dT = feeableGain * reserveBps / PERCENTAGE_100;
             gain_dTAbs -= reserve_dT;
         }
         reserveNavT1 = reserveNavT0 + reserve_dT;
@@ -456,6 +471,9 @@ contract Accounting is IAccounting, CDOComponent {
             uint256 reserveNavT1
         ) = calculateNAVSplit(nav, jrtBaseNav, srtBaseNav, reserveNav, navT1);
         updateIndex();
+        if (navT1 > feeWatermarkNav) {
+            feeWatermarkNav = navT1;
+        }
         nav = navT1;
         jrtBaseNav = jrtNavT1;
         srtBaseNav = srtNavT1;

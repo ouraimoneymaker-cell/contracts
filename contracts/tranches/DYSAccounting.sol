@@ -145,9 +145,6 @@ contract DYSAccounting is IAccounting, CDOComponent {
     /// @notice Time-weighted Senior NAV (asset-time)
     uint256 public srtNavTime;
 
-    /// @notice Time-weighted Junior NAV (asset-time, uses projected)
-    uint256 public jrtNavTime;
-
     /// @notice Time-weighted total system NAV (asset-time) (incl. projected assets)
     uint256 public navTime;
 
@@ -286,7 +283,6 @@ contract DYSAccounting is IAccounting, CDOComponent {
         uint256 systemAssets = srAssets + jrAssets + reserveNav;
 
         srtNavTime += srAssets * dt;
-        jrtNavTime += jrAssets * dt;
         navTime += systemAssets * dt;
         navTimeNet += nav * dt;
         srtProjectedPnLTime += Math.saturatingSub(srtPnLProjected, srtPaidProjected) * dt;
@@ -997,7 +993,6 @@ contract DYSAccounting is IAccounting, CDOComponent {
             srtPnLBenchmark = 0;
             srtPaidProjected = 0;
             srtNavTime = 0;
-            jrtNavTime = 0;
             navTime = 0;
             navTimeNet = 0;
             srtProjectedPnLTime = 0;

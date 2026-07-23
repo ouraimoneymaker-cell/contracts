@@ -21,15 +21,24 @@ abstract contract MultiStrategy is Strategy, IMultiStrategy, IRebalanceable {
     // WAD ratio (1e18 = 100%). When > 0, strat1 target is raised to at least this share of total assets.
     uint256 public liquidAllocationFloor;
 
+    struct TTokenConfig {
+        bool supported;
+        bool jrtDepositsPaused;
+        bool jrtWithdrawalsPaused;
+        bool srtDepositsPaused;
+        bool srtWithdrawalsPaused;
+    }
+
     mapping(address => bool) private _supportedTokens;
     IERC20[] private _supportedTokenList;
-    mapping(address strat => mapping(address token => bool)) public perStrategyTokens;
+    mapping(address strat => mapping(address token => TTokenConfig)) public perStrategyTokens;
     mapping(address token => IStrategy) public converters;
 
     uint256[42] private __gap;
 
     event StratNavSnapshot(uint256[] navs);
     event RebalancerSet(address indexed rebalancer);
+    event StrategyTokenConfigChanged(address indexed strat, address indexed token, TTokenConfig config);
 
     /// @notice Restricts calls to the configured rebalancer.
     modifier onlyRebalancer() {
@@ -59,16 +68,11 @@ abstract contract MultiStrategy is Strategy, IMultiStrategy, IRebalanceable {
         liquidAllocationFloor = liquidAllocationFloor_;
     }
 
-    /// @notice Returns the default sub-strategy index used for deposits from a tranche.
-    function _depositStratIndex(address tranche) internal view virtual returns (uint256);
+    /// @notice Returns the packed sub-strategy deposit order for a tranche.
+    /// @dev Implementations should return preference order only. Token support and deposit pause state are checked here.
+    function _depositStratIndexes(address tranche, address token, uint256 baseAssets) internal view virtual returns (uint256);
     /// @notice Returns the packed sub-strategy withdrawal order for a tranche.
     function _withdrawStratIndexes(address tranche) internal view virtual returns (uint256);
-
-    /// @notice Returns the sub-strategy index for a deposit with token and amount context.
-    /// @dev Defaults to the tranche strategy mapping so existing implementations need no change.
-    function _depositStratIndex(address tranche, address /*token*/, uint256 /*baseAssets*/) internal view virtual returns (uint256) {
-        return _depositStratIndex(tranche);
-    }
 
 
     /// @notice Routes a CDO deposit into the selected sub-strategy.
@@ -77,11 +81,29 @@ abstract contract MultiStrategy is Strategy, IMultiStrategy, IRebalanceable {
         onlyCDO
         returns (uint256)
     {
-        uint256 idx = _depositStratIndex(tranche, token, baseAssets);
-        IStrategy strat = strats[idx];
-        SafeERC20.safeTransferFrom(IERC20(token), owner, address(this), tokenAmount);
-        SafeERC20.forceApprove(IERC20(token), address(strat), tokenAmount);
-        return strat.deposit(tranche, token, tokenAmount, baseAssets, address(this));
+        uint256 depositOrder = _depositStratIndexes(tranche, token, baseAssets);
+        uint256 length = IndexPackerLib.length(depositOrder);
+        bool isJunior = cdo.isJrt(tranche);
+        for (uint256 i = 0; i < length; ++i) {
+            uint256 idx = IndexPackerLib.unpack(depositOrder, i);
+            IStrategy strat = strats[idx];
+            TTokenConfig memory config = perStrategyTokens[address(strat)][token];
+            if (!config.supported) {
+                continue;
+            }
+            bool paused = isJunior ? config.jrtDepositsPaused : config.srtDepositsPaused;
+            if (paused) {
+                continue;
+            }
+            uint256 depositCap = strat.maxDeposit(tranche, token, tokenAmount);
+            if (depositCap < baseAssets) {
+                continue;
+            }
+            SafeERC20.safeTransferFrom(IERC20(token), owner, address(this), tokenAmount);
+            SafeERC20.forceApprove(IERC20(token), address(strat), tokenAmount);
+            return strat.deposit(tranche, token, tokenAmount, baseAssets, address(this));
+        }
+        revert DepositRejectedByStrategy(tranche, token);
     }
 
     /// @notice Withdraws assets across sub-strategies using the tranche withdrawal order.
@@ -139,6 +161,20 @@ abstract contract MultiStrategy is Strategy, IMultiStrategy, IRebalanceable {
         }
     }
 
+    /// @notice Updates pause configuration for a supported strategy token.
+    /// @dev The supported flag cannot be changed here; it is managed by strategy configuration.
+    function setStrategyTokenConfig(IStrategy strat, address token, TTokenConfig calldata config) external onlyRole(PAUSER_ROLE) {
+        address stratAddr = address(strat);
+        if (!perStrategyTokens[stratAddr][token].supported) {
+            revert UnsupportedToken(token);
+        }
+
+        TTokenConfig memory updated = config;
+        updated.supported = true;
+        perStrategyTokens[stratAddr][token] = updated;
+        emit StrategyTokenConfigChanged(stratAddr, token, updated);
+    }
+
     /// @notice Sets the rebalancer used for strategy reallocations.
     function setRebalancer(IRebalancer rebalancer_) external onlyOwner {
         if (address(rebalancer) != address(0)) {
@@ -151,14 +187,21 @@ abstract contract MultiStrategy is Strategy, IMultiStrategy, IRebalanceable {
 
     /// @notice Returns the withdrawable assets across compatible sub-strategies.
     function maxWithdraw(address tranche, address token, uint256 tokenAmount) external view override(IStrategy, Strategy) returns (uint256 assets) {
+        bool isJunior = cdo.isJrt(tranche);
         uint256 len = strats.length;
         for (uint256 i; i < len; ++i) {
             IStrategy strat = strats[i];
-            if (!perStrategyTokens[address(strat)][token]) {
+            TTokenConfig memory config = perStrategyTokens[address(strat)][token];
+            if (!config.supported) {
+                continue;
+            }
+            bool paused = isJunior ? config.jrtWithdrawalsPaused : config.srtWithdrawalsPaused;
+            if (paused) {
                 continue;
             }
             assets += Math.min(
                 strat.totalAssets(),
+                // Strategies may apply their own withdrawal caps below totalAssets.
                 strat.maxWithdraw(tranche, token, tokenAmount)
             );
         }
@@ -167,10 +210,16 @@ abstract contract MultiStrategy is Strategy, IMultiStrategy, IRebalanceable {
 
     /// @notice Returns the largest deposit cap among compatible sub-strategies.
     function maxDeposit(address tranche, address token, uint256 tokenAmount) external view override(IStrategy, Strategy) returns (uint256 assets) {
+        bool isJunior = cdo.isJrt(tranche);
         uint256 len = strats.length;
         for (uint256 i; i < len; ++i) {
             IStrategy strat = strats[i];
-            if (!perStrategyTokens[address(strat)][token]) {
+            TTokenConfig memory config = perStrategyTokens[address(strat)][token];
+            if (!config.supported) {
+                continue;
+            }
+            bool paused = isJunior ? config.jrtDepositsPaused : config.srtDepositsPaused;
+            if (paused) {
                 continue;
             }
             uint256 stratMax = strat.maxDeposit(tranche, token, tokenAmount);
@@ -219,7 +268,7 @@ abstract contract MultiStrategy is Strategy, IMultiStrategy, IRebalanceable {
         uint256 len = strats.length;
         for (uint256 i; i < len; i++) {
             IStrategy strat = strats[i];
-            if (!perStrategyTokens[address(strat)][token]) {
+            if (!perStrategyTokens[address(strat)][token].supported) {
                 continue;
             }
             uint256 baseAssets = strat.convertToAssets(token, tokenAmount, Math.Rounding.Floor);
@@ -236,9 +285,9 @@ abstract contract MultiStrategy is Strategy, IMultiStrategy, IRebalanceable {
         return _supportedTokenList;
     }
 
-    /// @notice Returns tokens supported by the tranche deposit sub-strategy.
-    function getSupportedTokens(address tranche) external view returns (IERC20[] memory) {
-        return strats[_depositStratIndex(tranche)].getSupportedTokens();
+    /// @notice Returns tokens supported by any deposit sub-strategy for the tranche.
+    function getSupportedTokens(address /*tranche*/) external view returns (IERC20[] memory) {
+        return _supportedTokenList;
     }
 
     /// @notice Converts a supported token amount to base assets through its converter strategy.
@@ -266,7 +315,7 @@ abstract contract MultiStrategy is Strategy, IMultiStrategy, IRebalanceable {
         converters[token].ensureRedeemable(caller, token, baseAssets);
     }
 
-    /// @notice Internal withdrawal router that drains sub-strategies in packed order.
+    /// @notice Routes withdrawals across sub-strategies in packed order.
     function _withdraw(
         address tranche,
         address token,
@@ -279,12 +328,17 @@ abstract contract MultiStrategy is Strategy, IMultiStrategy, IRebalanceable {
         uint256 withdrawOrder = _withdrawStratIndexes(tranche);
         uint256 length = IndexPackerLib.length(withdrawOrder);
         uint256 remainingAssets = baseAssets;
+        bool isJunior = cdo.isJrt(tranche);
 
-        for (uint256 i = 0; i < length && remainingAssets > 0; i++) {
+        for (uint256 i = 0; i < length && remainingAssets > 0; ++i) {
             uint256 stratIdx = IndexPackerLib.unpack(withdrawOrder, i);
             IStrategy strat = strats[stratIdx];
-
-            if (!perStrategyTokens[address(strat)][token]) {
+            TTokenConfig memory config = perStrategyTokens[address(strat)][token];
+            if (!config.supported) {
+                continue;
+            }
+            bool paused = isJunior ? config.jrtWithdrawalsPaused : config.srtWithdrawalsPaused;
+            if (paused) {
                 continue;
             }
 
@@ -298,7 +352,7 @@ abstract contract MultiStrategy is Strategy, IMultiStrategy, IRebalanceable {
             }
         }
         if (remainingAssets > 0) {
-            revert WithdrawalCapReached(tranche);
+            revert WithdrawalRejectedByStrategy(tranche, token);
         }
     }
 
@@ -311,7 +365,7 @@ abstract contract MultiStrategy is Strategy, IMultiStrategy, IRebalanceable {
             for (uint256 j; j < old.length; j++) {
                 address token = address(old[j]);
                 _supportedTokens[token] = false;
-                perStrategyTokens[strat][token] = false;
+                perStrategyTokens[strat][token].supported = false;
                 delete converters[token];
             }
         }
@@ -331,7 +385,7 @@ abstract contract MultiStrategy is Strategy, IMultiStrategy, IRebalanceable {
                     _supportedTokenList.push(tokens[j]);
                     converters[token] = strats_[i];
                 }
-                perStrategyTokens[strat][token] = true;
+                perStrategyTokens[strat][token].supported = true;
             }
         }
     }

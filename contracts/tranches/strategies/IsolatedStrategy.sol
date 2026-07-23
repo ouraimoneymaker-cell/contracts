@@ -20,6 +20,11 @@ contract IsolatedStrategy is MultiStrategy, IIsolatedStrategy {
     /// @dev Packed withdrawal order for SRT: [junior(0), senior(1)]
     uint256 private immutable _srtWithdrawOrderPacked;
 
+    /// @dev Packed common deposit order, JRT first: [junior(0), senior(1)]
+    uint256 private immutable _jrtDepositOrderPacked;
+    /// @dev Packed common deposit order, SRT first: [senior(1), junior(0)]
+    uint256 private immutable _srtDepositOrderPacked;
+
     IStrategy public juniorStrat;
     IStrategy public seniorStrat;
 
@@ -29,6 +34,9 @@ contract IsolatedStrategy is MultiStrategy, IIsolatedStrategy {
     constructor() Strategy(address(0), address(0)) {
         _jrtWithdrawOrderPacked = IndexPackerLib.pack2(SRT_IDX, JRT_IDX);
         _srtWithdrawOrderPacked = IndexPackerLib.pack2(JRT_IDX, SRT_IDX);
+
+        _jrtDepositOrderPacked = IndexPackerLib.pack2(JRT_IDX, SRT_IDX);
+        _srtDepositOrderPacked = IndexPackerLib.pack2(SRT_IDX, JRT_IDX);
     }
 
     function configureStrategies(
@@ -54,13 +62,7 @@ contract IsolatedStrategy is MultiStrategy, IIsolatedStrategy {
         emit LiquidAllocationFloorSet(floor_);
     }
 
-
-    // JRT deposits go to junior strat (index 0), SRT to senior strat (index 1).
-    function _depositStratIndex(address tranche) internal view override returns (uint256) {
-        return cdo.isJrt(tranche) ? JRT_IDX : SRT_IDX;
-    }
-
-    function _depositStratIndex(address tranche, address token, uint256 baseAssets) internal view override returns (uint256) {
+    function _depositStratIndexes(address tranche, address /*token*/, uint256 baseAssets) internal view override returns (uint256) {
         (
             uint256 deficitStratIdx,
             uint256 deficitAmount,
@@ -71,26 +73,24 @@ contract IsolatedStrategy is MultiStrategy, IIsolatedStrategy {
         if (deficitStratIdx == JRT_IDX &&
             baseAssets <= deficitAmount &&
             surplusStratIdx == SRT_IDX &&
-            surplusAmount > 0 &&
-            perStrategyTokens[address(juniorStrat)][token]) {
+            surplusAmount > 0) {
 
             // Junior has deficit AND Senior has surplus
-            return JRT_IDX;
+            return _jrtDepositOrderPacked;
         }
 
         if (
             deficitStratIdx == SRT_IDX &&
             baseAssets <= deficitAmount &&
             surplusStratIdx == JRT_IDX &&
-            surplusAmount > 0 &&
-            perStrategyTokens[address(seniorStrat)][token]) {
+            surplusAmount > 0) {
 
             // Senior has deficit AND Junior has surplus
-            return SRT_IDX;
+            return _srtDepositOrderPacked;
         }
 
         // Otherwise deposit to the tranche's default strategy
-        return _depositStratIndex(tranche);
+        return cdo.isJrt(tranche) ? _jrtDepositOrderPacked : _srtDepositOrderPacked;
     }
 
     // JRT redemptions from senior strategy first (index 1); SRT redeems from junior first (index 0).

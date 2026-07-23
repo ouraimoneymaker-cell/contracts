@@ -410,7 +410,8 @@ contract Accounting is IAccounting, CDOComponent {
 
             loss -= reserveLoss;
             uint256 srtLoss = Math.min(srtNavT0, loss);
-            require(srtLoss == loss, "Loss>navT0");
+            // The market is considered abandoned if losses would consume the protected dust NAV
+            require(srtLoss == loss, "NavBelowMinimum");
 
             jrtNavT0 -= jrtLoss;
             srtNavT0  -= srtLoss;

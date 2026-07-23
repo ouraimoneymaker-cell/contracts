@@ -720,7 +720,8 @@ contract DYSAccounting is IAccounting, CDOComponent {
 
             loss -= reserveLoss;
             uint256 srtLoss = Math.min(srtNavT0, loss);
-            require(srtLoss == loss, "Loss>navT0");
+            // The market is considered abandoned if losses would consume the protected dust NAV
+            require(srtLoss == loss, "NavBelowMinimum");
 
             jrtNavT1Projected = jrtNavT0Projected - jrtLoss;
             jrtNavT1Real = Math.min(jrtNavT1Projected, jrtNavT0Real);
@@ -942,7 +943,8 @@ contract DYSAccounting is IAccounting, CDOComponent {
             loss -= reserveLoss;
             // Apply SRT loss to recently accrued balance
             uint256 srtLoss = Math.min(srtNavT1, loss);
-            require(srtLoss == loss, "Loss>navT0");
+            // The market is considered abandoned if losses would consume the protected dust NAV
+            require(srtLoss == loss, "NavBelowMinimum");
 
             jrtNavT1Real = jrtNavT0Real - jrtLoss;
             srtNavT1 -= srtLoss;

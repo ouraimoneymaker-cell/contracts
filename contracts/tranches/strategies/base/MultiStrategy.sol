@@ -214,24 +214,21 @@ abstract contract MultiStrategy is Strategy, IMultiStrategy, IRebalanceable {
     }
 
     /// @notice Routes reserve withdrawals to a compatible sub-strategy.
+    /// @dev The protocol owner can target a specific strategy by redeeming that strategy's share token.
     function reduceReserve(address token, uint256 tokenAmount, address receiver) external onlyCDO {
         uint256 len = strats.length;
         for (uint256 i; i < len; i++) {
-            if (perStrategyTokens[address(strats[i])][token]) {
-                uint256 baseAssets = strats[i].convertToAssets(token, tokenAmount, Math.Rounding.Floor);
-                if (strats[i].totalAssets() >= baseAssets) {
-                    strats[i].reduceReserve(token, tokenAmount, receiver);
-                    return;
-                }
+            IStrategy strat = strats[i];
+            if (!perStrategyTokens[address(strat)][token]) {
+                continue;
             }
-        }
-        for (uint256 i; i < len; i++) {
-            if (perStrategyTokens[address(strats[i])][token]) {
-                strats[i].reduceReserve(token, tokenAmount, receiver);
+            uint256 baseAssets = strat.convertToAssets(token, tokenAmount, Math.Rounding.Floor);
+            if (strat.totalAssets() >= baseAssets) {
+                strat.reduceReserve(token, tokenAmount, receiver);
                 return;
             }
         }
-        revert UnsupportedToken(token);
+        revert("InsufficientAssetsForToken");
     }
 
     /// @notice Returns all tokens supported by at least one sub-strategy.

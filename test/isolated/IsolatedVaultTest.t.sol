@@ -138,9 +138,9 @@ contract IsolatedVaultTest is IsolatedVaultDeploy {
         // Junior strat should be fully drained, remainder from senior
         assertEq(juniorConsumed, DEPOSIT_AMOUNT, "All junior liquidity should be consumed first");
         assertEq(seniorConsumed, withdrawAmount - DEPOSIT_AMOUNT, "Senior strat covers the remainder");
-        // Junior drained below the 30% liquid allocation floor, so imbalances() caps its deficit at
-        // the floor target (0.3 * navTotal = 0.3 * 1500 = 450), not the full 1000 borrowed.
-        assertApproxEqAbs(_debtToJunior(), DEPOSIT_AMOUNT * 45 / 100, 1e3, "Junior deficit capped at liquid allocation floor");
+        // Junior's accounting entitlement is above the 30% liquid allocation floor, so imbalances()
+        // reports the full entitlement deficit instead of capping it at the floor target.
+        assertApproxEqAbs(_debtToJunior(), DEPOSIT_AMOUNT, 1e3, "Junior deficit follows entitlement above floor");
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -230,16 +230,14 @@ contract IsolatedVaultTest is IsolatedVaultDeploy {
         _depositToJrt(alice, jrtDeposit);
         _depositToSrt(alice, DEPOSIT_AMOUNT);
 
-        // Set senior strategy to 1 wei to simulate near-total loss.
-        // Using exactly 0 triggers the oracle-stale gate in MultiStrategy.totalAssets
-        // (returns navT0 whenever any sub-strategy returns 0, conflating genuine zero
-        // with "oracle not yet updated").
-        seniorStrat.setTotalAssets(1);
+        // Set senior strategy to zero to simulate total loss in that sub-strategy.
+        // A fresh zero NAV must be reconciled as a real value, not treated as stale data.
+        seniorStrat.setTotalAssets(0);
 
-        // JRT absorbs loss first (loss ≈ 999 ether > jrtDeposit 300 ether), so JRT is fully wiped.
-        // SRT absorbs the remainder. Final NAVs must sum to navT1 = juniorStrat + 1 wei.
+        // JRT absorbs loss first (loss ≈ 1000 ether > jrtDeposit 300 ether), so JRT is fully wiped.
+        // SRT absorbs the remainder. Final NAVs must sum to navT1 = juniorStrat only.
         uint256 expectedJrtNav = 0;
-        uint256 expectedSrtNav = jrtDeposit + 1; // navT1 = 300e18 + 1 wei; JRT=0, SRT gets the rest
+        uint256 expectedSrtNav = jrtDeposit; // navT1 = 300e18; JRT=0, SRT gets the rest
 
         (uint256 jrtNavT1, uint256 srtNavT1,) = accounting.totalAssets();
         assertEq(jrtNavT1, expectedJrtNav, "JRT nav wiped to zero absorbing as much loss as possible");

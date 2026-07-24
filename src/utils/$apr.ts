@@ -2,6 +2,7 @@ import { $bigint } from 'dequanto/utils/$bigint';
 import { $date } from 'dequanto/utils/$date';
 import { $number } from 'dequanto/utils/$number';
 
+const SECONDS_PER_YEAR = 365 * 24 * 60 * 60;
 export namespace $apr {
     const DECIMALS = 12;
 
@@ -39,7 +40,26 @@ export namespace $apr {
         return aprSrt;
     }
 
-     export function calcAprJrt (params: {
+    export function calcPrice(params: {
+        price: number | bigint,
+        decimals?: number,
+        apr: number | bigint,
+        dt: number | string
+    }) {
+        let dt = typeof params.dt === 'string'
+            ? $date.parseTimespan(params.dt, { get: 's' })
+            : params.dt;
+        let apr = typeof params.apr === 'bigint' ? params.apr : $bigint.toWei(params.apr, 12);
+        let gainFactor = apr * BigInt(dt) / BigInt(SECONDS_PER_YEAR);
+        let price = typeof params.price === 'number'
+            ? $bigint.toWei(params.price, params.decimals ?? 18)
+            : params.price;
+
+        let nextPrice = price * (10n**12n + gainFactor) / 10n**12n;
+        return nextPrice
+    }
+
+    export function calcAprJrt (params: {
         aprs: { target: number, base: number},
         risk: [number, number, number],
         tvls: { jrt: number, srt: number },

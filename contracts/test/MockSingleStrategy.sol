@@ -10,10 +10,12 @@ contract MockSingleStrategy is IStrategy {
     using SafeERC20 for IERC20;
 
     IERC20 public immutable token;
+    address public cdo;
     uint256 public totalAssetsValue;
 
-    constructor(IERC20 token_) {
+    constructor(IERC20 token_, address cdo_) {
         token = token_;
+        cdo = cdo_;
     }
 
     function deposit (
@@ -104,8 +106,9 @@ contract MockSingleStrategy is IStrategy {
     }
 
     function depositFeeBps(address) external pure returns (uint256) { return 0; }
+    function depositFeeBps(address,address,uint256) external pure returns (uint256) { return 0; }
 
-    function getCDOAddress() external pure returns (address) { return address(0); }
+    function getCDOAddress() external view returns (address) { return cdo; }
 
     function maxDeposit(address, address, uint256 tokenAmount) external pure returns (uint256) { return tokenAmount; }
 
@@ -115,5 +118,8 @@ contract MockSingleStrategy is IStrategy {
 
     function setTotalAssets(uint256 assets) external {
         totalAssetsValue = assets;
+    }
+    function configure () external {
+
     }
 }

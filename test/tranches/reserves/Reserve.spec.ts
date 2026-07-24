@@ -8,8 +8,7 @@ import { l } from 'dequanto/utils/$logger';
 import { $ethena } from '../utils/$ethena';
 
 
-const test = $hh.create('ethena');
-await test.deploy();
+const test = await $hh.deploy('ethena');
 
 let { deployer, factory } = test
 let { sUSDe, USDe, strategy, cdo, accounting, unstakeCooldown } = test.tranches;
@@ -19,15 +18,14 @@ UTest.create({
     async $before () {
         await $erc20.mint(USDe, deployer, deployer, 1000_000);
         await cdo.$receipt().setReserveTreasury(deployer, '0xff');
-
     },
     async $after () {
-        await test.reset();
+        await test.wipe();
     },
     async $teardown () {
         await accounting.$receipt().setReserveBps(deployer, 0n);
     },
-    async '!withdraw sUSDe' () {
+    async 'withdraw sUSDe' () {
         await accounting.$receipt().setReserveBps(deployer, $bigint.toWei(0.02));
 
         let { jrtVault, srtVault,  } = test.tranches;
@@ -96,8 +94,6 @@ UTest.create({
     async 'update reserve should trigger accounting' () {
         let { jrtVault, srtVault, accounting } = test.tranches;
 
-        console.log(`Balance`, await USDe.balanceOf(deployer.address));
-
         await $erc4626.deposit(jrtVault, deployer, 1_000);
         await $ethena.distribute(sUSDe, USDe, deployer, 2000);
 
@@ -110,5 +106,5 @@ UTest.create({
 
         let r = await accounting.totalReserve();
         $require.eq(r, 0n, `No reserve must be present`);
-    },
+    }
 })

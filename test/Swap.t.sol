@@ -107,7 +107,7 @@ contract CDOTest is Test {
         jrtVault = Tranche(
             address(
                 new ERC1967Proxy(
-                    address(new Tranche()),
+                    address(new Tranche(false)),
                     abi.encodeWithSelector(Tranche.initialize.selector, owner, address(acm), "jrtVault", "jrtUSDe", IERC20(address(USDe)), address(cdo))
                 )
             )
@@ -115,7 +115,7 @@ contract CDOTest is Test {
         srtVault = Tranche(
             address(
                 new ERC1967Proxy(
-                    address(new Tranche()),
+                    address(new Tranche(false)),
                     abi.encodeWithSelector(Tranche.initialize.selector, owner, address(acm), "srtVault", "srtUSDe", IERC20(address(USDe)), address(cdo))
                 )
             )

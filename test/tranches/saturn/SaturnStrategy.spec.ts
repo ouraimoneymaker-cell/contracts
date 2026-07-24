@@ -224,7 +224,7 @@ UTest.create({
         await $tranche.deposit(srtVault, deployer, base, 10_000);
 
         // Check Saturn' exit fee
-        const fee = await strategy.depositFeeBps();
+        const fee = await strategy.depositFeeBps(jrtVault.address, base.address, BigInt(10_000e18));
         $require.eq(await jrtVault.totalAssets(), BigInt(10_000e6 * (1 - Number(fee) / 10000)));
         $require.eq(await srtVault.totalAssets(), BigInt(10_000e6 * (1 - Number(fee) / 10000)));
 
@@ -280,7 +280,8 @@ UTest.create({
             const reserveNavEth = $bigint.toEther(reserveNav, 6);
             const jrtNav = await jrtVault.totalAssets();
 
-            $test.eqDiff(gain * $bigint.toEther(reserveBps, 18), reserveNavEth, .01, `Invalid reserve nav`);
+            $require.gt(reserveBps, BigInt(0.01e18));
+            $test.eqDiff(0, reserveNavEth, .01, `No performance fee under the watermark`);
 
             // We have recovered the loss;
             // however, for 2 seconds Junior has paid Senior the APR, and we have collected the reserve fee

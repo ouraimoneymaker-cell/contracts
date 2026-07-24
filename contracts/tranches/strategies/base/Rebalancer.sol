@@ -34,12 +34,22 @@ contract Rebalancer is IRebalancer, AccessControlled {
     IRebalanceable public strategy;
     IUnstakeCooldown public unstakeCooldown;
 
+    uint256 public immutable maxPendingRebalances;
+    uint256 public immutable minRebalanceBaseAssets;
+
     PendingRebalance[] public pendingRebalances;
     mapping(uint256 => uint256) private _pendingToStrat;
+    uint256 public pendingBaseAssetsTotal;
 
     event RebalanceInitiated(uint256 indexed fromStratIdx, uint256 indexed toStratIdx, uint256 baseAssets);
     event RebalanceCompleted(uint256 indexed fromStratIdx, uint256 indexed toStratIdx, uint256 baseAssets);
     event RebalanceCanceled(uint256 indexed fromStratIdx, uint256 indexed toStratIdx, uint256 baseAssets);
+
+    constructor(uint256 maxPendingRebalances_, uint256 minRebalanceBaseAssets_) {
+        require(maxPendingRebalances_ > 0, "ZeroMaxPending");
+        maxPendingRebalances = maxPendingRebalances_;
+        minRebalanceBaseAssets = minRebalanceBaseAssets_;
+    }
 
     function initialize(address owner_, address acm_, IRebalanceable strategy_, IUnstakeCooldown unstakeCooldown_) external initializer {
         AccessControlled_init(owner_, acm_);
@@ -112,6 +122,7 @@ contract Rebalancer is IRebalancer, AccessControlled {
     ) private {
         // No swap path exists: source and destination use the same base asset; equality prevents stranded funds.
         require(withdrawToken == depositToken, "TokenMismatch");
+        require(baseAssets >= minRebalanceBaseAssets, "RebalanceTooSmall");
 
         uint256 balBefore = IERC20(depositToken).balanceOf(address(this));
         uint256 tokenAmount = strategy.withdrawForRebalance(fromStratIdx, withdrawToken, baseAssets, address(this));
@@ -123,6 +134,7 @@ contract Rebalancer is IRebalancer, AccessControlled {
 
             emit RebalanceCompleted(fromStratIdx, toStratIdx, baseAssets);
         } else {
+            require(pendingRebalances.length < maxPendingRebalances, "TooManyPendingRebalances");
             address shareToken = strategy.getStratShareToken(fromStratIdx);
             pendingRebalances.push(PendingRebalance({
                 fromStratIdx: fromStratIdx,
@@ -134,6 +146,7 @@ contract Rebalancer is IRebalancer, AccessControlled {
                 tokenAmount: tokenAmount
             }));
             _pendingToStrat[toStratIdx] += baseAssets;
+            pendingBaseAssetsTotal += baseAssets;
 
             emit RebalanceInitiated(fromStratIdx, toStratIdx, baseAssets);
         }
@@ -174,13 +187,14 @@ contract Rebalancer is IRebalancer, AccessControlled {
 
         // Reduce by the expected pending baseAssets
         _pendingToStrat[pending.toStratIdx] -= pending.baseAssets;
+        pendingBaseAssetsTotal -= pending.baseAssets;
 
         uint256 last = pendingRebalances.length - 1;
         if (idx < last) {
             pendingRebalances[idx] = pendingRebalances[last];
         }
         pendingRebalances.pop();
-        emit RebalanceCompleted(pending.fromStratIdx, pending.toStratIdx, pending.baseAssets);
+        emit RebalanceCompleted(pending.fromStratIdx, pending.toStratIdx, baseAssets);
     }
 
     /// @notice Cancels a pending rebalance when the underlying redemption is canceled by the protocol.
@@ -189,6 +203,7 @@ contract Rebalancer is IRebalancer, AccessControlled {
     /// @param idx The index of the pending rebalance to cancel.
     /// @param minShares Minimum share tokens to recover.
     function cancelRebalance(uint256 idx, uint256 minShares) external onlyRole(UPDATER_STRAT_CONFIG_ROLE) {
+        require(idx < pendingRebalances.length, "InvalidIndex");
         PendingRebalance memory pending = pendingRebalances[idx];
         address shareToken = pending.shareToken;
         uint256 fromStratIdx = pending.fromStratIdx;
@@ -210,6 +225,7 @@ contract Rebalancer is IRebalancer, AccessControlled {
 
         // Reduce by the expected pending baseAssets
         _pendingToStrat[pending.toStratIdx] -= pending.baseAssets;
+        pendingBaseAssetsTotal -= pending.baseAssets;
 
         uint256 last = pendingRebalances.length - 1;
         if (idx < last) {
@@ -223,11 +239,7 @@ contract Rebalancer is IRebalancer, AccessControlled {
     /// @dev Reports the requested baseAssets amount until completion or cancellation,
     ///      independent of the underlying unstake request status.
     function totalAssets() external view returns (uint256 assets) {
-        uint256 len = pendingRebalances.length;
-        for (uint256 i = 0; i < len; i++) {
-            assets += pendingRebalances[i].baseAssets;
-        }
-        return assets;
+        return pendingBaseAssetsTotal;
     }
 
     function pendingCount() external view returns (uint256) {

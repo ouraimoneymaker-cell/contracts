@@ -7,11 +7,12 @@ License text copyright (c) 2017 MariaDB Corporation Ab, All Rights Reserved.
 
 Parameters
 
-Licensor: Frontera Labs Inc.
+Licensor: IP retained by individual founders per
+contractor agreements with carve-out
 
 Licensed Work: Strata V1 Core
 
-Licensed Work is (c) 2025 Frontera Labs Inc.
+Licensed Work is (c) 2026 Founders
 
 Additional Use Grant: Any uses listed and defined at this [LICENSE](./LICENSE.md)
 

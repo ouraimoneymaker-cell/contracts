@@ -41,6 +41,10 @@ contract DiscreteAccounting is IAccounting, CDOComponent {
     uint256 public srtTargetIndex;
 
     uint256 public reserveBps;
+
+    /// @notice High-water mark used to charge performance fees only on new NAV gains.
+    uint256 public feeWatermarkNav;
+
     uint256 constant PERCENTAGE_100 = 1e18;
     uint256 constant RESERVE_BPS_MAX = 0.2e18;
 
@@ -112,6 +116,12 @@ contract DiscreteAccounting is IAccounting, CDOComponent {
     ///      real rewards are detected — not on every deposit.
     uint256 public lastReconciliation;
 
+    /// @notice Gross Senior NAV deposited during valuation loss and self-funded by Senior.
+    uint256 public srtFundedGrossNav;
+
+    /// @notice Portion of funded Senior NAV that covers its own valuation loss.
+    uint256 public srtFundNav;
+
     error InvalidNavSplit(uint256 navT1, uint256 jrtAssets, uint256 srtAssets, uint256 reserveAssets);
     error ReserveTooLow(uint256 reserveNav, uint256 requestedNav);
 
@@ -173,6 +183,12 @@ contract DiscreteAccounting is IAccounting, CDOComponent {
         (jrtNavT1Projected, srtNavT1) = calcEffectiveNav(jrtNavT1Projected, srtNavT1);
     }
 
+    /// @notice Returns projected or reconciled amounts without projection unwind.
+    /// @dev Unprojected redemption pricing is not supported. Use DYSAccounting if projection unwind is required.
+    function totalAssetsUnprojected () external view returns (uint256 jrtNavUnprojected, uint256 srtNavUnprojected, uint256 reserveNavUnprojected) {
+        return totalAssets();
+    }
+
     /// @notice Returns the updated total assets for each tranche and the reserve
     /// @dev This method is used by the Tranches to get their updated total assets for the current block
     /// @dev The strategy must return NAV with new rewards, using accounting's current NAV and timestamp.
@@ -224,10 +240,12 @@ contract DiscreteAccounting is IAccounting, CDOComponent {
             revert ReserveTooLow(amount, jrtAmountIn + srtAmountIn);
         }
         reserveNav = reserveNav - amount;
+        adjustFeeWatermark(jrtAmountIn + srtAmountIn, amount);
         nav = nav + jrtAmountIn + srtAmountIn - amount;
         navTimestamp = block.timestamp;
         jrtNavProjected += jrtAmountIn;
         jrtBaseNav += jrtAmountIn;
+        srtFundNav += _trackSrtFundNavIn(srtAmountIn);
         srtBaseNav += srtAmountIn;
 
         // Fetch APRs and force recalculate aprSrt, as JRT and SRT TVLs may have changed.
@@ -294,7 +312,25 @@ contract DiscreteAccounting is IAccounting, CDOComponent {
         uint256 srtAssetsIn,
         uint256 srtAssetsOut
     ) external onlyCDO {
+        srtFundNav += _trackSrtFundNavIn(srtAssetsIn);
+
         if (valuationPrice < 1e18 && srtAssetsOut > 0) {
+            uint256 fundedFundOut;
+            if (srtFundedGrossNav > 0) {
+                (, uint256 srtNavEffective) = calcEffectiveNav(jrtBaseNav, srtBaseNav);
+                uint256 fundedGrossOut = Math.min(
+                    srtAssetsOut,
+                    Math.mulDiv(srtAssetsOut, srtFundedGrossNav, srtNavEffective)
+                );
+                fundedFundOut = Math.min(
+                    srtFundNav,
+                    Math.mulDiv(fundedGrossOut, 1e18 - valuationPrice, valuationPrice)
+                );
+                srtFundedGrossNav -= fundedGrossOut;
+                srtFundNav -= fundedFundOut;
+            }
+
+            uint256 jrtAssetsOutEffective = jrtAssetsOut;
             (jrtAssetsOut, srtAssetsOut) = AccountingLib.splitValuatedNavOut(
                 jrtBaseNav,
                 srtBaseNav,
@@ -303,10 +339,21 @@ contract DiscreteAccounting is IAccounting, CDOComponent {
                 jrtAssetsOut,
                 srtAssetsOut
             );
+            uint256 jrtCoverage = jrtAssetsOut - jrtAssetsOutEffective;
+            // Use the Senior-funded top-up to reduce Junior's realized coverage loss.
+            // Cap it by remaining Senior base capacity to avoid over-withdrawing Senior NAV.
+            uint256 remainingSrtCapacity = Math.saturatingSub(srtBaseNav + srtAssetsIn, srtAssetsOut);
+            uint256 coveredByFund = Math.min(
+                Math.min(Math.mulDiv(fundedFundOut, valuationPrice, 1e18), jrtCoverage),
+                remainingSrtCapacity
+            );
+            jrtAssetsOut -= coveredByFund;
+            srtAssetsOut += coveredByFund;
         }
         jrtBaseNav = jrtBaseNav + jrtAssetsIn - jrtAssetsOut;
         jrtNavProjected = jrtNavProjected + jrtAssetsIn - jrtAssetsOut;
         srtBaseNav = srtBaseNav + srtAssetsIn - srtAssetsOut;
+        adjustFeeWatermark(jrtAssetsIn + srtAssetsIn, jrtAssetsOut + srtAssetsOut);
         nav = nav + jrtAssetsIn + srtAssetsIn - jrtAssetsOut - srtAssetsOut;
         navTimestamp = block.timestamp;
         (bool modified, UD60x18 aprTarget_, UD60x18 aprBase_) = fetchAprs();
@@ -328,6 +375,14 @@ contract DiscreteAccounting is IAccounting, CDOComponent {
             srtBaseNav -= amountToReserve;
         }
         emit FeeAccrued(isJrt, amountToReserve, amount - amountToReserve);
+    }
+
+    function adjustFeeWatermark(uint256 assetsIn, uint256 assetsOut) internal {
+        if (assetsIn > assetsOut) {
+            feeWatermarkNav += assetsIn - assetsOut;
+        } else if (assetsOut > assetsIn) {
+            feeWatermarkNav = Math.saturatingSub(feeWatermarkNav, assetsOut - assetsIn);
+        }
     }
 
     /// @notice Calculates the updated Net Asset Values (NAVs) for Junior, Senior tranches, and Reserve
@@ -385,7 +440,8 @@ contract DiscreteAccounting is IAccounting, CDOComponent {
 
             loss -= reserveLoss;
             uint256 srtLoss = Math.min(srtNavT0, loss);
-            require(srtLoss == loss, "Loss>navT0");
+            // The market is considered abandoned if losses would consume the protected dust NAV
+            require(srtLoss == loss, "NavBelowMinimum");
 
             jrtNavT0Real -= jrtLoss;
             srtNavT0  -= srtLoss;
@@ -396,8 +452,9 @@ contract DiscreteAccounting is IAccounting, CDOComponent {
 
         // #1 Final new reserve
         uint256 reserve_dT = 0;
-        if (gain_dTAbs > 0 && reserveBps > 0) {
-            reserve_dT = gain_dTAbs * reserveBps / PERCENTAGE_100;
+        if (navT1 > feeWatermarkNav && reserveBps > 0) {
+            uint256 feeableGain = navT1 - feeWatermarkNav;
+            reserve_dT = feeableGain * reserveBps / PERCENTAGE_100;
             gain_dTAbs -= reserve_dT;
         }
         reserveNavT1 = reserveNavT0 + reserve_dT;
@@ -474,7 +531,8 @@ contract DiscreteAccounting is IAccounting, CDOComponent {
 
             loss -= reserveLoss;
             uint256 srtLoss = Math.min(srtNavT0, loss);
-            require(srtLoss == loss, "Loss>navT0");
+            // The market is considered abandoned if losses would consume the protected dust NAV
+            require(srtLoss == loss, "NavBelowMinimum");
 
             jrtNavT1Projected = jrtNavT0Projected - jrtLoss;
             jrtNavT1Real = Math.min(jrtNavT1Projected, jrtNavT0Real);
@@ -492,9 +550,13 @@ contract DiscreteAccounting is IAccounting, CDOComponent {
 
         uint256 gain_dTAbs = uint256(gain_dT);
 
-        // #1 Decrease Projected Gain by expected peformance fee, but do not increase real reserve.
-        if (reserveBps > 0) {
-            uint256 reserve_dT = gain_dTAbs * reserveBps / PERCENTAGE_100;
+        // Decrease projected gain by the expected performance fee only above the high-water mark.
+        if (reserveBps > 0 && navT0 + gain_dTAbs > feeWatermarkNav) {
+            uint256 feeableGain = Math.min(
+                gain_dTAbs,
+                navT0 + gain_dTAbs - feeWatermarkNav
+            );
+            uint256 reserve_dT = (feeableGain * reserveBps) / PERCENTAGE_100;
             gain_dTAbs -= reserve_dT;
         }
 
@@ -548,6 +610,9 @@ contract DiscreteAccounting is IAccounting, CDOComponent {
         ) = calculateNAVSplit(nav, jrtNavProjected, jrtBaseNav, srtBaseNav, reserveNav, navT1);
         updateIndex();
         if (useNavAtReconciliation && navT1 != nav) lastReconciliation = block.timestamp;
+        if (navT1 != nav && navT1 > feeWatermarkNav) {
+            feeWatermarkNav = navT1;
+        }
         nav = navT1;
         navTimestamp = block.timestamp;
         srtBaseNav = srtNavT1;
@@ -582,7 +647,11 @@ contract DiscreteAccounting is IAccounting, CDOComponent {
 
 
     function calculateRiskPremium () internal view returns (UD60x18){
-        UD60x18 tvlRatio = UD60x18.wrap(srtBaseNav == 0 ? 0 : (srtBaseNav * 1e18 / (srtBaseNav + jrtNavProjected)));
+        (
+            uint256 jrtEffective,
+            uint256 srtEffective
+        ) = calcEffectiveNav(jrtNavProjected, srtBaseNav);
+        UD60x18 tvlRatio = UD60x18.wrap(srtEffective == 0 ? 0 : (srtEffective * 1e18 / (srtEffective + jrtEffective)));
         UD60x18 riskPremium = calculateRiskPremiumInner(riskX, riskY, riskK, tvlRatio);
         return riskPremium;
     }
@@ -622,6 +691,14 @@ contract DiscreteAccounting is IAccounting, CDOComponent {
         aprSrt = UD60x18Ext.max(aprTarget_, aprSrt1);
     }
 
+    function syncAprs() internal {
+        (bool modified, UD60x18 aprTarget_, UD60x18 aprBase_) = fetchAprs();
+        if (modified) {
+            emit AprDataChangedViaPush(aprTarget_, aprBase_);
+        } else {
+            updateAprSrt(aprTarget_, aprBase_);
+        }
+    }
     /// @dev Calculates the desired gain based on the change in target index over a period
     /// @return The calculated gain (positive) or loss (negative) as an int256
     function calculateGain (uint256 navT0, uint256 targetIndexT1, uint256 targetIndexT0) internal pure returns (int256) {
@@ -650,13 +727,7 @@ contract DiscreteAccounting is IAccounting, CDOComponent {
     // Trigger fetching new APRs to update srtTargetIndex
     function onAprChanged () external onlyRole(UPDATER_FEED_ROLE)  {
         updateAccountingInner(cdo.totalStrategyAssets(nav, _navAnchor()));
-        (bool modified, UD60x18 aprTarget_, UD60x18 aprBase_) = fetchAprs();
-        if (modified) {
-            emit AprDataChangedViaPush(aprTarget_, aprBase_);
-        } else {
-            // If APRs are unchanged, recalculate aprSrt using old APRs and the post-accounting TVL ratio
-            updateAprSrt(aprTarget_, aprBase_);
-        }
+        syncAprs();
     }
 
     /// @notice Sets the risk premium parameters used in calculating the risk-adjusted APR
@@ -679,21 +750,16 @@ contract DiscreteAccounting is IAccounting, CDOComponent {
         updateAprSrt(aprTarget, aprBase);
     }
 
-    /// @notice Sets the APRs Feed contract for fetching APR target and APR base
-    /// @dev This feed provides the external APR values used in calculations
-    /// @param aprPairFeed_ The address of the new APRs Feed contract
-    /// @dev Only callable by the protocol owner
-    /// @dev IMPORTANT: When changing the APR feed, the Owner MUST execute onAprChanged() atomically
-    ///      BEFORE and AFTER calling this function:
-    ///      1. Call onAprChanged() BEFORE setAprPairFeed() to finalize the old SRT index period
-    ///      2. Call setAprPairFeed() to update the feed address
-    ///      3. Call onAprChanged() AFTER setAprPairFeed() to start the new period with updated APRs
-    ///      This ensures proper index continuity and prevents accounting discrepancies.
+    /// @notice Sets the APR feed contract for fetching APR target and APR base.
+    /// @dev Finalizes accounting with the current feed before switching, then starts the new APR period.
+    /// @param aprPairFeed_ The address of the new APR feed contract.
     function setAprPairFeed (IAprPairFeed aprPairFeed_) external onlyOwner {
-        // integrity check
         require(aprPairFeed_.decimals() == APR_FEED_DECIMALS, "InvalidFeed");
+        updateAccountingInner(cdo.totalStrategyAssets(nav, _navAnchor()));
+        syncAprs();
         aprPairFeed = aprPairFeed_;
         emit AprPairFeedChanged(address(aprPairFeed_));
+        syncAprs();
     }
 
     /// @notice Sets the percentage of gains allocated to the reserve
@@ -741,6 +807,7 @@ contract DiscreteAccounting is IAccounting, CDOComponent {
         bool valuationLossEntered = isValuationLossPeriod == false && price < 1e18;
         // Allow the valuation price in range 0.0001-1
         require(0.0001e18 <= price && price <= 1e18, "InvalidValuationPrice");
+        _resyncSrtFundNav(price);
         valuationPrice = price;
         valuationUpdatedAt = uint64(block.timestamp);
         if (valuationLossEntered) {
@@ -757,6 +824,27 @@ contract DiscreteAccounting is IAccounting, CDOComponent {
         emit ValuationGracePeriodChanged(period);
     }
 
+
+    function _trackSrtFundNavIn(uint256 amount) internal returns (uint256 srtFundAmountIn) {
+        if (amount == 0 || valuationPrice == 1e18) {
+            return 0;
+        }
+        srtFundAmountIn = Math.mulDiv(amount, 1e18 - valuationPrice, valuationPrice);
+        srtFundedGrossNav += amount;
+    }
+
+    function _resyncSrtFundNav(uint128 price) internal {
+        uint256 fundedGrossNav = srtFundedGrossNav;
+        if (fundedGrossNav == 0) {
+            return;
+        }
+        if (price == 1e18) {
+            srtFundedGrossNav = 0;
+            srtFundNav = 0;
+            return;
+        }
+        srtFundNav = Math.mulDiv(fundedGrossNav, 1e18 - price, price);
+    }
 
     /// @notice Calculates valuation-adjusted NAVs for Junior and Senior tranches
     /// @dev Applies the valuation loss adjustment mechanism where Junior absorbs Senior's valuation losses first.
@@ -782,6 +870,7 @@ contract DiscreteAccounting is IAccounting, CDOComponent {
             return (jrtFact, srtFact);
         }
         uint256 extraNeeded = srtFact * (1e18 - valuationPrice) / valuationPrice;
+        extraNeeded = Math.saturatingSub(extraNeeded, srtFundNav);
         uint256 extraTaken = Math.min(
             Math.saturatingSub(jrtFact, ONE_ASSET),
             extraNeeded

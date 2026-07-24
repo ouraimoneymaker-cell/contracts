@@ -70,7 +70,7 @@ abstract contract Strategy is IStrategy, CDOComponent {
      * @notice Returns the deposit fee percentage for the underlying protocol
      * @return feeBps The deposit fee in basis points (e.g., 10 = 0.1%)
      */
-    function depositFeeBps (address) external virtual view returns (uint256 feeBps) {
+    function depositFeeBps (address /*tranche*/, address /*tokenIn*/, uint256 /*tokenAmount*/) external virtual view returns (uint256 feeBps) {
         return 0;
     }
 
@@ -119,4 +119,8 @@ abstract contract Strategy is IStrategy, CDOComponent {
         address receiver,
         bool shouldSkipCooldown
     ) public virtual returns (uint256);
+
+    function configure () external virtual onlyCDO {
+        // No default configuration
+    }
 }

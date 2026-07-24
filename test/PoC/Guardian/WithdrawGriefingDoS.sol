@@ -213,7 +213,7 @@ contract WithdrawGriefingDoS is Test {
     }
 
     function _deployTranche(string memory name, string memory symbol) internal returns (Tranche) {
-        Tranche trancheImpl = new Tranche();
+        Tranche trancheImpl = new Tranche(false);
         vm.label(address(trancheImpl), string.concat(name, "_Tranche_Impl"));
         address proxy = address(
             new ERC1967Proxy(

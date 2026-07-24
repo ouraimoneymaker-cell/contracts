@@ -90,7 +90,7 @@ export class MM1UsdDeployments extends DeploymentsBase<{
             });
             const midasRedemptionVault = await this.ds.ensureContract(MockRedemptionVault, {
                 id: 'MockMM1USDRedemptionVault',
-                arguments: [mM1USD.address, USDC.address],
+                arguments: [mM1USD.address, USDC.address, $address.ZERO],
             });
             const oracle = await this.ds.ensureContract(MockOracle, {
                 id: 'MockMM1USDOracle',

@@ -89,7 +89,16 @@ export interface ICDO {
             useBenchmark?: boolean
             // When true, DYSAccounting uses the rate-based senior true-up (MultiStrategy deployments).
             useRatesForReconciliation?: boolean;
+            // When true, totalStrategyAssets uses lastReconciliation instead of navTimestamp.
+            // navTimestamp - works for single strategy
+            // lastReconciliation - works for multi-strategy
+            useNavAtReconciliation?: boolean;
+            // When true, Junior covers paid-out projected Senior assets if realized PnL is underestimated.
+            useJuniorCoversPaidSrtProjection?: boolean
+            // When true, redemptions exclude unreconciled projected gains.
+            useConservativeRedemptionPrice?: boolean
         }
+        unstakeImpl?: 'MockInstant'
     };
 
     // Contracts prefixes (can be overridden for testing)

@@ -71,7 +71,9 @@ UTest.create({
                 18n,
                 false,
                 true,
-                false
+                false,
+                false,
+                false,
             ],
             initialize: [
                 deployer.address,
@@ -217,22 +219,33 @@ UTest.create({
                 await deposit(500, 500);
 
                 await mine('0.5year');
+
                 await redeem(0, 250);
+                const { srtNavT1 } = await accounting.totalAssets();
+
+                // ProjectedAPR: 10%; RiskPremium=0.5
+                // 1/2 Year Senior = 500 * 0.05 / 2 = 512.5
+                $require.eq($bigint.toEther(srtNavT1), 262.5, `The first half-year projection: 512.5 - 250 = 262.5`);
 
                 await mine('0.5year');
-                await distribute('1year', 0.50);
+
+                await distribute('1year', 0.50 /* 50% */);
 
                 // total NAV before reward = 750
                 // PnL = 375
                 //
-                // srtNavTime = 500 * 0.5 + 250 * 0.5 = 375
+                // srtPaidProjected = 250 * 12.5 / 512.5 = 6.0975609756
+                // liveProjected = 12.5 - 6.0975609756 = 6.4024390244
+                // srtNavTime = 500 * 0.5 + 262.5 * 0.5 = 381.25
+                // srtProjectedPnLTime = 6.4024390244 * 0.5 = 3.2012195122
+                // srtNavTimeNet = 381.25 - 3.2012195122 = 378.0487804878
                 // navTime = 1000 * 0.5 + 750 * 0.5 = 875
-                // ratio = 375 / 875
+                // ratio = 381.25 / 875
                 //
-                // SRT gain = 375 * 0.5 * 375 / 875 = 80.3571428571
-                // SRT = 250 + 80.3571428571 = 330.3571428571
-                // JRT = 1125 - 330.3571428571 = 794.6428571429
-                await expectApprox(794.6428571429, 330.3571428571);
+                // SRT gain = 375 * 0.5 * 378.0487804878 / 875 = 81.01045296167143
+                // SRT = 250 + 81.01045296167143 = 331.01045296167143
+                // JRT = 1125 - 331.01045296167143 = 793.9895470383285
+                await expectApprox(793.9895470383285, 331.01045296167143);
             },
 
             async 'junior only receives all NAV rewards'() {
@@ -322,7 +335,7 @@ UTest.create({
                 // SRT = 500 * 1.0625^4 = 637.71533203125
                 // JRT = 964.09130859375
                 await expectApprox(964.09, 637.7);
-            }
+            },
 
         })
     }

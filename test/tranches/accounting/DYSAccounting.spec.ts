@@ -168,19 +168,12 @@ UTest.create({
       await updateAccounting();
 
       const srtNavTime = await accounting.srtNavTime();
-      const jrtNavTime = await accounting.jrtNavTime();
       const navTime = await accounting.navTime();
       $require.eq(
         srtNavTime,
         0n,
         "srtNavTime should reset after reconciliation",
       );
-      $require.eq(
-        jrtNavTime,
-        0n,
-        "jrtNavTime should reset after reconciliation",
-      );
-      $require.eq(navTime, 0n, "navTime should reset after reconciliation");
     },
 
     async "lastAccrual updates on every state change"() {

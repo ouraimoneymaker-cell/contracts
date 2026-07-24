@@ -79,7 +79,7 @@ UTest.create({
                 function convertToTokens (address, uint256 baseAssets, uint8) external pure returns (uint256) {
                     return baseAssets;
                 }
-                function depositFeeBps(address) external pure returns (uint256) {
+                function depositFeeBps(address,address,uint256) external pure returns (uint256) {
                     return 0;
                 }
                 function maxDeposit(address, address, uint256) external pure returns (uint256) {

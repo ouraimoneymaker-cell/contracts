@@ -22,6 +22,9 @@ contract Tranche is ITranche, CDOComponent, ERC4626Upgradeable, ERC20PermitUpgra
     /// @notice Basis points denominator
     uint256 public constant BPS_DENOMINATOR = 10000;
 
+    /// @notice When true, redemptions exclude unreconciled projected gains.
+    bool public immutable useConservativeRedemptionPrice;
+
     event OnMetaDeposit(address indexed owner, address indexed token, uint256 tokenAssets, uint256 shares);
     event OnMetaWithdraw(address indexed receiver, address indexed token, uint256 tokenAssets, uint256 shares);
     event OnExit(
@@ -33,6 +36,10 @@ contract Tranche is ITranche, CDOComponent, ERC4626Upgradeable, ERC20PermitUpgra
         uint256 exitFee,
         uint32 cooldownSeconds
     );
+
+    constructor(bool useConservativeRedemptionPrice_) {
+        useConservativeRedemptionPrice = useConservativeRedemptionPrice_;
+    }
 
     function initialize(
         address owner_,
@@ -54,6 +61,11 @@ contract Tranche is ITranche, CDOComponent, ERC4626Upgradeable, ERC20PermitUpgra
     /// @return uint256 The total assets for this tranche
     function totalAssets() public view override(ERC4626Upgradeable, IERC4626) returns (uint256) {
         return cdo.totalAssets(address(this));
+    }
+
+    /// @return uint256 The total assets for this tranche, excluding projection when available
+    function totalAssetsUnprojected() public view returns (uint256) {
+        return cdo.totalAssetsUnprojected(address(this));
     }
 
     function decimals() public view override(ERC20Upgradeable, ERC4626Upgradeable, IERC20Metadata) returns (uint8) {
@@ -93,7 +105,7 @@ contract Tranche is ITranche, CDOComponent, ERC4626Upgradeable, ERC20PermitUpgra
     /** @dev Extends {IERC4626-maxRedeem} to handle the paused state and the TVL ratio */
     function maxRedeem(address owner) public view override(ERC4626Upgradeable, IERC4626) returns (uint256 sharesGross) {
         uint256 assetsProtocolMax = cdo.maxWithdraw(address(this), owner);
-        uint256 sharesProtocolMax = convertToShares(assetsProtocolMax);
+        uint256 sharesProtocolMax = convertToSharesRedeemable(assetsProtocolMax, Math.Rounding.Floor);
         sharesGross = Math.min(super.maxRedeem(owner), sharesProtocolMax);
     }
 
@@ -102,7 +114,7 @@ contract Tranche is ITranche, CDOComponent, ERC4626Upgradeable, ERC20PermitUpgra
     ///      The tranche itself charges no additional deposit fees.
     ///      Returns the net shares the user will receive after the strategy fees are applied.
     function previewDeposit(uint256 assetsGross) public view override(ERC4626Upgradeable, IERC4626) returns (uint256 sharesNet) {
-        uint256 feeBps = cdo.strategy().depositFeeBps(asset());
+        uint256 feeBps = cdo.strategy().depositFeeBps(address(this), asset(), assetsGross);
         sharesNet = quoteDeposit(assetsGross, feeBps);
     }
     function quoteDeposit(uint256 assetsGross, uint256 feeBps) public view returns (uint256 sharesNet) {
@@ -115,7 +127,11 @@ contract Tranche is ITranche, CDOComponent, ERC4626Upgradeable, ERC20PermitUpgra
     ///      The tranche itself charges no additional deposit fees.
     ///      Returns the gross assets required to mint the specified shares after the strategy fees are applied.
     function previewMint(uint256 sharesNet) public view override(ERC4626Upgradeable, IERC4626) returns (uint256 assetsGross) {
-        uint256 feeBps = cdo.strategy().depositFeeBps(asset());
+        uint256 feeBps = cdo.strategy().depositFeeBps(
+            address(this),
+            asset(),
+            super.previewMint(sharesNet)
+        );
         assetsGross = quoteMint(sharesNet, feeBps);
     }
     function quoteMint(uint256 sharesNet, uint256 feeBps) public view returns (uint256 assetsGross) {
@@ -132,7 +148,7 @@ contract Tranche is ITranche, CDOComponent, ERC4626Upgradeable, ERC20PermitUpgra
     }
     function quoteRedeem(uint256 sharesGross, uint256 fee) public view returns (uint256 assetsNet) {
         uint256 sharesFee = fee > 0 ? calculateExitFee(sharesGross, fee, /*isGross*/true) : 0;
-        assetsNet = super.previewRedeem(sharesGross - sharesFee);
+        assetsNet = convertToAssetsRedeemable(sharesGross - sharesFee, Math.Rounding.Floor);
     }
 
     /** @dev Extends {IERC4626-previewWithdraw} to handle fee calculation */
@@ -142,7 +158,7 @@ contract Tranche is ITranche, CDOComponent, ERC4626Upgradeable, ERC20PermitUpgra
     }
 
     function quoteWithdraw(uint256 assetsNet, uint256 fee) public view returns (uint256 sharesGross) {
-        uint256 sharesNet = super.previewWithdraw(assetsNet);
+        uint256 sharesNet = convertToSharesRedeemable(assetsNet, Math.Rounding.Ceil);
         uint256 sharesFee = fee > 0 ? calculateExitFee(sharesNet, fee, /*isGross*/false) : 0;
         sharesGross = sharesNet + sharesFee;
     }
@@ -171,7 +187,7 @@ contract Tranche is ITranche, CDOComponent, ERC4626Upgradeable, ERC20PermitUpgra
     function previewDeposit(address token, uint256 tokenAmount) public view returns (uint256) {
         IStrategy strategy = cdo.strategy();
         uint256 baseAssets = strategy.convertToAssets(token, tokenAmount, Math.Rounding.Floor);
-        uint256 feeBps = strategy.depositFeeBps(token);
+        uint256 feeBps = strategy.depositFeeBps(address(this), token, tokenAmount);
         uint256 shares = quoteDeposit(baseAssets, feeBps);
         return shares;
     }
@@ -179,7 +195,12 @@ contract Tranche is ITranche, CDOComponent, ERC4626Upgradeable, ERC20PermitUpgra
     /** @dev Overloads {IERC4626-previewMint} to return the required Meta Token amount for minting the given number of shares. */
     function previewMint(address token, uint256 shares) public view returns (uint256) {
         IStrategy strategy = cdo.strategy();
-        uint256 feeBps = strategy.depositFeeBps(token);
+        uint256 feeBps = strategy.depositFeeBps(
+            address(this),
+            token,
+            // pre-fee net amount for mint quotes
+            strategy.convertToTokens(token, quoteMint(shares, 0), Math.Rounding.Ceil)
+        );
         uint256 baseAssets = quoteMint(shares, feeBps);
         uint256 tokenAssets = strategy.convertToTokens(token, baseAssets, Math.Rounding.Ceil);
         return tokenAssets;
@@ -220,7 +241,7 @@ contract Tranche is ITranche, CDOComponent, ERC4626Upgradeable, ERC20PermitUpgra
         // {Optimistic path} Reverts if token is not supported
         IStrategy strategy = cdo.strategy();
         uint256 baseAssets = strategy.convertToAssets(token, tokenAmount, Math.Rounding.Floor);
-        uint256 feeBps = strategy.depositFeeBps(token);
+        uint256 feeBps = strategy.depositFeeBps(address(this), token, tokenAmount);
         uint256 shares = quoteDeposit(baseAssets, feeBps);
         _deposit(token, _msgSender(), receiver, baseAssets, tokenAmount, shares, params.strategyOptions);
         return shares;
@@ -239,7 +260,12 @@ contract Tranche is ITranche, CDOComponent, ERC4626Upgradeable, ERC20PermitUpgra
         cdo.updateAccounting();
 
         IStrategy strategy = cdo.strategy();
-        uint256 feeBps = strategy.depositFeeBps(token);
+        uint256 feeBps = strategy.depositFeeBps(
+            address(this),
+            token,
+            // pre-fee net amount for mint quotes
+            strategy.convertToTokens(token, quoteMint(shares, 0), Math.Rounding.Ceil)
+        );
         uint256 baseAssets = quoteMint(shares, feeBps);
         // {Optimistic path} Reverts if token is not supported
         uint256 tokenAssets = strategy.convertToTokens(token, baseAssets, Math.Rounding.Ceil);
@@ -384,7 +410,7 @@ contract Tranche is ITranche, CDOComponent, ERC4626Upgradeable, ERC20PermitUpgra
             return;
         }
 
-        uint256 baseAssetsGross = convertToAssets(sharesGross);
+        uint256 baseAssetsGross = convertToAssetsRedeemable(sharesGross, Math.Rounding.Floor);
         uint256 fee = Math.saturatingSub(baseAssetsGross, baseAssets);
 
         _burn(owner, sharesGross);
@@ -419,7 +445,7 @@ contract Tranche is ITranche, CDOComponent, ERC4626Upgradeable, ERC20PermitUpgra
             revert ERC4626ExceededMaxRedeem(owner, shares, maxShares);
         }
 
-        assets = convertToAssets(shares);
+        assets = convertToAssetsRedeemable(shares, Math.Rounding.Floor);
         _burn(owner, shares);
         cdo.accrueFee(address(this), assets);
         cdo.updateBalanceFlow();
@@ -453,6 +479,16 @@ contract Tranche is ITranche, CDOComponent, ERC4626Upgradeable, ERC20PermitUpgra
         if (totalSupply() < MIN_SHARES) {
             revert MinSharesViolation();
         }
+    }
+
+    function convertToAssetsRedeemable(uint256 shares, Math.Rounding rounding) internal view returns (uint256) {
+        uint256 assets = useConservativeRedemptionPrice ? totalAssetsUnprojected() : totalAssets();
+        return Math.mulDiv(shares, assets + 1, totalSupply() + 10 ** _decimalsOffset(), rounding);
+    }
+
+    function convertToSharesRedeemable(uint256 assets, Math.Rounding rounding) internal view returns (uint256) {
+        uint256 totalAssets_ = useConservativeRedemptionPrice ? totalAssetsUnprojected() : totalAssets();
+        return Math.mulDiv(assets, totalSupply() + 10 ** _decimalsOffset(), totalAssets_ + 1, rounding);
     }
 
     /// @dev The calculation can be based on either the gross withdrawal amount (before fees)

@@ -31,6 +31,9 @@ import {AccountingLib} from "./utils/AccountingLib.sol";
  *   - Asset-time counters are reset
  */
 contract DYSAccounting is IAccounting, CDOComponent {
+    uint256 private constant MIGRATION_V2 = 1 << 0;
+    uint256 private constant MIGRATION_V3 = 1 << 1;
+
     uint256 constant SECONDS_PER_YEAR = 31_536_000;
 
     int64 private constant APR_FEED_BOUNDARY_MAX = 2e12; // 200%
@@ -79,9 +82,6 @@ contract DYSAccounting is IAccounting, CDOComponent {
     uint256 public srtTargetIndex;
 
     uint256 public reserveBps;
-
-    /// @notice High-water mark used to charge performance fees only on new NAV gains.
-    uint256 public feeWatermarkNav;
 
     /// @dev Latest balances at T0 (latest protocol interrogation)
     uint256 public nav;
@@ -138,6 +138,19 @@ contract DYSAccounting is IAccounting, CDOComponent {
     ///      to prevent front-running and allow for proper loss validation
     uint64 public valuationGracePeriod;
 
+    /// @notice Gross Senior NAV deposited during valuation loss and self-funded by Senior.
+    uint256 public srtFundedGrossNav;
+
+    /// @notice Portion of funded Senior NAV that covers its own valuation loss.
+    uint256 public srtFundNav;
+
+    /// @notice High-water mark used to charge performance fees only on new NAV gains.
+    uint256 public feeWatermarkNav;
+
+    /// @notice Timestamp of the last oracle-detected NAV change; used as time anchor when useNavAtReconciliation is true
+    uint256 public lastReconciliation;
+
+
     /*****************************************************************************
      *                  DYS-specific State Variables                              *
      *****************************************************************************/
@@ -188,14 +201,6 @@ contract DYSAccounting is IAccounting, CDOComponent {
     ///      0 means rate tracking is not enabled; the proportional nav-time formula is used instead.
     uint256 public strategyRate;
 
-    /// @notice Timestamp of the last oracle-detected NAV change; used as time anchor when useNavAtReconciliation is true
-    uint256 public lastReconciliation;
-
-    /// @notice Gross Senior NAV deposited during valuation loss and self-funded by Senior.
-    uint256 public srtFundedGrossNav;
-
-    /// @notice Portion of funded Senior NAV that covers its own valuation loss.
-    uint256 public srtFundNav;
 
     error InvalidNavSplit(
         uint256 navT1,
@@ -240,7 +245,10 @@ contract DYSAccounting is IAccounting, CDOComponent {
         address acm_,
         IStrataCDO cdo_,
         IAprPairFeed aprPairFeed_
-    ) public virtual initializer {
+    ) public virtual reinitializer(3) {
+        // This function sets the initializer version directly to the latest version.
+        // The guard ensures it can only be used for fresh deployments.
+        require(address(cdo) == address(0), "AlreadyInitialized");
         AccessControlled_init(owner_, acm_);
         cdo = cdo_;
 
@@ -251,25 +259,54 @@ contract DYSAccounting is IAccounting, CDOComponent {
         riskK = UD60x18.wrap(0.3e18);
 
         srtTargetIndex = 1e18;
-        benchmarkIndex = 1e18;
         navTargetIndex = 1e18;
         indexTimestamp = block.timestamp;
-        lastAccrual = block.timestamp;
-        epochStart = block.timestamp;
+        navTimestamp = block.timestamp;
         minimumJrtSrtRatio = 0.05e18;
         minimumJrtSrtRatioBuffer = 0.06e18;
 
+        _initV2();
+        _initV3();
+    }
+
+    function initializeV2() external reinitializer(2) {
+        _initV2();
+    }
+    function initializeV3() external reinitializer(3) {
+        _initV2();
+        _initV3();
+    }
+    /// @notice Migration V2: valuation loss support and performance fee high-watermark.
+    /// @dev V2 migration is compatible across all Strata accounting contracts.
+    function _initV2() internal {
+        if (migrationBitmap & MIGRATION_V2 != 0) {
+            return;
+        }
+        valuationPrice = 1e18;
+        feeWatermarkNav = nav;
+        if (useNavAtReconciliation) {
+            lastReconciliation = navTimestamp;
+        }
+        migrationBitmap |= MIGRATION_V2;
+    }
+
+    /// @notice Migration V3: DYS asset-time tracking, Senior true-up, and Senior loss floor.
+    /// @dev V3 migration upgrades Strata accountings to DYS accounting.
+    function _initV3() internal {
+        if (migrationBitmap & MIGRATION_V3 != 0) {
+            return;
+        }
+        benchmarkIndex = 1e18;
+        lastAccrual = block.timestamp;
+        epochStart = block.timestamp;
         windowEnd = block.timestamp + 1 days;
         windowStartSrtNav = 0;
         windowNetFlows = 0;
         floorRate = 0;
-        valuationPrice = 1e18;
-        if (useNavAtReconciliation) {
-            lastReconciliation = block.timestamp;
-        }
         if (useRatesForReconciliation) {
-            strategyRate = cdo_.strategy().getRate();
+            strategyRate = cdo.strategy().getRate();
         }
+        migrationBitmap |= MIGRATION_V3;
     }
 
     /*****************************************************************************

@@ -15,6 +15,7 @@ import { AccountingLib } from "./utils/AccountingLib.sol";
  * @dev Pure math contract to track the in-flow and out-flow of assets and balance the gain/loss between Junior (Jrt) and Senior (Srt) Tranche Value Locked (TVL).
  */
 contract DiscreteAccounting is IAccounting, CDOComponent {
+    uint256 private constant MIGRATION_V2 = 1 << 0;
 
     uint256 constant SECONDS_PER_YEAR = 31_536_000;
 
@@ -41,9 +42,6 @@ contract DiscreteAccounting is IAccounting, CDOComponent {
     uint256 public srtTargetIndex;
 
     uint256 public reserveBps;
-
-    /// @notice High-water mark used to charge performance fees only on new NAV gains.
-    uint256 public feeWatermarkNav;
 
     uint256 constant PERCENTAGE_100 = 1e18;
     uint256 constant RESERVE_BPS_MAX = 0.2e18;
@@ -110,17 +108,20 @@ contract DiscreteAccounting is IAccounting, CDOComponent {
     ///      to prevent front-running and allow for proper loss validation
     uint64 public valuationGracePeriod;
 
-    /// @notice Timestamp of the last successful NAV reconciliation.
-    /// @dev Only used when useNavAtReconciliation is true. Passed to totalStrategyAssets so
-    ///      sub-strategies gate their reward signal on this value, which only advances when
-    ///      real rewards are detected — not on every deposit.
-    uint256 public lastReconciliation;
-
     /// @notice Gross Senior NAV deposited during valuation loss and self-funded by Senior.
     uint256 public srtFundedGrossNav;
 
     /// @notice Portion of funded Senior NAV that covers its own valuation loss.
     uint256 public srtFundNav;
+
+    /// @notice High-water mark used to charge performance fees only on new NAV gains.
+    uint256 public feeWatermarkNav;
+
+    /// @notice Timestamp of the last successful NAV reconciliation.
+    /// @dev Only used when useNavAtReconciliation is true. Passed to totalStrategyAssets so
+    ///      sub-strategies gate their reward signal on this value, which only advances when
+    ///      real rewards are detected — not on every deposit.
+    uint256 public lastReconciliation;
 
     error InvalidNavSplit(uint256 navT1, uint256 jrtAssets, uint256 srtAssets, uint256 reserveAssets);
     error ReserveTooLow(uint256 reserveNav, uint256 requestedNav);
@@ -148,7 +149,10 @@ contract DiscreteAccounting is IAccounting, CDOComponent {
         address acm_,
         IStrataCDO cdo_,
         IAprPairFeed aprPairFeed_
-    ) public virtual initializer {
+    ) public virtual reinitializer(2) {
+        // This function sets the initializer version directly to the latest version.
+        // The guard ensures it can only be used for fresh deployments.
+        require(address(cdo) == address(0), "AlreadyInitialized");
         AccessControlled_init(owner_, acm_);
         cdo = cdo_;
 
@@ -161,10 +165,27 @@ contract DiscreteAccounting is IAccounting, CDOComponent {
         srtTargetIndex = 1e18;
         navTargetIndex = 1e18;
         indexTimestamp = block.timestamp;
+        navTimestamp = block.timestamp;
         minimumJrtSrtRatio = 0.05e18;
         minimumJrtSrtRatioBuffer = 0.06e18;
+        _initV2();
+    }
+
+    function initializeV2() external reinitializer(2) {
+        _initV2();
+    }
+    /// @notice Migration V2: valuation loss support and performance fee high-watermark.
+    /// @dev V2 migration is compatible across all Strata accounting contracts.
+    function _initV2() internal {
+        if (migrationBitmap & MIGRATION_V2 != 0) {
+            return;
+        }
         valuationPrice = 1e18;
-        if (useNavAtReconciliation) lastReconciliation = block.timestamp;
+        feeWatermarkNav = nav;
+        if (useNavAtReconciliation) {
+            lastReconciliation = navTimestamp;
+        }
+        migrationBitmap |= MIGRATION_V2;
     }
 
     /// @notice Returns the updated total assets for each tranche and the reserve

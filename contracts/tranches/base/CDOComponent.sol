@@ -13,10 +13,16 @@ abstract contract CDOComponent is ICDOComponent, IErrors, AccessControlled {
 
     IStrataCDO public cdo;
 
+    /// @notice Shared migration flags for CDO components.
+    /// @dev Simple implementation versions can be tracked and deployed separately. When an upgrade
+    ///      requires a state migration, the component should define a migration version and store
+    ///      its completion flag here.
+    uint256 internal migrationBitmap;
+
      /**
      * @dev See https://docs.openzeppelin.com/upgrades-plugins/writing-upgradeable#storage-gaps
      */
-    uint256[49] private __gap;
+    uint256[48] private __gap;
 
     /// @notice ensure cooldownDuration is zero
     modifier onlyCDO() {

@@ -142,6 +142,7 @@ contract DYSAccounting is IAccounting, CDOComponent {
     uint256 public srtFundedGrossNav;
 
     /// @notice Portion of funded Senior NAV that covers its own valuation loss.
+    /// @dev Per-entry valuation recovery is not bucketed; small mismatches are socialized through the Senior share price.
     uint256 public srtFundNav;
 
     /// @notice High-water mark used to charge performance fees only on new NAV gains.
@@ -1392,7 +1393,9 @@ contract DYSAccounting is IAccounting, CDOComponent {
             srtFundNav = 0;
             return;
         }
-        srtFundNav = Math.mulDiv(fundedGrossNav, 1e18 - price, price);
+        // Senior deposits self-fund only the valuation loss that existed at deposit time.
+        // On further de-peg, Junior still covers the additional Senior loss.
+        srtFundNav = Math.min(srtFundNav, Math.mulDiv(fundedGrossNav, 1e18 - price, price));
     }
 
     /// @notice Adjusts Junior and Senior NAVs when the base asset is trading below par (valuation loss)

@@ -29,6 +29,13 @@ web3:
       - url: ${{ RPC_ETH }}
         blockRangeLimit: 100000
 
+  'mantle':
+    chainId: 5000
+    chainToken: 'MNT'
+    endpoints:
+      - url: ${{ RPC_MANTLE }}
+        blockRangeLimit: 100000
+
 
 accounts:
   - name: safe/eth/owner
@@ -64,6 +71,18 @@ accounts:
     operator:
       - 'safe/eth/strata'
 
+  - name: timelock/plasma/strata
+    address: '0xFbb6821bf80EB463a8C63633De837a79E5B0B8Bf'
+    platform: 'plasma'
+    operator:
+      - 'safe/plasma/strata'
+
+  - name: timelock/monad/strata
+    address: '0xFbb6821bf80EB463a8C63633De837a79E5B0B8Bf'
+    platform: 'monad'
+    operator:
+      - 'safe/monad/strata'
+
   - name: timelock/eth/config
     address: '0x4f2682b78F37910704fB1AFF29358A1da07E022d'
     platform: 'eth'
@@ -87,3 +106,6 @@ accounts:
 
   - name: hoodi/deployer
     address: '0xB878F43161E20AD229896c830ff478Db95a2dBb5'
+
+  - name: oft-deployer
+    address: '0x99394602661317e9806745477B7da94bDB4f6099'

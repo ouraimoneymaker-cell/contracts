@@ -316,18 +316,51 @@ contract DYSAccounting is IAccounting, CDOComponent {
 
     /// @notice Accrues asset-time for all tranches. MUST be called before any state change.
     function _accrueAssetTime() internal {
-        uint256 dt = block.timestamp - lastAccrual;
-        if (dt == 0) return;
+        if (block.timestamp == lastAccrual) return;
 
-        uint256 srAssets = srtBaseNav;
-        uint256 jrAssets = jrtNavProjected;
-        uint256 systemAssets = srAssets + jrAssets + reserveNav;
-
-        srtNavTime += srAssets * dt;
-        navTime += systemAssets * dt;
-        navTimeNet += nav * dt;
-        srtProjectedPnLTime += Math.saturatingSub(srtPnLProjected, srtPaidProjected) * dt;
+        (
+            srtNavTime,
+            navTime,
+            navTimeNet,
+            srtProjectedPnLTime
+        ) = _accruedAssetTimeView(
+            nav,
+            jrtNavProjected,
+            srtBaseNav,
+            reserveNav
+        );
         lastAccrual = block.timestamp;
+    }
+
+    function _accruedAssetTimeView(
+        uint256 navT0,
+        uint256 jrtNavT0Projected,
+        uint256 srtNavT0,
+        uint256 reserveNavT0
+    )
+        internal
+        view
+        returns (
+            uint256 srtNavTime_,
+            uint256 navTime_,
+            uint256 navTimeNet_,
+            uint256 srtProjectedPnLTime_
+        )
+    {
+        srtNavTime_ = srtNavTime;
+        navTime_ = navTime;
+        navTimeNet_ = navTimeNet;
+        srtProjectedPnLTime_ = srtProjectedPnLTime;
+
+        uint256 dt = block.timestamp - lastAccrual;
+        if (dt == 0) return (srtNavTime_, navTime_, navTimeNet_, srtProjectedPnLTime_);
+
+        uint256 systemAssets = srtNavT0 + jrtNavT0Projected + reserveNavT0;
+
+        srtNavTime_ += srtNavT0 * dt;
+        navTime_ += systemAssets * dt;
+        navTimeNet_ += navT0 * dt;
+        srtProjectedPnLTime_ += Math.saturatingSub(srtPnLProjected, srtPaidProjected) * dt;
     }
 
     function _navAnchor() private view returns (uint256) {
@@ -710,6 +743,7 @@ contract DYSAccounting is IAccounting, CDOComponent {
         return
             calculateNAVSplitReconciliation(
                 navT0,
+                jrtNavT0Projected,
                 jrtNavT0Real,
                 srtNavT0,
                 reserveNavT0,
@@ -824,6 +858,7 @@ contract DYSAccounting is IAccounting, CDOComponent {
     /// @dev Uses asset-time weighting to allocate realized PnL between tranches
     function calculateNAVSplitReconciliation(
         uint256 navT0,
+        uint256 jrtNavT0Projected,
         uint256 jrtNavT0Real,
         uint256 srtNavT0,
         uint256 reserveNavT0,
@@ -849,6 +884,19 @@ contract DYSAccounting is IAccounting, CDOComponent {
         }
         reserveNavT1 = reserveNavT0 + reserve_dT;
 
+        // Accrue the unpersisted interval before unwinding projected Senior NAV.
+        (
+            uint256 srtNavTimeAccrued,
+            uint256 navTimeAccrued,
+            uint256 navTimeNetAccrued,
+            uint256 srtProjectedPnLTimeAccrued
+        ) = _accruedAssetTimeView(
+            navT0,
+            jrtNavT0Projected,
+            srtNavT0,
+            reserveNavT0
+        );
+
         // srtNavT0 includes srtPnLProjected added during the epoch
         // unwind it and rollback to real T0 assets for SRT and JRT
         // Guard: large Senior withdrawals during the epoch can make srtNavT0 < srtPnLProjected
@@ -870,10 +918,10 @@ contract DYSAccounting is IAccounting, CDOComponent {
         // 2.   when possitive, add to Juniors NAV
         // 3.   when negative, apply the loss waterfall: Juniors Loss, Reserve Loss, then Senior Loss
 
-        // Calculate Senior PnL allocation using asset-time weighting
-        // Use accumulated asset-time if available (navTime > 0), otherwise use snapshot NAVs
-        uint256 srtNavTime_ = navTime > 0 ? srtNavTime : srtNavT0;
-        uint256 navTime_ = navTime > 0 ? navTime : navT0;
+        // Calculate Senior PnL allocation using asset-time weighting.
+        // Use accumulated asset-time if available, otherwise use snapshot NAVs.
+        uint256 srtNavTime_ = navTimeAccrued > 0 ? srtNavTimeAccrued : srtNavT0;
+        uint256 navTime_ = navTimeAccrued > 0 ? navTimeAccrued : navT0;
 
         // Note: riskPremium is capped at 1e18 (100%) via setRiskParameters validation
         UD60x18 riskPremium = calculateRiskPremium();
@@ -892,7 +940,7 @@ contract DYSAccounting is IAccounting, CDOComponent {
                 ? srtRateT1 - strategyRate
                 : strategyRate - srtRateT1;
             if (epochDt > 0) {
-                uint256 srtNavTimeReal = Math.saturatingSub(srtNavTime_, srtProjectedPnLTime);
+                uint256 srtNavTimeReal = Math.saturatingSub(srtNavTime_, srtProjectedPnLTimeAccrued);
                 uint256 navTimeXGrowth = Math.mulDiv(srtNavTimeReal, rateDeltaAbs, strategyRate);
                 uint256 pnlAbs = Math.mulDiv(navTimeXGrowth, srtFactor, 1e18 * epochDt);
                 srtPnLRealized = isPositive
@@ -903,8 +951,8 @@ contract DYSAccounting is IAccounting, CDOComponent {
         } else {
             // Proportional nav-time formula (single strategy / no rate tracking).
             // srtPnL = totalUnderlyingProfit * srtFactor * srtNavTime / navTime
-            uint256 srtNavTimeNet_ = Math.saturatingSub(srtNavTime_, srtProjectedPnLTime);
-            uint256 navTimeNet_ = navTimeNet > 0 ? navTimeNet : navT0;
+            uint256 srtNavTimeNet_ = Math.saturatingSub(srtNavTime_, srtProjectedPnLTimeAccrued);
+            uint256 navTimeNet_ = navTimeNetAccrued > 0 ? navTimeNetAccrued : navT0;
 
             srtPnLRealized = navTime_ == 0
                 ? int256(0)

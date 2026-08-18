@@ -89,6 +89,25 @@ accounts:
     operator:
       - 'safe/eth/strata'
 
+
+  - name: timelock/plasma/strata
+    address: '0xA62B204099277762d1669d283732dCc1B3AA96CE'
+    platform: 'eth'
+    operator:
+      - 'safe/plasma/strata'
+
+  - name: timelock/plasma/config
+    address: '0x1516d031CcaE6c73f4cC106474Ae87628a403660'
+    platform: 'eth'
+    operator:
+      - 'safe/plasma/strata'
+
+
+  - name: safe/eth/treasury
+    type: safe
+    address: '0x40c5C15Ec27526Ad769b04E767cD319551f7F4e4'
+    platform: 'eth'
+
   - name: eth/deployer
     address: '0x296400D87BE5cFB63C5025904cD006EBB23d15d5'
 

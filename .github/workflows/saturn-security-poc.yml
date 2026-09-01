@@ -28,4 +28,4 @@ jobs:
       - uses: foundry-rs/foundry-toolchain@v1
 
       - name: Run Saturn same-block reuse PoC
-        run: forge test --match-path test/security/SaturnUnstakeSameBlockReuse.t.sol -vvv
+        run: forge test --match-path test/security/SaturnUnstakeSameBlockReuse.t.sol --skip test/PoC -vvv

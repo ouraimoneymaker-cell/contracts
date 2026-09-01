@@ -1,0 +1,31 @@
+name: Saturn Security PoC
+
+on:
+  push:
+    branches:
+      - security-research
+    paths:
+      - 'test/security/**'
+      - 'contracts/tranches/base/cooldown/**'
+      - 'contracts/tranches/strategies/saturn/**'
+      - '.github/workflows/saturn-security-poc.yml'
+  workflow_dispatch:
+
+jobs:
+  saturn-poc:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - run: npm ci
+
+      - uses: foundry-rs/foundry-toolchain@v1
+
+      - name: Run Saturn same-block reuse PoC
+        run: forge test --match-path test/security/SaturnUnstakeSameBlockReuse.t.sol -vvv

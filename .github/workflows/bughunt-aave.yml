@@ -1,0 +1,40 @@
+name: Bughunt Aave APR
+
+on:
+  push:
+    branches:
+      - bughunt/discrete-accounting-invariant
+
+env:
+  RPC_ETH: ${{ secrets.RPC_ETH }}
+
+jobs:
+  aave-apr-candidate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - uses: foundry-rs/foundry-toolchain@v1
+      - name: Isolate Aave hunt tests
+        run: |
+          mkdir -p /tmp/strata-test-tree
+          mv test /tmp/strata-test-tree/original
+          mkdir -p test/PoC/Guardian
+          cp /tmp/strata-test-tree/original/PoC/Guardian/DiscreteAccountingConservationInvariant.t.sol \
+            test/PoC/Guardian/DiscreteAccountingConservationInvariant.t.sol
+          cp /tmp/strata-test-tree/original/PoC/Guardian/AaveAprFallbackManipulation.t.sol \
+            test/PoC/Guardian/AaveAprFallbackManipulation.t.sol
+          cp /tmp/strata-test-tree/original/PoC/Guardian/AaveAprProviderForkSensitivity.t.sol \
+            test/PoC/Guardian/AaveAprProviderForkSensitivity.t.sol
+      - name: Structural persistence and value-transfer PoC
+        run: forge test --match-path test/PoC/Guardian/AaveAprFallbackManipulation.t.sol -vvv
+      - name: Deployed-provider mainnet-fork sensitivity
+        run: forge test --match-path test/PoC/Guardian/AaveAprProviderForkSensitivity.t.sol -vvv

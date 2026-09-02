@@ -11,7 +11,7 @@ import { UD60x18 } from "@prb/math/src/ud60x18/ValueType.sol";
 import { AccessControlManager } from "../../../contracts/governance/AccessControlManager.sol";
 import { StrataCDO } from "../../../contracts/tranches/StrataCDO.sol";
 import { Tranche } from "../../../contracts/tranches/Tranche.sol";
-import { DiscreteAccounting } from "../../../contracts/tranches/DiscreteAccounting.sol";
+import { Accounting } from "../../../contracts/tranches/Accounting.sol";
 import { AprPairFeed } from "../../../contracts/tranches/oracles/AprPairFeed.sol";
 import {
     AaveAprPairProvider,
@@ -90,7 +90,7 @@ struct AaveFallbackStack {
     StrataCDO cdo;
     Tranche jrt;
     Tranche srt;
-    DiscreteAccounting accounting;
+    Accounting accounting;
     HuntStrategy strategy;
     AprPairFeed feed;
     AaveAprPairProvider provider;
@@ -101,8 +101,9 @@ struct AaveFallbackStack {
     MockERC20 usdt;
 }
 
-/// @notice Structural PoC for the stale-feed fallback path. It uses the real Strata
-/// feed/provider/accounting stack and varies only external Aave spot state.
+/// @notice Structural PoC for the stale-feed fallback path. It uses the same
+/// Accounting implementation recorded for the deployed Ethereum USDe stack and
+/// varies only external Aave spot state.
 contract AaveAprFallbackManipulationPoC is Test {
     bytes32 internal constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
 
@@ -198,11 +199,11 @@ contract AaveAprFallbackManipulationPoC is Test {
             )
         )));
 
-        DiscreteAccounting accountingImpl = new DiscreteAccounting(18);
-        s.accounting = DiscreteAccounting(address(new ERC1967Proxy(
+        Accounting accountingImpl = new Accounting(18);
+        s.accounting = Accounting(address(new ERC1967Proxy(
             address(accountingImpl),
             abi.encodeWithSelector(
-                DiscreteAccounting.initialize.selector,
+                Accounting.initialize.selector,
                 owner,
                 address(s.acm),
                 IStrataCDO(address(s.cdo)),
@@ -257,7 +258,7 @@ contract AaveAprFallbackManipulationPoC is Test {
 
         _deposit(s, juniorHolder, s.jrt, 1_000e18);
         _deposit(s, seniorHolder, s.srt, 1_000e18);
-        assertEq(s.accounting.aprSrt().unwrap(), HONEST_TARGET, "honest target not installed");
+        assertEq(s.accounting.aprSrt().unwrap(), HONEST_TARGET * 1e6, "honest target not installed");
 
         if (manipulate) {
             _setManipulatedAaveState(s);
@@ -266,7 +267,7 @@ contract AaveAprFallbackManipulationPoC is Test {
 
         // Ordinary, unprivileged JRT deposit. Its updateBalanceFlow() calls fetchAprs(),
         // and because the pushed feed is stale, the manipulated provider value is
-        // persisted into DiscreteAccounting.aprTarget/aprSrt.
+        // persisted into Accounting.aprTarget/aprSrt.
         uint256 attackerShares = _deposit(s, attacker, s.jrt, 1_000e18);
         out.capturedTarget = s.accounting.aprTarget().unwrap();
 
@@ -274,7 +275,7 @@ contract AaveAprFallbackManipulationPoC is Test {
             _restoreHonestAaveState(s);
             out.restoredProviderTarget = uint256(uint64(s.provider.getAPRtarget()));
             assertEq(out.restoredProviderTarget, HONEST_TARGET, "provider did not restore");
-            assertLt(out.capturedTarget, HONEST_TARGET / 50, "Strata did not retain manipulated target");
+            assertLt(out.capturedTarget, HONEST_TARGET * 1e6 / 50, "Strata did not retain manipulated target");
             assertEq(
                 s.accounting.aprSrt().unwrap(),
                 out.capturedTarget,
@@ -282,7 +283,7 @@ contract AaveAprFallbackManipulationPoC is Test {
             );
         } else {
             out.restoredProviderTarget = uint256(uint64(s.provider.getAPRtarget()));
-            assertEq(out.capturedTarget, HONEST_TARGET, "control target changed");
+            assertEq(out.capturedTarget, HONEST_TARGET * 1e6, "control target changed");
         }
 
         // External Aave state is already honest again. No Strata balance flow occurs
@@ -299,7 +300,7 @@ contract AaveAprFallbackManipulationPoC is Test {
         out.attackerPayout = s.asset.balanceOf(attacker) - beforeBal;
 
         (out.juniorAssetsAfter, out.seniorAssetsAfter,) = s.accounting.totalAssetsT0();
-        assertEq(s.accounting.aprTarget().unwrap(), HONEST_TARGET, "exit did not restore honest provider APR");
+        assertEq(s.accounting.aprTarget().unwrap(), HONEST_TARGET * 1e6, "exit did not restore honest provider APR");
     }
 
     function test_staleFallbackSpotAprCanBeSnapshottedAndRealized() public {
@@ -318,8 +319,6 @@ contract AaveAprFallbackManipulationPoC is Test {
             "suppressed target did not transfer value away from Senior"
         );
 
-        // With no change in total realized strategy yield, the attacker's additional
-        // payout is funded by a corresponding reduction in Senior allocation.
         uint256 attackerAdvantage = attack.attackerPayout - control.attackerPayout;
         uint256 seniorShortfall = control.seniorAssetsAfter - attack.seniorAssetsAfter;
         assertGt(attackerAdvantage, 1e18, "economic effect too small in structural PoC");

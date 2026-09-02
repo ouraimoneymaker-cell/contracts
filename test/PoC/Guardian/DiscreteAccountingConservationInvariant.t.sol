@@ -3,7 +3,6 @@ pragma solidity ^0.8.28;
 
 import { Test } from "forge-std/Test.sol";
 import { StdInvariant } from "forge-std/StdInvariant.sol";
-import { console2 } from "forge-std/console2.sol";
 import { ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { IERC20Metadata } from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
@@ -12,7 +11,6 @@ import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
 import { AccessControlManager } from "../../../contracts/governance/AccessControlManager.sol";
 import { StrataCDO } from "../../../contracts/tranches/StrataCDO.sol";
 import { Tranche } from "../../../contracts/tranches/Tranche.sol";
-import { Accounting } from "../../../contracts/tranches/Accounting.sol";
 import { DiscreteAccounting } from "../../../contracts/tranches/DiscreteAccounting.sol";
 import { MockERC20 } from "../../../contracts/test/MockERC20.sol";
 import { IAccounting } from "../../../contracts/tranches/interfaces/IAccounting.sol";
@@ -21,7 +19,9 @@ import { IStrategy } from "../../../contracts/tranches/interfaces/IStrategy.sol"
 import { IStrataCDO } from "../../../contracts/tranches/interfaces/IStrataCDO.sol";
 import { ITranche } from "../../../contracts/tranches/interfaces/ITranche.sol";
 
-contract ConservationAprFeed is IAprPairFeed {
+/// @dev Stable APR feed for the invariant lab. Projection is intentional in
+///      DiscreteAccounting, so the harness never treats projected JRT as realized yield.
+contract DiscreteInvariantAprFeed is IAprPairFeed {
     TRound internal round;
 
     constructor(int64 aprTarget, int64 aprBase) {
@@ -31,13 +31,6 @@ contract ConservationAprFeed is IAprPairFeed {
             updatedAt: uint64(block.timestamp),
             answeredInRound: 1
         });
-    }
-
-    function set(int64 aprTarget, int64 aprBase) external {
-        round.aprTarget = aprTarget;
-        round.aprBase = aprBase;
-        round.updatedAt = uint64(block.timestamp);
-        round.answeredInRound += 1;
     }
 
     function updateRoundData(int64 aprTarget, int64 aprBase, uint64 timestamp) external {
@@ -52,7 +45,7 @@ contract ConservationAprFeed is IAprPairFeed {
     }
 
     function description() external pure returns (string memory) {
-        return "Conservation APR feed";
+        return "Discrete invariant APR feed";
     }
 
     function getRoundData(uint64) external view returns (TRound memory) {
@@ -64,9 +57,9 @@ contract ConservationAprFeed is IAprPairFeed {
     }
 }
 
-/// @dev Deliberately simple 1:1 strategy whose reported NAV changes only when this
-///      harness explicitly changes it. There is no implicit yield.
-contract ConservationStrategy is IStrategy {
+/// @dev 1:1 strategy used only to make strategy NAV and physical backing observable.
+///      reportYield/reportLoss are explicit economic events; there is no hidden yield.
+contract DiscreteInvariantStrategy is IStrategy {
     IERC20 public immutable baseAsset;
     address public immutable cdoAddress;
     uint256 public reportedAssets;
@@ -181,48 +174,48 @@ contract ConservationStrategy is IStrategy {
         return 0;
     }
 
-    /// @dev Models a genuine strategy loss in accounting terms. The physical mock
-    ///      token balance is intentionally left untouched; CDO accounting limits
-    ///      redemptions to reported NAV.
-    function reportLoss(uint256 amount) external {
-        if (amount > reportedAssets) amount = reportedAssets;
-        reportedAssets -= amount;
-    }
-
-    /// @dev Legitimate yield is explicit and separately observable by the harness.
     function reportYield(uint256 amount) external {
+        if (amount == 0) return;
         MockERC20(address(baseAsset)).mint(address(this), amount);
         reportedAssets += amount;
     }
+
+    function reportLoss(uint256 amount) external {
+        if (amount == 0) return;
+        if (amount > reportedAssets) amount = reportedAssets;
+        reportedAssets -= amount;
+        require(baseAsset.transfer(address(0xdead), amount), "loss transfer");
+    }
 }
 
-struct ConservationStack {
+struct DiscreteInvariantStack {
     MockERC20 asset;
     AccessControlManager acm;
     StrataCDO cdo;
     Tranche jrt;
     Tranche srt;
-    IAccounting accounting;
-    ConservationStrategy strategy;
-    ConservationAprFeed feed;
+    DiscreteAccounting accounting;
+    DiscreteInvariantStrategy strategy;
+    DiscreteInvariantAprFeed feed;
 }
 
-abstract contract EconomicConservationBase is Test {
-    uint256 internal constant WAD = 1e18;
+abstract contract DiscreteInvariantDeployment is Test {
     bytes32 internal constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
 
     address internal owner;
     address internal alice;
     address internal bob;
+    address internal carol;
 
-    function _newStack(bool discrete) internal returns (ConservationStack memory s) {
+    function _deployDiscreteStack() internal returns (DiscreteInvariantStack memory s) {
         owner = makeAddr("owner");
         alice = makeAddr("alice");
         bob = makeAddr("bob");
+        carol = makeAddr("carol");
 
         s.asset = new MockERC20("BASE", 18);
         s.acm = new AccessControlManager(owner);
-        s.feed = new ConservationAprFeed(0, 100_000_000_000); // 10% base APR, 12 decimals
+        s.feed = new DiscreteInvariantAprFeed(0, 100_000_000_000); // 10% base APR
 
         vm.startPrank(owner);
 
@@ -270,44 +263,26 @@ abstract contract EconomicConservationBase is Test {
             )
         );
 
-        if (discrete) {
-            DiscreteAccounting impl = new DiscreteAccounting(18);
-            s.accounting = IAccounting(
-                address(
-                    new ERC1967Proxy(
-                        address(impl),
-                        abi.encodeWithSelector(
-                            DiscreteAccounting.initialize.selector,
-                            owner,
-                            address(s.acm),
-                            IStrataCDO(address(s.cdo)),
-                            IAprPairFeed(address(s.feed))
-                        )
+        DiscreteAccounting accountingImpl = new DiscreteAccounting(18);
+        s.accounting = DiscreteAccounting(
+            address(
+                new ERC1967Proxy(
+                    address(accountingImpl),
+                    abi.encodeWithSelector(
+                        DiscreteAccounting.initialize.selector,
+                        owner,
+                        address(s.acm),
+                        IStrataCDO(address(s.cdo)),
+                        IAprPairFeed(address(s.feed))
                     )
                 )
-            );
-        } else {
-            Accounting impl = new Accounting(18);
-            s.accounting = IAccounting(
-                address(
-                    new ERC1967Proxy(
-                        address(impl),
-                        abi.encodeWithSelector(
-                            Accounting.initialize.selector,
-                            owner,
-                            address(s.acm),
-                            IStrataCDO(address(s.cdo)),
-                            IAprPairFeed(address(s.feed))
-                        )
-                    )
-                )
-            );
-        }
+            )
+        );
 
-        s.strategy = new ConservationStrategy(IERC20(address(s.asset)), address(s.cdo));
+        s.strategy = new DiscreteInvariantStrategy(IERC20(address(s.asset)), address(s.cdo));
 
         s.cdo.configure(
-            s.accounting,
+            IAccounting(address(s.accounting)),
             IStrategy(address(s.strategy)),
             ITranche(address(s.jrt)),
             ITranche(address(s.srt))
@@ -319,292 +294,349 @@ abstract contract EconomicConservationBase is Test {
         vm.stopPrank();
     }
 
-    function _deposit(ConservationStack memory s, address actor, Tranche vault, uint256 amount)
+    function _fundAndApprove(DiscreteInvariantStack memory s, address actor, Tranche vault, uint256 amount)
         internal
-        returns (uint256 shares)
     {
         s.asset.mint(actor, amount);
         vm.startPrank(actor);
         s.asset.approve(address(vault), type(uint256).max);
-        shares = vault.deposit(amount, actor);
         vm.stopPrank();
     }
-}
 
-/// @notice Deterministic differential PoC for the conservation boundary.
-contract DiscreteProjectedWithdrawalPoC is EconomicConservationBase {
-    function test_AccountingDoesNotCashOutUnrealizedYield() public {
-        ConservationStack memory s = _newStack(false);
-
-        _deposit(s, alice, s.srt, 10e18);
-        _deposit(s, bob, s.srt, 10e18);
-        _deposit(s, alice, s.jrt, 900e18);
-        uint256 bobShares = _deposit(s, bob, s.jrt, 100e18);
-
-        vm.warp(block.timestamp + 365 days);
-
-        uint256 bobBefore = s.asset.balanceOf(bob);
-        vm.prank(bob);
-        uint256 payout = s.jrt.redeem(bobShares, bob, bob);
-        uint256 bobAfter = s.asset.balanceOf(bob);
-
-        assertEq(bobAfter - bobBefore, payout);
-        assertLe(payout, 100e18 + 2, "continuous accounting created cashable no-yield profit");
+    function _deposit(
+        DiscreteInvariantStack memory s,
+        address actor,
+        Tranche vault,
+        uint256 amount
+    ) internal returns (uint256 shares) {
+        _fundAndApprove(s, actor, vault, amount);
+        vm.prank(actor);
+        shares = vault.deposit(amount, actor);
     }
 
-    function test_DiscreteProjectedYieldIsCashableBeforeStrategyRealizesYield() public {
-        ConservationStack memory s = _newStack(true);
-        DiscreteAccounting discrete = DiscreteAccounting(address(s.accounting));
-
-        uint256 aliceDeposit = 900e18;
-        uint256 bobDeposit = 100e18;
-        uint256 seniorSeed = 20e18;
-        uint256 initialPhysicalNav = aliceDeposit + bobDeposit + seniorSeed;
-
-        _deposit(s, alice, s.srt, 10e18);
-        _deposit(s, bob, s.srt, 10e18);
-        _deposit(s, alice, s.jrt, aliceDeposit);
-        uint256 bobShares = _deposit(s, bob, s.jrt, bobDeposit);
-
-        // No call to reportYield() occurs anywhere in this test. Both the strategy's
-        // reported NAV and its physical token balance stay exactly flat for one year.
-        assertEq(s.strategy.reportedAssets(), initialPhysicalNav, "unexpected initial strategy NAV");
-        assertEq(s.asset.balanceOf(address(s.strategy)), initialPhysicalNav, "unexpected initial token balance");
-
-        vm.warp(block.timestamp + 365 days);
-
-        assertEq(s.strategy.reportedAssets(), initialPhysicalNav, "strategy realized yield unexpectedly");
-        assertEq(
-            s.asset.balanceOf(address(s.strategy)),
-            initialPhysicalNav,
-            "strategy physically received yield unexpectedly"
-        );
-
-        // ---- Load-bearing mismatch -------------------------------------------------
-        // Stored/T0 JRT is real accounted Junior NAV. The view-time totalAssets()
-        // path may project JRT forward even though strategy NAV is unchanged.
-        (uint256 realJrt,,) = discrete.totalAssetsT0();
-        (uint256 projectedJrt,,) = discrete.totalAssets();
-
-        uint256 bobPreview = s.jrt.previewRedeem(bobShares);
-        uint256 globalRealJrtCap = discrete.maxWithdraw(true);
-        uint256 bobMaxWithdraw = s.jrt.maxWithdraw(bob);
-
-        console2.log("strategy physical NAV      ", initialPhysicalNav);
-        console2.log("stored/real JRT            ", realJrt);
-        console2.log("view-time projected JRT    ", projectedJrt);
-        console2.log("Bob principal              ", bobDeposit);
-        console2.log("Bob previewRedeem          ", bobPreview);
-        console2.log("global REAL-JRT cap        ", globalRealJrtCap);
-        console2.log("Bob maxWithdraw            ", bobMaxWithdraw);
-
-        assertGt(projectedJrt, realJrt, "DiscreteAccounting did not project JRT above real JRT");
-        assertGt(bobPreview, bobDeposit, "projected ERC4626 quote did not exceed Bob principal");
-
-        // Bob's personal projected quote fits under a *pool-wide* withdrawal cap
-        // derived from real JRT. Therefore the cap does not prevent him from cashing
-        // the unrealized projected component.
-        assertGt(globalRealJrtCap, bobPreview, "scenario sizing no longer fits beneath real-JRT cap");
-        assertEq(bobMaxWithdraw, bobPreview, "Bob's projected quote should be the binding maxWithdraw");
-        assertGt(bobMaxWithdraw, bobDeposit, "expected projected cashable value > principal");
-
-        // NORMAL USER REDEMPTION: Bob has no owner/admin/pauser role.
-        uint256 bobBefore = s.asset.balanceOf(bob);
-        uint256 strategyBefore = s.strategy.reportedAssets();
-        uint256 strategyTokenBefore = s.asset.balanceOf(address(s.strategy));
-
-        vm.prank(bob);
-        uint256 payout = s.jrt.redeem(bobShares, bob, bob);
-
-        uint256 bobAfter = s.asset.balanceOf(bob);
-        uint256 strategyAfter = s.strategy.reportedAssets();
-        uint256 strategyTokenAfter = s.asset.balanceOf(address(s.strategy));
-        uint256 unrealizedProfit = payout - bobDeposit;
-
-        console2.log("Bob actual payout          ", payout);
-        console2.log("Bob no-yield profit        ", unrealizedProfit);
-        console2.log("strategy NAV after redeem  ", strategyAfter);
-
-        assertEq(bobAfter - bobBefore, payout, "Bob did not receive the redeem payout");
-        assertEq(payout, bobPreview, "actual redemption diverged from projected ERC4626 quote");
-        assertGt(unrealizedProfit, 0, "Bob failed to cash out unrealized projection");
-
-        // Conservation proof: there was zero external yield. Every asset Bob received,
-        // including payout - principal, was removed from the pre-existing pooled
-        // strategy principal belonging collectively to all tranche holders.
-        assertEq(strategyBefore - strategyAfter, payout, "reported strategy NAV did not fund full payout");
-        assertEq(
-            strategyTokenBefore - strategyTokenAfter,
-            payout,
-            "physical strategy tokens did not fund full payout"
-        );
-        assertEq(
-            strategyAfter,
-            initialPhysicalNav - payout,
-            "remaining pool principal does not reconcile after extraction"
-        );
-    }
-
-    /// @notice Same exploit expressed as a two-user conservation statement:
-    ///         Bob exits with > his deposit despite zero yield, so the remaining
-    ///         pool necessarily bears an equal principal deficit.
-    function test_DiscreteEarlyRedeemerExternalizesProjectionToRemainingHolders() public {
-        ConservationStack memory s = _newStack(true);
-
-        uint256 aliceDeposit = 900e18;
-        uint256 bobDeposit = 100e18;
-        uint256 seniorSeed = 20e18;
-        uint256 initialPhysicalNav = aliceDeposit + bobDeposit + seniorSeed;
-
-        _deposit(s, alice, s.srt, 10e18);
-        _deposit(s, bob, s.srt, 10e18);
-        _deposit(s, alice, s.jrt, aliceDeposit);
-        uint256 bobShares = _deposit(s, bob, s.jrt, bobDeposit);
-
-        vm.warp(block.timestamp + 365 days);
-
-        assertEq(s.strategy.reportedAssets(), initialPhysicalNav, "strategy must remain yieldless");
-
-        uint256 quote = s.jrt.previewRedeem(bobShares);
-        assertGt(quote, bobDeposit, "scenario must create projected profit");
-
-        vm.prank(bob);
-        uint256 payout = s.jrt.redeem(bobShares, bob, bob);
-
-        uint256 bobProfit = payout - bobDeposit;
-        uint256 remainingPhysicalPrincipal = s.strategy.reportedAssets();
-
-        assertGt(bobProfit, 0, "Bob must exit with no-yield profit");
-        assertEq(
-            remainingPhysicalPrincipal + payout,
-            initialPhysicalNav,
-            "physical conservation must hold"
-        );
-        assertEq(
-            initialPhysicalNav - remainingPhysicalPrincipal - bobDeposit,
-            bobProfit,
-            "Bob's profit must be an equal depletion of pre-existing pooled principal"
-        );
+    function _sync(DiscreteInvariantStack memory s) internal {
+        vm.prank(address(s.jrt));
+        s.cdo.updateAccounting();
     }
 }
 
-/// @notice Stateful handler: no action can create legitimate yield. The only new
-///      value entering the protocol comes from tracked user deposits.
-contract NoYieldConservationHandler is Test {
-    ConservationStack internal s;
-    address[2] internal actors;
+/// @notice Deterministic semantic checks. These encode SIP-03's intended rules:
+///         projection is allowed; real NAV remains the solvency/withdrawal boundary.
+contract DiscreteAccountingSemanticTest is DiscreteInvariantDeployment {
+    function test_projectionIsAllowedButJrtPublicExitRemainsRealCapped() public {
+        DiscreteInvariantStack memory s = _deployDiscreteStack();
 
-    mapping(address => uint256) public deposits;
-    mapping(address => uint256) public withdrawals;
+        _deposit(s, alice, s.srt, 100e18);
+        uint256 bobShares = _deposit(s, bob, s.jrt, 1_000e18);
 
-    constructor(ConservationStack memory stack, address actor0, address actor1) {
+        vm.warp(block.timestamp + 30 days);
+
+        (uint256 realJrt,,) = s.accounting.totalAssetsT0();
+        (uint256 projectedJrt,,) = s.accounting.totalAssets();
+
+        assertGt(projectedJrt, realJrt, "scenario should exercise JRT projection");
+
+        uint256 protocolRealCap = s.accounting.maxWithdraw(true);
+        uint256 bobPublicCap = s.jrt.maxWithdraw(bob);
+
+        assertLe(protocolRealCap, realJrt, "protocol JRT cap exceeded real JRT");
+        assertLe(bobPublicCap, protocolRealCap, "public JRT exit bypassed real protocol cap");
+        assertLe(s.jrt.maxRedeem(bob), bobShares, "maxRedeem exceeded Bob shares");
+
+        // Calling projection views must not mutate saved real accounting state.
+        (uint256 realJrtAfter,,) = s.accounting.totalAssetsT0();
+        assertEq(realJrtAfter, realJrt, "projection view mutated real JRT");
+    }
+
+    function test_realizedLossUsesJuniorFirst() public {
+        DiscreteInvariantStack memory s = _deployDiscreteStack();
+
+        _deposit(s, alice, s.jrt, 100e18);
+        _deposit(s, bob, s.srt, 100e18);
+
+        (uint256 jrtBefore, uint256 srtBefore, uint256 reserveBefore) = s.accounting.totalAssetsT0();
+        uint256 navBefore = s.accounting.nav();
+
+        s.strategy.reportLoss(25e18);
+        _sync(s);
+
+        (uint256 jrtAfter, uint256 srtAfter, uint256 reserveAfter) = s.accounting.totalAssetsT0();
+
+        assertEq(jrtAfter, jrtBefore - 25e18, "Junior did not absorb first loss");
+        assertEq(srtAfter, srtBefore, "Senior was charged before Junior exhausted");
+        assertEq(reserveAfter, reserveBefore, "reserve changed before Junior exhausted");
+        assertEq(s.accounting.nav(), navBefore - 25e18, "accounted NAV missed realized loss");
+        assertEq(s.accounting.nav(), s.strategy.reportedAssets(), "strategy/accounting NAV mismatch");
+    }
+
+    function test_realizedYieldTrueUpResetsProjectedJrtToRealJrt() public {
+        DiscreteInvariantStack memory s = _deployDiscreteStack();
+
+        _deposit(s, alice, s.srt, 100e18);
+        _deposit(s, bob, s.jrt, 1_000e18);
+
+        vm.warp(block.timestamp + 30 days);
+        (uint256 realBefore,,) = s.accounting.totalAssetsT0();
+        (uint256 projectedBefore,,) = s.accounting.totalAssets();
+        assertGt(projectedBefore, realBefore, "scenario should create projection");
+
+        s.strategy.reportYield(10e18);
+        _sync(s);
+
+        assertEq(
+            s.accounting.jrtNavProjected(),
+            s.accounting.jrtNav(),
+            "realized-yield true-up left projected and real JRT divergent"
+        );
+
+        (uint256 jrt, uint256 srt, uint256 reserve) = s.accounting.totalAssetsT0();
+        assertEq(jrt + srt + reserve, s.accounting.nav(), "real split does not reconcile after true-up");
+        assertEq(s.accounting.nav(), s.strategy.reportedAssets(), "true-up missed strategy NAV");
+    }
+}
+
+/// @notice Stateful economic/accounting detector for fresh-root hunting.
+///
+/// It intentionally excludes the already-public Immunefi known issue where a long
+/// rewardless projected Senior accrual can exhaust real Junior and create InvalidNavSplit.
+/// Time only advances while real JRT/SRT coverage is comfortably above that boundary,
+/// and cumulative warp is capped. Counterexamples should therefore point somewhere else.
+contract DiscreteAccountingInvariantHandler is Test {
+    uint256 internal constant SAFE_PROJECTION_RATIO = 0.20e18;
+    uint256 internal constant MAX_TOTAL_WARP = 180 days;
+
+    DiscreteInvariantStack internal s;
+    address[3] internal actors;
+    uint256 public totalWarp;
+    bool public syncFailed;
+
+    constructor(
+        DiscreteInvariantStack memory stack,
+        address actor0,
+        address actor1,
+        address actor2
+    ) {
         s = stack;
         actors[0] = actor0;
         actors[1] = actor1;
+        actors[2] = actor2;
     }
 
-    function seed(uint256 actorIndex, uint256 amount) public {
-        address actor = actors[actorIndex % actors.length];
-        amount = bound(amount, 1e18, 1_000e18);
-        s.asset.mint(actor, amount);
-        vm.startPrank(actor);
-        s.asset.approve(address(s.jrt), type(uint256).max);
-        try s.jrt.deposit(amount, actor) returns (uint256) {
-            deposits[actor] += amount;
-        } catch { }
-        vm.stopPrank();
+    function depositJrt(uint256 actorSeed, uint256 amountSeed) external {
+        _deposit(actors[actorSeed % actors.length], s.jrt, amountSeed);
     }
 
-    function redeemSome(uint256 actorIndex, uint256 shareSeed) external {
-        address actor = actors[actorIndex % actors.length];
-        uint256 maxShares = s.jrt.maxRedeem(actor);
-        if (maxShares == 0) return;
+    function depositSrt(uint256 actorSeed, uint256 amountSeed) external {
+        _deposit(actors[actorSeed % actors.length], s.srt, amountSeed);
+    }
 
-        uint256 shares = 1 + (shareSeed % maxShares);
-        uint256 beforeBal = s.asset.balanceOf(actor);
-        vm.prank(actor);
-        try s.jrt.redeem(shares, actor, actor) returns (uint256) {
-            withdrawals[actor] += s.asset.balanceOf(actor) - beforeBal;
-        } catch { }
+    function mintJrt(uint256 actorSeed, uint256 shareSeed) external {
+        _mint(actors[actorSeed % actors.length], s.jrt, shareSeed);
+    }
+
+    function mintSrt(uint256 actorSeed, uint256 shareSeed) external {
+        _mint(actors[actorSeed % actors.length], s.srt, shareSeed);
+    }
+
+    function redeemJrt(uint256 actorSeed, uint256 shareSeed) external {
+        _redeem(actors[actorSeed % actors.length], s.jrt, shareSeed);
+    }
+
+    function redeemSrt(uint256 actorSeed, uint256 shareSeed) external {
+        _redeem(actors[actorSeed % actors.length], s.srt, shareSeed);
+    }
+
+    function withdrawJrt(uint256 actorSeed, uint256 assetSeed) external {
+        _withdraw(actors[actorSeed % actors.length], s.jrt, assetSeed);
+    }
+
+    function withdrawSrt(uint256 actorSeed, uint256 assetSeed) external {
+        _withdraw(actors[actorSeed % actors.length], s.srt, assetSeed);
+    }
+
+    function reportYieldAndSync(uint256 amountSeed) external {
+        uint256 nav = s.strategy.reportedAssets();
+        uint256 maxAmount = nav / 10;
+        if (maxAmount == 0) return;
+
+        uint256 amount = 1 + (amountSeed % maxAmount);
+        s.strategy.reportYield(amount);
+        _sync();
+    }
+
+    function reportLossAndSync(uint256 amountSeed) external {
+        uint256 nav = s.strategy.reportedAssets();
+        uint256 maxAmount = nav / 10;
+        if (maxAmount == 0) return;
+
+        uint256 amount = 1 + (amountSeed % maxAmount);
+        s.strategy.reportLoss(amount);
+        _sync();
+    }
+
+    function forceAccountingUpdate() external {
+        _sync();
     }
 
     function warpTime(uint256 secondsSeed) external {
-        uint256 dt = bound(secondsSeed, 1 days, 90 days);
-        vm.warp(block.timestamp + dt);
-    }
+        if (totalWarp >= MAX_TOTAL_WARP) return;
 
-    function reportLoss(uint256 amountSeed) external {
-        uint256 nav = s.strategy.reportedAssets();
-        if (nav == 0) return;
-        uint256 amount = amountSeed % (nav + 1);
-        s.strategy.reportLoss(amount);
+        (uint256 jrtReal, uint256 srtReal,) = s.accounting.totalAssetsT0();
+        if (srtReal > 0 && jrtReal * 1e18 / srtReal < SAFE_PROJECTION_RATIO) {
+            return;
+        }
+
+        uint256 remaining = MAX_TOTAL_WARP - totalWarp;
+        uint256 maxStep = Math.min(30 days, remaining);
+        if (maxStep == 0) return;
+
+        uint256 dt = 1 hours + (secondsSeed % maxStep);
+        if (dt > remaining) dt = remaining;
+
+        totalWarp += dt;
+        vm.warp(block.timestamp + dt);
     }
 
     function actor(uint256 i) external view returns (address) {
         return actors[i];
     }
 
-    function cashableWealth(address actor_) external view returns (uint256) {
-        return withdrawals[actor_] + s.jrt.maxWithdraw(actor_);
-    }
-}
+    function _deposit(address actor_, Tranche vault, uint256 amountSeed) internal {
+        uint256 amount = bound(amountSeed, 0.1e18, 250e18);
+        s.asset.mint(actor_, amount);
 
-abstract contract NoYieldConservationInvariantBase is EconomicConservationBase, StdInvariant {
-    ConservationStack internal stack;
-    NoYieldConservationHandler internal handler;
-
-    function _setUpInvariant(bool discrete) internal {
-        stack = _newStack(discrete);
-        handler = new NoYieldConservationHandler(stack, alice, bob);
-
-        // Both tranches are seeded above the Immunefi 10-asset minimum. SRT remains
-        // economically present while this invariant focuses on JRT conservation.
-        _deposit(stack, alice, stack.srt, 10e18);
-        _deposit(stack, bob, stack.srt, 10e18);
-
-        handler.seed(0, 900e18);
-        handler.seed(1, 100e18);
-
-        bytes4[] memory selectors = new bytes4[](3);
-        selectors[0] = handler.seed.selector;
-        selectors[1] = handler.redeemSome.selector;
-        selectors[2] = handler.warpTime.selector;
-        targetSelector(FuzzSelector({ addr: address(handler), selectors: selectors }));
+        vm.startPrank(actor_);
+        s.asset.approve(address(vault), type(uint256).max);
+        try vault.deposit(amount, actor_) returns (uint256) { } catch { }
+        vm.stopPrank();
     }
 
-    function _assertNoYieldConservation() internal view {
-        for (uint256 i; i < 2; ++i) {
-            address actor_ = handler.actor(i);
-            uint256 contributed = handler.deposits(actor_);
-            uint256 cashable = handler.withdrawals(actor_) + stack.jrt.maxWithdraw(actor_);
+    function _mint(address actor_, Tranche vault, uint256 shareSeed) internal {
+        uint256 shares = bound(shareSeed, 0.1e18, 100e18);
+        s.asset.mint(actor_, 1_000e18);
 
-            // Tiny tolerance only for ERC4626 virtual-share / rounding effects. The handler has
-            // no reportYield selector, so any larger excess is necessarily cashable projection.
-            assertLe(cashable, contributed + 5, "actor has cashable profit without legitimate yield");
+        vm.startPrank(actor_);
+        s.asset.approve(address(vault), type(uint256).max);
+        try vault.mint(shares, actor_) returns (uint256) { } catch { }
+        vm.stopPrank();
+    }
+
+    function _redeem(address actor_, Tranche vault, uint256 shareSeed) internal {
+        uint256 maxShares;
+        try vault.maxRedeem(actor_) returns (uint256 value) {
+            maxShares = value;
+        } catch {
+            return;
+        }
+        if (maxShares == 0) return;
+
+        uint256 shares = 1 + (shareSeed % maxShares);
+        vm.prank(actor_);
+        try vault.redeem(shares, actor_, actor_) returns (uint256) { } catch { }
+    }
+
+    function _withdraw(address actor_, Tranche vault, uint256 assetSeed) internal {
+        uint256 maxAssets;
+        try vault.maxWithdraw(actor_) returns (uint256 value) {
+            maxAssets = value;
+        } catch {
+            return;
+        }
+        if (maxAssets == 0) return;
+
+        uint256 assets = 1 + (assetSeed % maxAssets);
+        vm.prank(actor_);
+        try vault.withdraw(assets, actor_, actor_) returns (uint256) { } catch { }
+    }
+
+    function _sync() internal {
+        vm.prank(address(s.jrt));
+        try s.cdo.updateAccounting() { } catch {
+            syncFailed = true;
         }
     }
 }
 
-/// @dev Control invariant. This should stay green when the strategy reports no yield.
-contract AccountingEconomicConservationInvariantTest is NoYieldConservationInvariantBase {
+contract DiscreteAccountingConservationInvariantTest is DiscreteInvariantDeployment, StdInvariant {
+    DiscreteInvariantStack internal stack;
+    DiscreteAccountingInvariantHandler internal handler;
+
     function setUp() public {
-        _setUpInvariant(false);
+        stack = _deployDiscreteStack();
+
+        // Large Junior cushion keeps the fuzz domain away from the published
+        // long-rewardless real-JRT depletion issue while still exercising both tranches.
+        _deposit(stack, alice, stack.jrt, 1_000e18);
+        _deposit(stack, bob, stack.jrt, 500e18);
+        _deposit(stack, carol, stack.srt, 250e18);
+
+        handler = new DiscreteAccountingInvariantHandler(stack, alice, bob, carol);
+
+        bytes4[] memory selectors = new bytes4[](12);
+        selectors[0] = handler.depositJrt.selector;
+        selectors[1] = handler.depositSrt.selector;
+        selectors[2] = handler.mintJrt.selector;
+        selectors[3] = handler.mintSrt.selector;
+        selectors[4] = handler.redeemJrt.selector;
+        selectors[5] = handler.redeemSrt.selector;
+        selectors[6] = handler.withdrawJrt.selector;
+        selectors[7] = handler.withdrawSrt.selector;
+        selectors[8] = handler.reportYieldAndSync.selector;
+        selectors[9] = handler.reportLossAndSync.selector;
+        selectors[10] = handler.forceAccountingUpdate.selector;
+        selectors[11] = handler.warpTime.selector;
+
+        targetSelector(FuzzSelector({ addr: address(handler), selectors: selectors }));
     }
 
-    function invariant_noCashableProfitWithoutYield() public view {
-        _assertNoYieldConservation();
-    }
-}
-
-/// @dev Discovery invariant. On the reviewed commit, time projection is expected to
-///      produce a counterexample in which one JRT holder cashes out more than their
-///      tracked deposits despite zero reported strategy yield.
-contract DiscreteAccountingEconomicConservationInvariantTest is NoYieldConservationInvariantBase {
-    function setUp() public {
-        _setUpInvariant(true);
+    function invariant_accountingUpdateRemainsOperableInFreshSearchDomain() public view {
+        assertFalse(handler.syncFailed(), "accounting update reverted inside constrained fresh-search domain");
     }
 
-    function invariant_noCashableProfitWithoutYield() public view {
-        _assertNoYieldConservation();
+    /// @dev Real saved claims, not projected JRT, must reconcile exactly with accounted NAV.
+    function invariant_realSavedSplitConservesAccountedNav() public view {
+        (uint256 jrtReal, uint256 srtReal, uint256 reserveReal) = stack.accounting.totalAssetsT0();
+        assertEq(
+            jrtReal + srtReal + reserveReal,
+            stack.accounting.nav(),
+            "real JRT + SRT + reserve != accounted NAV"
+        );
+    }
+
+    /// @dev Every handler action either leaves strategy NAV unchanged or synchronizes it.
+    function invariant_accountedNavTracksStrategyNav() public view {
+        assertEq(
+            stack.accounting.nav(),
+            stack.strategy.reportedAssets(),
+            "accounting NAV diverged from strategy NAV"
+        );
+    }
+
+    /// @dev The mock's observable physical balance is the ground truth for strategy NAV.
+    function invariant_strategyReportedNavHasPhysicalBacking() public view {
+        assertEq(
+            stack.asset.balanceOf(address(stack.strategy)),
+            stack.strategy.reportedAssets(),
+            "strategy reported NAV lacks physical backing"
+        );
+    }
+
+    /// @dev SIP-03 uses real Junior NAV for withdrawal safety. Projected pricing may be
+    ///      higher, but public user exits must remain bounded by the real protocol cap.
+    function invariant_publicExitCapsStayInsideRealProtocolCaps() public view {
+        uint256 jrtProtocolCap = stack.accounting.maxWithdraw(true);
+        uint256 srtProtocolCap = stack.accounting.maxWithdraw(false);
+
+        (uint256 jrtReal, uint256 srtReal,) = stack.accounting.totalAssetsT0();
+
+        assertLe(jrtProtocolCap, jrtReal, "JRT protocol cap exceeded real JRT");
+        assertEq(stack.accounting.maxWithdraw(true, true), jrtReal, "cooldown JRT cap != real JRT");
+        assertEq(srtProtocolCap, srtReal, "SRT protocol cap != real SRT");
+
+        for (uint256 i; i < 3; ++i) {
+            address actor_ = handler.actor(i);
+            assertLe(stack.jrt.maxWithdraw(actor_), jrtProtocolCap, "user JRT exit bypassed real cap");
+            assertLe(stack.srt.maxWithdraw(actor_), srtProtocolCap, "user SRT exit bypassed real cap");
+        }
     }
 }

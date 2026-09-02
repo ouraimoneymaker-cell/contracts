@@ -24,14 +24,17 @@ jobs:
 
       - uses: foundry-rs/foundry-toolchain@v1
 
-      # These two pre-existing Guardian PoCs do not compile under the current Foundry
-      # toolchain because of generated DeployHelper98 constructor arguments. They are
-      # unrelated to this hunt and are moved only inside the disposable CI checkout.
-      - name: Isolate unrelated legacy Guardian PoCs
+      # Forge discovers the repository's whole test tree during compilation even with
+      # --match-path. Several pre-existing Guardian PoCs currently fail under Foundry
+      # 1.8.1 for unrelated generated-constructor reasons. Keep the repository intact,
+      # but reduce only this disposable CI checkout to the hunt file before compiling.
+      - name: Isolate the hunt test tree
         run: |
-          mkdir -p /tmp/strata-legacy-pocs
-          mv test/PoC/Guardian/StrataProtocolDeploymentBase.sol /tmp/strata-legacy-pocs/
-          mv test/PoC/Guardian/WithdrawGriefingDoS.sol /tmp/strata-legacy-pocs/
+          mkdir -p /tmp/strata-test-tree
+          mv test /tmp/strata-test-tree/original
+          mkdir -p test/PoC/Guardian
+          cp /tmp/strata-test-tree/original/PoC/Guardian/DiscreteAccountingConservationInvariant.t.sol \
+            test/PoC/Guardian/DiscreteAccountingConservationInvariant.t.sol
 
       - name: Run DiscreteAccounting invariant harness
         run: forge test --match-path test/PoC/Guardian/DiscreteAccountingConservationInvariant.t.sol -vvv

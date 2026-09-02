@@ -1,0 +1,28 @@
+name: Bughunt Foundry
+
+on:
+  push:
+    branches:
+      - bughunt/discrete-accounting-invariant
+
+jobs:
+  discrete-accounting-invariant:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      - uses: foundry-rs/foundry-toolchain@v1
+
+      - name: Run DiscreteAccounting invariant harness
+        run: forge test --match-path test/PoC/Guardian/DiscreteAccountingConservationInvariant.t.sol -vvv

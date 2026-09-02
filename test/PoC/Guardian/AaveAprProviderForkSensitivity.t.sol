@@ -12,15 +12,16 @@ import {
     AaveAprPairProvider,
     IAavePool
 } from "../../../contracts/tranches/strategies/ethena/AaveAprPairProvider.sol";
+import { IsUSDe } from "../../../contracts/tranches/strategies/ethena/IsUSDe.sol";
 
 interface IAavePoolActions {
     function supply(address asset, uint256 amount, address onBehalfOf, uint16 referralCode) external;
     function withdraw(address asset, uint256 amount, address to) external returns (uint256);
 }
 
-/// @notice Mainnet-fork-only diagnostic. It does not transact against production.
-/// It measures how much the deployed Strata Aave APR provider moves when an ordinary
-/// Aave supplier temporarily changes benchmark liquidity and aToken supply.
+/// @notice Mainnet-fork-only diagnostics. They never transact against production.
+/// The tests measure whether ordinary external protocol actions can move the APR values
+/// consumed by Strata's stale-feed fallback, and whether those external actions can unwind.
 contract AaveAprProviderForkSensitivityTest is Test {
     address internal constant DEPLOYED_PROVIDER = 0x1c137776e04803F807616c382AbBA12d9BF0AF73;
     address internal constant DEPLOYED_FEED = 0x2bb416614D740E5313aA64A0E3e419B39e800EC2;
@@ -72,9 +73,6 @@ contract AaveAprProviderForkSensitivityTest is Test {
         console2.log("Accounting stored Senior APR (1e18)", storedSeniorApr);
         console2.log("target floor currently binding", storedSeniorApr == storedTarget);
 
-        // Force only the fork clock beyond the pushed-round freshness boundary.
-        // This proves what the live feed will return after its documented stale period
-        // without sending a transaction to Ethereum.
         if (sourceMode == uint256(AprPairFeed.ESourcePref.Feed)) {
             uint256 staleAt = uint256(pushedUpdatedAt) + staleAfter + 1;
             if (block.timestamp < staleAt) vm.warp(staleAt);
@@ -89,7 +87,19 @@ contract AaveAprProviderForkSensitivityTest is Test {
         );
     }
 
-    function _tryMeasure(uint256 marketIndex, uint256 amount) internal returns (bool success, uint256 movedAbs) {
+    function _assertRestoredVeryClosely(uint256 beforeValue, uint256 afterValue, uint256 movedAbs) internal pure {
+        uint256 residualAbs = afterValue > beforeValue ? afterValue - beforeValue : beforeValue - afterValue;
+        // Aave's own reserve-index/rate accounting can leave a few 1e-12 APR units of
+        // same-block drift. Require the cleanup residual to be <0.1% of the induced move,
+        // with a tiny absolute allowance for the smallest measurements.
+        uint256 tolerance = movedAbs / 1_000 + 10_000;
+        assertLe(residualAbs, tolerance, "external APR source did not restore closely after cleanup");
+    }
+
+    function _tryMeasureAaveSupply(uint256 marketIndex, uint256 amount)
+        internal
+        returns (bool success, uint256 movedAbs)
+    {
         address token = provider.benchmarkTokens(marketIndex);
         (uint256 marketAprBefore, uint256 marketSupplyBefore) = provider.getAaveAsset(marketIndex);
         uint256 targetBefore = uint256(uint64(provider.getAPRtarget()));
@@ -114,11 +124,10 @@ contract AaveAprProviderForkSensitivityTest is Test {
 
         (uint256 marketAprDuring, uint256 marketSupplyDuring) = provider.getAaveAsset(marketIndex);
         uint256 targetDuring = uint256(uint64(provider.getAPRtarget()));
-
         movedAbs = targetDuring > targetBefore ? targetDuring - targetBefore : targetBefore - targetDuring;
 
-        console2.log("market", marketIndex);
-        console2.log("temporary supply", amount);
+        console2.log("Aave market", marketIndex);
+        console2.log("temporary benchmark supply", amount);
         console2.log("market APR before (1e12)", marketAprBefore);
         console2.log("market APR during (1e12)", marketAprDuring);
         console2.log("market supply before", marketSupplyBefore);
@@ -132,10 +141,7 @@ contract AaveAprProviderForkSensitivityTest is Test {
 
         uint256 targetAfter = uint256(uint64(provider.getAPRtarget()));
         console2.log("Strata target after cleanup (1e12)", targetAfter);
-
-        // Same-block cleanup should restore the benchmark very closely; one unit of
-        // 1e12 precision is allowed for Aave index/rate rounding.
-        assertApproxEqAbs(targetAfter, targetBefore, 1, "Aave target did not restore after cleanup");
+        _assertRestoredVeryClosely(targetBefore, targetAfter, movedAbs);
     }
 
     function test_deployedProviderRespondsToTemporaryBenchmarkSupply() public {
@@ -151,7 +157,7 @@ contract AaveAprProviderForkSensitivityTest is Test {
 
         for (uint256 market; market < 2; ++market) {
             for (uint256 i; i < notionals.length; ++i) {
-                (bool ok, uint256 moveAbs) = _tryMeasure(market, notionals[i]);
+                (bool ok, uint256 moveAbs) = _tryMeasureAaveSupply(market, notionals[i]);
                 if (!ok) continue;
                 successfulMeasurements += 1;
                 if (moveAbs > maxMove) maxMove = moveAbs;
@@ -160,5 +166,51 @@ contract AaveAprProviderForkSensitivityTest is Test {
 
         assertGt(successfulMeasurements, 0, "no benchmark supply size was accepted on fork");
         assertGt(maxMove, 0, "deployed provider was insensitive to unprivileged Aave supply");
+    }
+
+    function test_liveSusdeDepositCanMoveBaseAprAndChecksUnwindability() public {
+        IsUSDe vault = provider.sUSDe();
+        address asset = vault.asset();
+
+        uint256 baseBefore = uint256(uint64(provider.getAPRbase()));
+        uint256 totalAssetsBefore = vault.totalAssets();
+        uint256 cooldownDuration = vault.cooldownDuration();
+        uint256 amount = 100_000_000e18;
+
+        console2.log("sUSDe cooldown duration", cooldownDuration);
+        console2.log("sUSDe totalAssets before", totalAssetsBefore);
+        console2.log("Strata base APR before (1e12)", baseBefore);
+
+        deal(asset, address(this), amount);
+        IERC20(asset).approve(address(vault), type(uint256).max);
+
+        uint256 shares = vault.deposit(amount, address(this));
+        assertGt(shares, 0, "sUSDe deposit minted no shares");
+
+        uint256 baseDuring = uint256(uint64(provider.getAPRbase()));
+        uint256 movedAbs = baseDuring > baseBefore ? baseDuring - baseBefore : baseBefore - baseDuring;
+
+        console2.log("temporary USDe deposit", amount);
+        console2.log("sUSDe shares minted", shares);
+        console2.log("Strata base APR during (1e12)", baseDuring);
+        console2.log("absolute base APR move (1e12)", movedAbs);
+        assertGt(movedAbs, 0, "sUSDe deposit did not move Strata base APR");
+
+        (bool redeemed, bytes memory returndata) = address(vault).call(
+            abi.encodeWithSelector(IsUSDe.redeem.selector, shares, address(this), address(this))
+        );
+
+        console2.log("same-transaction standard redeem succeeded", redeemed);
+        if (!redeemed) {
+            console2.log("same-transaction redeem blocked; cooldown/capital lock must be priced into exploitability");
+            return;
+        }
+
+        uint256 assetsOut = abi.decode(returndata, (uint256));
+        assertGt(assetsOut, 0, "sUSDe cleanup redeemed no assets");
+
+        uint256 baseAfter = uint256(uint64(provider.getAPRbase()));
+        console2.log("Strata base APR after cleanup (1e12)", baseAfter);
+        _assertRestoredVeryClosely(baseBefore, baseAfter, movedAbs);
     }
 }

@@ -6,7 +6,7 @@ on:
       - bughunt/discrete-accounting-invariant
 
 env:
-  RPC_ETH: ${{ secrets.RPC_ETH }}
+  RPC_ETH: ${{ secrets.RPC_ETH || 'https://ethereum-rpc.publicnode.com' }}
 
 jobs:
   aave-apr-candidate:

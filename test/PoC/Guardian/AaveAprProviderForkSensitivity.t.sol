@@ -17,6 +17,8 @@ import { IsUSDe } from "../../../contracts/tranches/strategies/ethena/IsUSDe.sol
 interface IAavePoolActions {
     function supply(address asset, uint256 amount, address onBehalfOf, uint16 referralCode) external;
     function withdraw(address asset, uint256 amount, address to) external returns (uint256);
+    function borrow(address asset, uint256 amount, uint256 interestRateMode, uint16 referralCode, address onBehalfOf) external;
+    function repay(address asset, uint256 amount, uint256 interestRateMode, address onBehalfOf) external returns (uint256);
 }
 
 /// @notice Mainnet-fork-only diagnostics. They never transact against production.
@@ -26,6 +28,7 @@ contract AaveAprProviderForkSensitivityTest is Test {
     address internal constant DEPLOYED_PROVIDER = 0x1c137776e04803F807616c382AbBA12d9BF0AF73;
     address internal constant DEPLOYED_FEED = 0x2bb416614D740E5313aA64A0E3e419B39e800EC2;
     address internal constant DEPLOYED_ACCOUNTING = 0xa436c5Dd1Ba62c55D112C10cd10E988bb3355102;
+    address internal constant WETH = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
     bytes4 internal constant ERC4626_REDEEM_SELECTOR = bytes4(keccak256("redeem(uint256,address,address)"));
 
     AaveAprPairProvider internal provider;
@@ -164,6 +167,89 @@ contract AaveAprProviderForkSensitivityTest is Test {
 
         assertGt(successfulMeasurements, 0, "no benchmark supply size was accepted on fork");
         assertGt(maxMove, 0, "deployed provider was insensitive to unprivileged Aave supply");
+    }
+
+    function _tryMeasureAaveBorrow(uint256 marketIndex, uint256 amount)
+        internal
+        returns (bool success, uint256 movedUp)
+    {
+        address token = provider.benchmarkTokens(marketIndex);
+        uint256 targetBefore = uint256(uint64(provider.getAPRtarget()));
+        uint256 collateralAmount = 100_000 ether;
+
+        deal(WETH, address(this), collateralAmount);
+        IERC20(WETH).approve(address(pool), type(uint256).max);
+        pool.supply(WETH, collateralAmount, address(this), 0);
+
+        (success,) = address(pool).call(
+            abi.encodeWithSelector(
+                IAavePoolActions.borrow.selector,
+                token,
+                amount,
+                uint256(2),
+                uint16(0),
+                address(this)
+            )
+        );
+        if (!success) {
+            console2.log("borrow rejected market", marketIndex);
+            console2.log("borrow amount", amount);
+            pool.withdraw(WETH, type(uint256).max, address(this));
+            return (false, 0);
+        }
+
+        uint256 targetDuring = uint256(uint64(provider.getAPRtarget()));
+        movedUp = targetDuring > targetBefore ? targetDuring - targetBefore : 0;
+
+        console2.log("Aave borrow market", marketIndex);
+        console2.log("temporary benchmark borrow", amount);
+        console2.log("Strata target before borrow (1e12)", targetBefore);
+        console2.log("Strata target during borrow (1e12)", targetDuring);
+        console2.log("upward target move (1e12)", movedUp);
+
+        IERC20(token).approve(address(pool), type(uint256).max);
+        uint256 repaid = pool.repay(token, type(uint256).max, 2, address(this));
+        assertGt(repaid, 0, "fork cleanup repaid nothing");
+        uint256 collateralOut = pool.withdraw(WETH, type(uint256).max, address(this));
+        assertGt(collateralOut, 0, "fork cleanup withdrew no WETH collateral");
+
+        uint256 targetAfter = uint256(uint64(provider.getAPRtarget()));
+        console2.log("Strata target after borrow cleanup (1e12)", targetAfter);
+        if (movedUp > 0) _assertRestoredVeryClosely(targetBefore, targetAfter, movedUp);
+    }
+
+    function test_deployedProviderRespondsToTemporaryBenchmarkBorrow() public {
+        uint256[5] memory notionals = [
+            uint256(1_000_000e6),
+            uint256(10_000_000e6),
+            uint256(50_000_000e6),
+            uint256(100_000_000e6),
+            uint256(150_000_000e6)
+        ];
+
+        Accounting accounting = Accounting(DEPLOYED_ACCOUNTING);
+        uint256 liveSeniorApr12 = UD60x18.unwrap(accounting.aprSrt()) / 1e6;
+        uint256 maxTargetDuring;
+        uint256 successfulMeasurements;
+
+        console2.log("live stored Senior APR threshold (1e12)", liveSeniorApr12);
+
+        for (uint256 market; market < 2; ++market) {
+            for (uint256 i; i < notionals.length; ++i) {
+                (bool ok, uint256 movedUp) = _tryMeasureAaveBorrow(market, notionals[i]);
+                if (!ok) continue;
+                successfulMeasurements += 1;
+                uint256 targetNow = uint256(uint64(provider.getAPRtarget()));
+                // targetNow is restored after helper cleanup; reconstruct the peak from the move.
+                uint256 peak = targetNow + movedUp;
+                if (peak > maxTargetDuring) maxTargetDuring = peak;
+            }
+        }
+
+        assertGt(successfulMeasurements, 0, "no benchmark borrow size was accepted on fork");
+        assertGt(maxTargetDuring, uint256(uint64(provider.getAPRtarget())), "borrowing never raised Strata target");
+        console2.log("max temporary Strata target observed (1e12)", maxTargetDuring);
+        console2.log("temporary target crossed live Senior APR", maxTargetDuring > liveSeniorApr12);
     }
 
     function test_liveSusdeDepositCanMoveBaseAprAndChecksUnwindability() public {

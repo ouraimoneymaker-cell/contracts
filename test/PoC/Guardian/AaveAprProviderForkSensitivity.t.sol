@@ -26,6 +26,7 @@ contract AaveAprProviderForkSensitivityTest is Test {
     address internal constant DEPLOYED_PROVIDER = 0x1c137776e04803F807616c382AbBA12d9BF0AF73;
     address internal constant DEPLOYED_FEED = 0x2bb416614D740E5313aA64A0E3e419B39e800EC2;
     address internal constant DEPLOYED_ACCOUNTING = 0xa436c5Dd1Ba62c55D112C10cd10E988bb3355102;
+    bytes4 internal constant ERC4626_REDEEM_SELECTOR = bytes4(keccak256("redeem(uint256,address,address)"));
 
     AaveAprPairProvider internal provider;
     IAavePoolActions internal pool;
@@ -89,9 +90,6 @@ contract AaveAprProviderForkSensitivityTest is Test {
 
     function _assertRestoredVeryClosely(uint256 beforeValue, uint256 afterValue, uint256 movedAbs) internal pure {
         uint256 residualAbs = afterValue > beforeValue ? afterValue - beforeValue : beforeValue - afterValue;
-        // Aave's own reserve-index/rate accounting can leave a few 1e-12 APR units of
-        // same-block drift. Require the cleanup residual to be <0.1% of the induced move,
-        // with a tiny absolute allowance for the smallest measurements.
         uint256 tolerance = movedAbs / 1_000 + 10_000;
         assertLe(residualAbs, tolerance, "external APR source did not restore closely after cleanup");
     }
@@ -197,7 +195,7 @@ contract AaveAprProviderForkSensitivityTest is Test {
         assertGt(movedAbs, 0, "sUSDe deposit did not move Strata base APR");
 
         (bool redeemed, bytes memory returndata) = address(vault).call(
-            abi.encodeWithSelector(IsUSDe.redeem.selector, shares, address(this), address(this))
+            abi.encodeWithSelector(ERC4626_REDEEM_SELECTOR, shares, address(this), address(this))
         );
 
         console2.log("same-transaction standard redeem succeeded", redeemed);

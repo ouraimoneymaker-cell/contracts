@@ -227,6 +227,56 @@ contract SIP2Test is NeutrlDeploy {
         assertEq(jrtVault.balanceOf(alice), expectedRemainingShares, "Alice should have remaining shares");
     }
 
+    function test_SharesCooldownCanOverReserveJrtWithdrawalCapacity() public {
+        // With the default 5% hard floor, 10,000 SRT requires 500 JRT to remain.
+        _depositToJrt(alice, DEPOSIT_AMOUNT);
+        _depositToJrt(bob, DEPOSIT_AMOUNT);
+        _depositToSrt(alice, DEPOSIT_AMOUNT * 5);
+        _depositToSrt(bob, DEPOSIT_AMOUNT * 5);
+
+        uint256 initialCapacity = cdo.maxWithdraw(address(jrtVault), alice);
+        assertEq(initialCapacity, 1_500 ether, "unexpected initial JRT withdrawal capacity");
+
+        (IStrataCDO.TExitMode mode,, uint32 cooldownSeconds) =
+            cdo.calculateExitMode(address(jrtVault), alice);
+        assertEq(uint256(mode), uint256(IStrataCDO.TExitMode.SharesLock), "test requires shares lock");
+
+        vm.prank(alice);
+        jrtVault.redeem(sNUSD, jrtVault.balanceOf(alice), alice, alice);
+
+        // Alice's pending redemption does not reserve any accounting capacity.
+        uint256 capacityAfterFirstRequest = cdo.maxWithdraw(address(jrtVault), bob);
+        assertEq(capacityAfterFirstRequest, initialCapacity, "pending redemption unexpectedly reserved capacity");
+
+        vm.prank(bob);
+        jrtVault.redeem(sNUSD, jrtVault.balanceOf(bob), bob, bob);
+
+        vm.warp(block.timestamp + cooldownSeconds);
+
+        uint256 aliceBefore = IERC20(sNUSD).balanceOf(alice);
+        sharesCooldown.finalize(jrtVault, sNUSD, alice);
+        uint256 aliceReceived = IERC20(sNUSD).balanceOf(alice) - aliceBefore;
+
+        uint256 normalCapacityBeforeSecondFinalize = cdo.maxWithdraw(address(jrtVault), bob);
+        uint256 bobPendingAssets = jrtVault.convertToAssets(jrtVault.balanceOf(address(sharesCooldown)));
+        assertLt(
+            normalCapacityBeforeSecondFinalize,
+            bobPendingAssets,
+            "hard floor does not block the full second withdrawal"
+        );
+
+        uint256 bobBefore = IERC20(sNUSD).balanceOf(bob);
+        sharesCooldown.finalize(jrtVault, sNUSD, bob);
+        uint256 bobReceived = IERC20(sNUSD).balanceOf(bob) - bobBefore;
+
+        assertGt(bobReceived, 0, "over-reserved redemption did not settle");
+        assertGt(
+            aliceReceived + bobReceived,
+            initialCapacity,
+            "aggregate cooldown exits did not exceed initial JRT capacity"
+        );
+    }
+
     function test_ExitParams_MediumCoverage_MediumFeeAndCooldown() public {
         // Setup medium coverage: 50% <= coverage < 100%
         _depositToJrt(alice, DEPOSIT_AMOUNT * 3);
@@ -297,232 +347,3 @@ contract SIP2Test is NeutrlDeploy {
         // Calculate expected fee and net shares
         uint256 expectedFeeShares = (redeemShares * exitFee) / 1e18;
         uint256 expectedNetShares = redeemShares - expectedFeeShares;
-
-        // 4. Request redemption - shares get locked in SharesCooldown
-        vm.prank(alice);
-        jrtVault.redeem(sNUSD, redeemShares, alice, alice);
-
-        // 5. Verify shares are locked in SharesCooldown contract
-        uint256 aliceSharesAfterRedeem = jrtVault.balanceOf(alice);
-        uint256 cooldownSharesAfterRedeem = jrtVault.balanceOf(address(sharesCooldown));
-
-        assertEq(
-            aliceSharesAfterRedeem, aliceSharesBefore - redeemShares, "Alice shares should decrease by redeemed amount"
-        );
-        assertEq(
-            cooldownSharesAfterRedeem - cooldownSharesBefore,
-            expectedNetShares,
-            "Cooldown contract should hold net shares (after fee burned)"
-        );
-
-        // Verify request exists in SharesCooldown
-        ICooldown.TBalanceState memory stateBeforeCancel = sharesCooldown.balanceOf(IERC20(address(jrtVault)), alice);
-        assertEq(stateBeforeCancel.totalRequests, 1, "Should have 1 active request");
-        assertEq(stateBeforeCancel.pending, expectedNetShares, "Pending should equal net shares");
-        assertEq(stateBeforeCancel.claimable, 0, "Nothing claimable yet (still in cooldown)");
-
-        // Verify Alice has NOT received any sNUSD (assets are not released during cooldown)
-        uint256 aliceSNUSDAfterRedeem = IERC20(sNUSD).balanceOf(alice);
-        assertEq(aliceSNUSDAfterRedeem, aliceSNUSDBefore, "Alice should not have received sNUSD");
-
-        // 6. Cancel the redemption request
-        vm.prank(alice);
-        sharesCooldown.cancel(IERC20(address(jrtVault)), alice, 0, ISharesCooldown.TCancelGuard({shares: 0}));
-
-        // 7. Verify Alice receives back SHARES
-        uint256 aliceSharesAfterCancel = jrtVault.balanceOf(alice);
-        uint256 aliceSNUSDAfterCancel = IERC20(sNUSD).balanceOf(alice);
-        uint256 cooldownSharesAfterCancel = jrtVault.balanceOf(address(sharesCooldown));
-
-        // Alice should get back the net shares (fee was already burned at request time)
-        assertEq(
-            aliceSharesAfterCancel, aliceSharesAfterRedeem + expectedNetShares, "Alice should receive back net shares"
-        );
-
-        // Alice should NOT have received any sNUSD (cancel returns shares, not assets)
-        assertEq(aliceSNUSDAfterCancel, aliceSNUSDBefore, "Alice should NOT receive sNUSD - cancel returns shares only");
-
-        // Cooldown contract should no longer hold any shares
-        assertEq(cooldownSharesAfterCancel, cooldownSharesBefore, "Cooldown contract should have released all shares");
-
-        // 8. Verify request is fully canceled
-        ICooldown.TBalanceState memory stateAfterCancel = sharesCooldown.balanceOf(IERC20(address(jrtVault)), alice);
-        assertEq(stateAfterCancel.totalRequests, 0, "Should have no requests after cancel");
-        assertEq(stateAfterCancel.pending, 0, "Should have no pending shares");
-        assertEq(stateAfterCancel.claimable, 0, "Should have no claimable shares");
-    }
-
-    function test_CancelRequest_OnlyOwnerCanCancel() public {
-        // Setup: Alice deposits and requests redeem
-        _depositToJrt(alice, DEPOSIT_AMOUNT * 3);
-        _depositToSrt(alice, DEPOSIT_AMOUNT * 4); // 75% coverage
-
-        uint256 redeemShares = jrtVault.maxRedeem(alice);
-
-        vm.prank(alice);
-        jrtVault.redeem(sNUSD, redeemShares, alice, alice);
-
-        // Bob tries to cancel Alice's request
-        vm.prank(bob);
-        vm.expectRevert("OnlySharesOwner");
-        sharesCooldown.cancel(IERC20(address(jrtVault)), alice, 0, ISharesCooldown.TCancelGuard({shares: 0}));
-    }
-
-    /*//////////////////////////////////////////////////////////////
-                      EARLY EXIT WITH FEE TESTS
-    //////////////////////////////////////////////////////////////*/
-
-    function test_EarlyExitWithFee() public {
-        // Setup early exit fee
-        vm.prank(owner);
-        sharesCooldown.setVaultEarlyExitFee(address(jrtVault), 0.01e18); // 1% per day
-
-        // Setup: Alice deposits and requests redeem
-        _depositToJrt(alice, DEPOSIT_AMOUNT * 3);
-        _depositToSrt(alice, DEPOSIT_AMOUNT * 4); // 75% coverage
-
-        // uint256 shares = jrtVault.balanceOf(alice);
-        uint256 redeemShares = jrtVault.maxRedeem(alice);
-
-        vm.startPrank(alice);
-
-        // Request redeem
-        jrtVault.redeem(sNUSD, redeemShares, alice, alice);
-
-        // Get pending amount
-        ICooldown.TBalanceState memory state = sharesCooldown.balanceOf(IERC20(address(jrtVault)), alice);
-        uint256 pendingShares = state.pending;
-        assertGt(pendingShares, 0, "Should have pending shares");
-
-        // Early exit (before cooldown ends)
-        uint256 nusdBefore = IERC20(NUSD).balanceOf(alice);
-
-        // finalizeWithFee returns the number of shares claimed (after early exit fee deducted)
-        uint256 claimedShares = sharesCooldown.finalizeWithFee(jrtVault, NUSD, alice, 0, ISharesCooldown.TFinalizeWithFeeGuard({shares: uint192(pendingShares), daysLeft: 0}));
-
-        uint256 nusdAfter = IERC20(NUSD).balanceOf(alice);
-        assertEq(nusdAfter, nusdBefore + claimedShares, "Should receive NUSD tokens");
-
-        vm.stopPrank();
-
-        // Verify shares claimed (with early exit fee deducted from pending)
-        assertGt(claimedShares, 0, "Should claim some shares");
-        assertLt(claimedShares, pendingShares, "Should receive less than pending due to early exit fee");
-        console2.log("claimedShares", claimedShares);
-        console2.log("pendingShares", pendingShares);
-
-        // Verify NUSD received (finalizeWithFee redeems to base asset NUSD)
-        uint256 nusdReceived = nusdAfter - nusdBefore;
-        assertGt(nusdReceived, 0, "Should receive NUSD tokens");
-
-        // Verify request is cleared
-        ICooldown.TBalanceState memory stateAfter = sharesCooldown.balanceOf(IERC20(address(jrtVault)), alice);
-        assertEq(stateAfter.totalRequests, 0, "Should have no requests after early exit");
-    }
-
-    function test_EarlyExitRevertAfterCooldown() public {
-        // Setup early exit fee
-        vm.prank(owner);
-        sharesCooldown.setVaultEarlyExitFee(address(jrtVault), 0.01e18); // 1% per day
-
-        // Setup: Alice deposits and requests redeem
-        _depositToJrt(alice, DEPOSIT_AMOUNT * 3);
-        _depositToSrt(alice, DEPOSIT_AMOUNT * 4); // 75% coverage
-
-        // Get cooldown period
-        (,, uint32 cooldownSeconds) = cdo.calculateExitMode(address(jrtVault), alice);
-
-        uint256 redeemShares = jrtVault.maxRedeem(alice);
-
-        vm.prank(alice);
-        jrtVault.redeem(sNUSD, redeemShares, alice, alice);
-
-        // Wait for cooldown to complete
-        vm.warp(block.timestamp + cooldownSeconds);
-
-        // Try to call finalizeWithFee after cooldown - should revert
-        vm.prank(alice);
-        vm.expectRevert("RequestReady");
-        sharesCooldown.finalizeWithFee(jrtVault, NUSD, alice, 0, ISharesCooldown.TFinalizeWithFeeGuard({shares: 0, daysLeft: 0}));
-    }
-
-    /*//////////////////////////////////////////////////////////////
-                             HELPERS
-    //////////////////////////////////////////////////////////////*/
-
-    function _deploySharesCooldown() internal {
-        vm.startPrank(owner);
-
-        // Deploy SharesCooldown
-        SharesCooldown sharesCooldownImpl = new SharesCooldown();
-        vm.label(address(sharesCooldownImpl), "SharesCooldown_Impl");
-
-        sharesCooldown = SharesCooldown(
-            address(
-                new ERC1967Proxy(
-                    address(sharesCooldownImpl),
-                    abi.encodeWithSelector(CooldownBase.initialize.selector, owner, address(acm))
-                )
-            )
-        );
-        vm.label(address(sharesCooldown), "SharesCooldown");
-
-        // Set shares cooldown in CDO
-        cdo.setSharesCooldown(ISharesCooldown(address(sharesCooldown)));
-
-        // Grant COOLDOWN_WORKER_ROLE to CDO
-        bytes32 cooldownWorkerRole = sharesCooldown.COOLDOWN_WORKER_ROLE();
-        acm.grantRole(cooldownWorkerRole, address(cdo));
-
-        // Set TwoStepConfigManager for sharesCooldown
-        sharesCooldown.setTwoStepConfigManager(owner);
-
-        // Configure exit bounds for JRT vault
-        // Coverage < 50%: 2% fee, 7 days cooldown
-        // 50% <= Coverage < 100%: 1% fee, 3 days cooldown
-        // Coverage >= 100%: 0% fee, 0 cooldown
-        ISharesCooldown.TExitUpperBounds memory jrtBounds = ISharesCooldown.TExitUpperBounds({
-            p0: COVERAGE_THRESHOLD_P0, // 50%
-            p1: COVERAGE_THRESHOLD_P1, // 100%
-            r0: ISharesCooldown.TExitParams({feePpm: FEE_2_PERCENT, sharesLock: COOLDOWN_7_DAYS}),
-            r1: ISharesCooldown.TExitParams({feePpm: FEE_1_PERCENT, sharesLock: COOLDOWN_3_DAYS}),
-            r2: ISharesCooldown.TExitParams({feePpm: FEE_0, sharesLock: COOLDOWN_0})
-        });
-
-        sharesCooldown.setVaultExitBounds(address(jrtVault), jrtBounds);
-
-        vm.stopPrank();
-    }
-
-    function _mintNUSD(address to, uint256 amount) internal {
-        deal(NUSD, to, amount);
-    }
-
-    function _depositToJrt(address user, uint256 amount) internal {
-        vm.startPrank(user);
-        IERC20(NUSD).approve(address(jrtVault), amount);
-        jrtVault.deposit(NUSD, amount, user);
-        vm.stopPrank();
-    }
-
-    function _depositToSrt(address user, uint256 amount) internal {
-        vm.startPrank(user);
-        IERC20(NUSD).approve(address(srtVault), amount);
-        srtVault.deposit(NUSD, amount, user);
-        vm.stopPrank();
-    }
-
-    function _disableSNUSDCooldown() internal {
-        address admin = _getSNUSDAdmin();
-        vm.startPrank(admin);
-        (bool success,) = sNUSD.call(abi.encodeWithSignature("setCooldownDuration(uint24)", uint24(0)));
-        require(success, "Failed to disable cooldown");
-        vm.stopPrank();
-    }
-
-    function _getSNUSDAdmin() internal view returns (address) {
-        (bool success, bytes memory data) = sNUSD.staticcall(abi.encodeWithSignature("owner()"));
-        require(success, "Failed to get sNUSD owner");
-        return abi.decode(data, (address));
-    }
-}

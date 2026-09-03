@@ -59,3 +59,10 @@ jobs:
           npx atma test test/tranches/PoC/TransientCoverageBypassSaturnLiveScale.spec.ts >/tmp/saturn-live.log 2>&1 || { cat /tmp/saturn-live.log; exit 1; }
           grep -E 'live-scale' /tmp/saturn-live.log || true
           echo "PASS: current-Saturn-sized six-figure differential reproduced"
+
+      - name: Saturn cross-tranche Senior-loss PoC
+        shell: bash
+        run: |
+          npx atma test test/tranches/PoC/TransientCoverageBypassSaturnSeniorLoss.spec.ts >/tmp/saturn-senior-loss.log 2>&1 || { cat /tmp/saturn-senior-loss.log; exit 1; }
+          grep -E 'senior-loss' /tmp/saturn-senior-loss.log || true
+          echo "PASS: transient coverage bypass pushes matched loss through Junior into Senior"

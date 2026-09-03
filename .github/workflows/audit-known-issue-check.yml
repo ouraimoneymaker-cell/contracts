@@ -21,7 +21,7 @@ jobs:
           test -s /tmp/strata-shares-cooldown.pdf
           file /tmp/strata-shares-cooldown.pdf
 
-      - name: Extract Cyfrin M-2 and full M-6 context
+      - name: Extract pages relevant to Cyfrin M-6
         shell: bash
         run: |
           set -euo pipefail
@@ -31,25 +31,31 @@ jobs:
           from pypdf import PdfReader
 
           reader = PdfReader('/tmp/strata-shares-cooldown.pdf')
-          text = '\n'.join((page.extract_text() or '') for page in reader.pages)
-          lines = [' '.join(line.split()) for line in text.splitlines()]
+          needles = (
+              'increase in coverage',
+              'previous withdrawal',
+              'grief attack',
+              'coverage',
+              'finalize',
+              'withdrawal request',
+          )
 
-          # Identify M-2 and M-6 occurrences, including TOC and body occurrences.
-          for marker in ('M-2', 'M-6'):
-              print(f'=== {marker} OCCURRENCES ===')
-              indices = [i for i, line in enumerate(lines) if f'[{marker}]' in line or re.search(rf'\b{marker}\b', line)]
-              for n, idx in enumerate(indices, 1):
-                  print(f'--- occurrence {n} at line {idx} ---')
-                  # For the actual finding body, print from the marker until the next
-                  # finding heading. For a TOC occurrence this will stay compact.
-                  block = []
-                  for j in range(idx, min(len(lines), idx + 220)):
-                      line = lines[j]
-                      if j > idx and re.match(r'^\[(?:H|M|L|I)-\d+\]', line):
-                          break
-                      if line:
-                          block.append(line)
-                      if sum(len(x) + 1 for x in block) > 12000:
-                          break
-                  print('\n'.join(block))
+          print('TOTAL PAGES', len(reader.pages))
+          for page_no, page in enumerate(reader.pages, 1):
+              raw = page.extract_text() or ''
+              normalized = ' '.join(raw.lower().split())
+              strong = (
+                  'increase in coverage' in normalized
+                  or 'previous withdrawal' in normalized
+                  or 'grief attack' in normalized
+              )
+              contextual = ('coverage' in normalized and ('withdraw' in normalized or 'finaliz' in normalized))
+              if not (strong or contextual):
+                  continue
+              print(f'=== PAGE {page_no} ===')
+              # Preserve line order but normalize whitespace so the CI log remains readable.
+              for line in raw.splitlines():
+                  line = ' '.join(line.split())
+                  if line:
+                      print(line)
           PY

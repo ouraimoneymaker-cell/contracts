@@ -33,11 +33,11 @@ jobs:
       - name: Run complete nOPAL stale-loss PoC suite
         run: forge test --match-path test/PoC/NestOpalDYSStaleLossPoC.t.sol -vv
 
-      - name: Run current-like nOPAL economics regression
-        run: forge test --match-path test/PoC/NestOpalDYSStaleLossEconomics.t.sol --match-test test_CurrentLikeCoverageTwentyBpsLossCreatesRationalImmediateExit -vvv
-
       - name: Run current-like nOPAL Senior spill regression
         run: forge test --match-path test/PoC/NestOpalDYSStaleLossSeniorSpill.t.sol --match-test test_CurrentLikeCoverageWhaleExitCanPushDeferredLossIntoSenior -vvv
+
+      - name: Run current-like nOPAL economics boundary regression
+        run: forge test --match-path test/PoC/NestOpalDYSStaleLossEconomics.t.sol -vvv
 
       - name: Run Strata existing non-fork nOPAL regression suite
         run: forge test --match-path test/nest/NestOpalTest.t.sol -vv

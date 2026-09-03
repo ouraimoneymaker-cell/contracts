@@ -35,7 +35,7 @@ let {
     accounting,
     cdo,
     USDe,
-} = await $hh.test.deploy();
+} = await $hh.test.deploy({ initialDeposit: false });
 
 let { configManager } = await $hh.test.factory.ensureConfigManager();
 let { deployer } = $hh.test;
@@ -60,7 +60,7 @@ await $exitMode.set(sharesCooldown, configManager, jrtVault.address, [
     { covPct: 0,  feeBps: 20, lock: 0        },
 ]);
 
-// Initial pool: 230 JRT / 1000 SRT = ~23% coverage, inside the protected 7-day tier.
+// Initial pool: 230 JRT / 1000 SRT = 23% coverage, inside the protected 7-day tier.
 // Attacker owns 25 of the existing JRT; the rest belongs to an unrelated LP.
 await $tranche.deposit(jrtVault, liquidityProvider, USDe, 205.0);
 await $tranche.deposit(jrtVault, attacker, USDe, 25.0);
@@ -78,8 +78,8 @@ UTest.create({
 
     async 'control: 23% coverage forces the existing JRT into the 7-day SharesCooldown' () {
         let coverage = Number(await cdo.coverage());
-        $require.gt(coverage, 220_000);
-        $require.lt(coverage, 240_000);
+        $require.gt(coverage, 229_900);
+        $require.lt(coverage, 230_100);
 
         let oldShares = await jrtVault.balanceOf(attacker.address);
         let cooldownBefore = await jrtVault.balanceOf(sharesCooldown.address);
@@ -94,13 +94,13 @@ UTest.create({
 
     async 'attack: temporary JRT raises coverage above 30%, lets both withdrawals execute, then coverage falls back below 30%' () {
         let coverageBefore = Number(await cdo.coverage());
-        $require.gt(coverageBefore, 220_000);
-        $require.lt(coverageBefore, 240_000);
+        $require.gt(coverageBefore, 229_900);
+        $require.lt(coverageBefore, 230_100);
 
         let oldShares = await jrtVault.balanceOf(attacker.address);
         let cooldownBefore = await jrtVault.balanceOf(sharesCooldown.address);
 
-        // Temporary recapitalization: 230 + 100 JRT against 1000 SRT => ~33% coverage.
+        // Temporary recapitalization: 230 + 100 JRT against 1000 SRT => 33% coverage.
         await $tranche.deposit(jrtVault, attacker, USDe, 100.0);
         let coverageBoosted = Number(await cdo.coverage());
         $require.gt(coverageBoosted, 300_000);

@@ -65,11 +65,11 @@ contract AaveAprMorphoCollateralScanTest is Test {
     address internal constant WETH   = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
     address internal constant WSTETH = 0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0;
     address internal constant WEETH  = 0xCd5fE23C85820F7B72D0926FC9b05b43E359b7ee;
-    address internal constant RSETH  = 0xA1290d69c65A6Fe4DF752f95823fae25cb99e5A7;
+    address internal constant RSETH  = 0xA1290d69c65A6Fe4DF752f95823fae25cB99e5A7;
     address internal constant RETH   = 0xae78736Cd615f374D3085123A210448E74Fc6393;
     address internal constant EZETH  = 0xbf5495Efe5DB9ce00f80364C8B423567e58d2110;
     address internal constant WBTC   = 0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599;
-    address internal constant CBBTC  = 0xcbb7C0000ab88B473b1f5aFd9ef808440eed33BF;
+    address internal constant CBBTC  = 0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf;
 
     // Aave account-data base currency is USD with 8 decimals on this deployment.
     uint256 internal constant MIN_THRESHOLD_BORROW_BASE = 44_200_000 * 1e8;

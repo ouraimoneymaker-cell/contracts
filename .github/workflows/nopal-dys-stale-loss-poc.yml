@@ -25,5 +25,11 @@ jobs:
 
       - uses: foundry-rs/foundry-toolchain@v1
 
-      - name: Run nOPAL stale-loss redemption PoC
-        run: forge test --match-path test/PoC/NestOpalDYSStaleLossPoC.t.sol -vvv
+      - name: Trace primary nOPAL stale-loss exploit
+        run: forge test --match-path test/PoC/NestOpalDYSStaleLossPoC.t.sol --match-test test_NegativeRateDelayLetsFirstJrtRedeemerExternalizeLoss -vvvv
+
+      - name: Run complete nOPAL stale-loss PoC suite
+        run: forge test --match-path test/PoC/NestOpalDYSStaleLossPoC.t.sol -vv
+
+      - name: Run Strata existing non-fork nOPAL regression suite
+        run: forge test --match-path test/nest/NestOpalTest.t.sol -vv

@@ -21,6 +21,9 @@ jobs:
           export DEPOSIT_TOPIC="$(cast keccak 'Deposit(address,address,uint256,uint256)')"
           export WITHDRAW_TOPIC="$(cast keccak 'Withdraw(address,address,address,uint256,uint256)')"
           export APR_PUSH_TOPIC="$(cast keccak 'AprDataChangedViaPush(uint256,uint256)')"
+          export FEE_ACCRUED_TOPIC="$(cast keccak 'FeeAccrued(bool,uint256,uint256)')"
+          export RESERVE_REDUCED_TOPIC="$(cast keccak 'ReserveReduced(address,uint256)')"
+          export RESERVE_DISTRIBUTED_TOPIC="$(cast keccak 'ReserveDistributed(uint256,uint256)')"
           node <<'NODE'
           const candidates = [
             'https://eth.llamarpc.com',
@@ -30,10 +33,14 @@ jobs:
           ].filter((v, i, a) => v && a.indexOf(v) === i);
           const JRT = '0xC58D044404d8B14e953C115E67823784dEA53d8F';
           const SRT = '0x3d7d6fdf07EE548B939A80edbc9B2256d0cdc003';
+          const CDO = '0x908B3921aaE4fC17191D382BB61020f2Ee6C0e20';
           const ACCOUNTING = '0xa436c5Dd1Ba62c55D112C10cd10E988bb3355102';
           const DEPOSIT = process.env.DEPOSIT_TOPIC.toLowerCase();
           const WITHDRAW = process.env.WITHDRAW_TOPIC.toLowerCase();
           const APR_PUSH = process.env.APR_PUSH_TOPIC.toLowerCase();
+          const FEE_ACCRUED = process.env.FEE_ACCRUED_TOPIC.toLowerCase();
+          const RESERVE_REDUCED = process.env.RESERVE_REDUCED_TOPIC.toLowerCase();
+          const RESERVE_DISTRIBUTED = process.env.RESERVE_DISTRIBUTED_TOPIC.toLowerCase();
           let id = 1;
           const archiveRejected = new Set();
 
@@ -66,9 +73,7 @@ jobs:
               } catch (e) {
                 last = e;
                 const msg = String(e && e.message || e);
-                if (method === 'eth_getLogs' && /archive|historical|range|token/i.test(msg)) {
-                  archiveRejected.add(url);
-                }
+                if (method === 'eth_getLogs' && /archive|historical|range|token/i.test(msg)) archiveRejected.add(url);
               }
             }
             throw new Error(`${method} failed on all RPCs: ${last}`);
@@ -76,7 +81,7 @@ jobs:
 
           const hex = n => '0x' + n.toString(16);
           const latest = parseInt(await rpc('eth_blockNumber', []), 16);
-          const lookback = 100000; // roughly two weeks on Ethereum
+          const lookback = 100000;
           const start = Math.max(0, latest - lookback);
           const chunk = 2000;
           const events = [];
@@ -84,33 +89,30 @@ jobs:
           async function collect(address, topics, source) {
             for (let from = start; from <= latest; from += chunk) {
               const to = Math.min(latest, from + chunk - 1);
-              const logs = await rpc('eth_getLogs', [{
-                fromBlock: hex(from),
-                toBlock: hex(to),
-                address,
-                topics: [topics]
-              }]);
+              const logs = await rpc('eth_getLogs', [{fromBlock:hex(from), toBlock:hex(to), address, topics:[topics]}]);
               for (const log of logs) {
                 const t = log.topics[0].toLowerCase();
                 let kind = source;
                 if (t === DEPOSIT) kind = `${source}:Deposit`;
                 else if (t === WITHDRAW) kind = `${source}:Withdraw`;
                 else if (t === APR_PUSH) kind = 'Accounting:AprPush';
-                events.push({block: parseInt(log.blockNumber,16), tx:log.transactionHash, kind});
+                else if (t === FEE_ACCRUED) kind = 'Accounting:FeeAccrued';
+                else if (t === RESERVE_REDUCED) kind = 'CDO:ReserveReduced';
+                else if (t === RESERVE_DISTRIBUTED) kind = 'CDO:ReserveDistributed';
+                events.push({block:parseInt(log.blockNumber,16), tx:log.transactionHash, kind});
               }
             }
           }
 
           await collect(JRT, [DEPOSIT, WITHDRAW], 'JRT');
           await collect(SRT, [DEPOSIT, WITHDRAW], 'SRT');
-          await collect(ACCOUNTING, APR_PUSH, 'Accounting');
+          await collect(ACCOUNTING, [APR_PUSH, FEE_ACCRUED], 'Accounting');
+          await collect(CDO, [RESERVE_REDUCED, RESERVE_DISTRIBUTED], 'CDO');
 
-          // Multiple relevant logs can occur in one transaction/block; for poison lifetime the
-          // block timestamp is what matters, so dedupe refresh moments by block.
           events.sort((a,b)=>a.block-b.block);
           const refreshByBlock = [];
           for (const e of events) {
-            const last = refreshByBlock[refreshByBlock.length - 1];
+            const last = refreshByBlock[refreshByBlock.length-1];
             if (last && last.block === e.block) last.kinds.add(e.kind);
             else refreshByBlock.push({block:e.block, kinds:new Set([e.kind]), tx:e.tx});
           }
@@ -149,25 +151,18 @@ jobs:
           console.log('window duration', fmt(latestTs-startTs));
           console.log('raw refresh-relevant log count', events.length);
           console.log('distinct refresh-relevant blocks', refreshByBlock.length);
-          console.log('JRT deposits', events.filter(e=>e.kind==='JRT:Deposit').length);
-          console.log('JRT withdrawals', events.filter(e=>e.kind==='JRT:Withdraw').length);
-          console.log('SRT deposits', events.filter(e=>e.kind==='SRT:Deposit').length);
-          console.log('SRT withdrawals', events.filter(e=>e.kind==='SRT:Withdraw').length);
-          console.log('Accounting APR pushes', events.filter(e=>e.kind==='Accounting:AprPush').length);
+          for (const kind of ['JRT:Deposit','JRT:Withdraw','SRT:Deposit','SRT:Withdraw','Accounting:AprPush','Accounting:FeeAccrued','CDO:ReserveReduced','CDO:ReserveDistributed']) {
+            console.log(kind, events.filter(e=>e.kind===kind).length);
+          }
           console.log('median observed refresh gap', fmt(percentile(0.50)));
           console.log('p90 observed refresh gap', fmt(percentile(0.90)));
           console.log('p95 observed refresh gap', fmt(percentile(0.95)));
           if (refreshByBlock.length) {
             const last = refreshByBlock[refreshByBlock.length-1];
             console.log('most recent refresh-relevant block', last.block, [...last.kinds].join('+'), 'age', fmt(latestTs-last.ts));
-          } else {
-            console.log('no refresh-relevant events in window');
-          }
+          } else console.log('no refresh-relevant events in window');
           console.log('largest observed event-free gaps:');
           for (const g of gaps.slice(0,10)) console.log(fmt(g.seconds), g.from, '->', g.to, 'ending block', g.endBlock);
-
           console.log('most recent refresh-relevant events:');
-          for (const e of refreshByBlock.slice(-15)) {
-            console.log(new Date(e.ts*1000).toISOString(), 'block', e.block, [...e.kinds].sort().join('+'), e.tx);
-          }
+          for (const e of refreshByBlock.slice(-15)) console.log(new Date(e.ts*1000).toISOString(), 'block', e.block, [...e.kinds].sort().join('+'), e.tx);
           NODE

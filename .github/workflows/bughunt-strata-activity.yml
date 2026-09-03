@@ -1,0 +1,122 @@
+name: Bughunt Strata Activity
+
+on:
+  push:
+    branches:
+      - bughunt/discrete-accounting-invariant
+
+env:
+  RPC_ETH: ${{ secrets.RPC_ETH || 'https://ethereum-rpc.publicnode.com' }}
+
+jobs:
+  strata-activity:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: foundry-rs/foundry-toolchain@v1
+      - name: Measure recent APR-refresh quiet intervals
+        shell: bash
+        run: |
+          export DEPOSIT_TOPIC="$(cast keccak 'Deposit(address,address,uint256,uint256)')"
+          export WITHDRAW_TOPIC="$(cast keccak 'Withdraw(address,address,address,uint256,uint256)')"
+          export APR_PUSH_TOPIC="$(cast keccak 'AprDataChangedViaPush(uint256,uint256)')"
+          node <<'NODE'
+          const RPC = process.env.RPC_ETH;
+          const JRT = '0xC58D044404d8B14e953C115E67823784dEA53d8F';
+          const SRT = '0x3d7d6fdf07EE548B939A80edbc9B2256d0cdc003';
+          const ACCOUNTING = '0xa436c5Dd1Ba62c55D112C10cd10E988bb3355102';
+          const DEPOSIT = process.env.DEPOSIT_TOPIC.toLowerCase();
+          const WITHDRAW = process.env.WITHDRAW_TOPIC.toLowerCase();
+          const APR_PUSH = process.env.APR_PUSH_TOPIC.toLowerCase();
+          let id = 1;
+          async function rpc(method, params) {
+            const r = await fetch(RPC, {
+              method: 'POST',
+              headers: {'content-type':'application/json'},
+              body: JSON.stringify({jsonrpc:'2.0', id:id++, method, params})
+            });
+            const j = await r.json();
+            if (j.error) throw new Error(`${method}: ${JSON.stringify(j.error)}`);
+            return j.result;
+          }
+          const hex = n => '0x' + n.toString(16);
+          const latest = parseInt(await rpc('eth_blockNumber', []), 16);
+          const lookback = 100000; // roughly two weeks on Ethereum
+          const start = Math.max(0, latest - lookback);
+          const chunk = 5000;
+          const events = [];
+
+          async function collect(address, topics, source) {
+            for (let from = start; from <= latest; from += chunk) {
+              const to = Math.min(latest, from + chunk - 1);
+              const logs = await rpc('eth_getLogs', [{
+                fromBlock: hex(from),
+                toBlock: hex(to),
+                address,
+                topics: [topics]
+              }]);
+              for (const log of logs) {
+                const t = log.topics[0].toLowerCase();
+                let kind = source;
+                if (t === DEPOSIT) kind = `${source}:Deposit`;
+                else if (t === WITHDRAW) kind = `${source}:Withdraw`;
+                else if (t === APR_PUSH) kind = 'Accounting:AprPush';
+                events.push({block: parseInt(log.blockNumber,16), tx:log.transactionHash, kind});
+              }
+            }
+          }
+
+          await collect(JRT, [DEPOSIT, WITHDRAW], 'JRT');
+          await collect(SRT, [DEPOSIT, WITHDRAW], 'SRT');
+          await collect(ACCOUNTING, APR_PUSH, 'Accounting');
+
+          const uniqueBlocks = [...new Set([start, latest, ...events.map(e=>e.block)])].sort((a,b)=>a-b);
+          const timestamps = new Map();
+          for (let i=0; i<uniqueBlocks.length; i+=8) {
+            const batch = uniqueBlocks.slice(i,i+8);
+            const blocks = await Promise.all(batch.map(b => rpc('eth_getBlockByNumber',[hex(b),false])));
+            blocks.forEach((blk,j)=>timestamps.set(batch[j], parseInt(blk.timestamp,16)));
+          }
+          events.sort((a,b)=>a.block-b.block);
+          const startTs = timestamps.get(start);
+          const latestTs = timestamps.get(latest);
+          for (const e of events) e.ts = timestamps.get(e.block);
+
+          const refreshEvents = events; // all enumerated events either execute balance flow or explicit APR refresh
+          const gaps = [];
+          let prevTs = startTs;
+          let prevLabel = 'window-start';
+          for (const e of refreshEvents) {
+            gaps.push({seconds:e.ts-prevTs, from:prevLabel, to:e.kind, endBlock:e.block});
+            prevTs = e.ts;
+            prevLabel = e.kind;
+          }
+          gaps.push({seconds:latestTs-prevTs, from:prevLabel, to:'now', endBlock:latest});
+          gaps.sort((a,b)=>b.seconds-a.seconds);
+
+          const fmt = s => `${s}s = ${(s/3600).toFixed(2)}h = ${(s/86400).toFixed(2)}d`;
+          console.log('latest block', latest);
+          console.log('lookback start block', start);
+          console.log('window duration', fmt(latestTs-startTs));
+          console.log('refresh-relevant event count', refreshEvents.length);
+          console.log('JRT deposits', events.filter(e=>e.kind==='JRT:Deposit').length);
+          console.log('JRT withdrawals', events.filter(e=>e.kind==='JRT:Withdraw').length);
+          console.log('SRT deposits', events.filter(e=>e.kind==='SRT:Deposit').length);
+          console.log('SRT withdrawals', events.filter(e=>e.kind==='SRT:Withdraw').length);
+          console.log('Accounting APR pushes', events.filter(e=>e.kind==='Accounting:AprPush').length);
+          if (refreshEvents.length) {
+            const last = refreshEvents[refreshEvents.length-1];
+            console.log('most recent refresh-relevant event', last.kind, 'block', last.block, 'age', fmt(latestTs-last.ts));
+          } else {
+            console.log('no refresh-relevant events in window');
+          }
+          console.log('largest observed event-free gaps:');
+          for (const g of gaps.slice(0,10)) console.log(fmt(g.seconds), g.from, '->', g.to, 'ending block', g.endBlock);
+
+          // Compact chronological tail for manual sanity-check.
+          console.log('most recent refresh-relevant events:');
+          for (const e of refreshEvents.slice(-15)) {
+            console.log(new Date(e.ts*1000).toISOString(), 'block', e.block, e.kind, e.tx);
+          }
+          NODE

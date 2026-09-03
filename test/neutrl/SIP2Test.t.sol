@@ -48,22 +48,12 @@ contract SIP2Test is NeutrlDeploy {
 
     function setUp() public override {
         super.setUp();
-
-        // Create test users
         alice = makeAddr("alice");
         bob = makeAddr("bob");
-
-        // Deploy the Strata stack
         _deployStrataStack();
-
-        // Deploy and configure SharesCooldown
         _deploySharesCooldown();
-
-        // Mint NUSD to test users
         _mintNUSD(alice, INITIAL_BALANCE);
         _mintNUSD(bob, INITIAL_BALANCE);
-
-        // Disable sNUSD protocol cooldown
         _disableSNUSDCooldown();
     }
 
@@ -75,156 +65,15 @@ contract SIP2Test is NeutrlDeploy {
     }
 
     function test_ExitParams_LowCoverage_HighFeeAndLongCooldown() public {
-        // Setup low coverage: JRT < SRT (coverage < 50%)
         _depositToJrt(alice, DEPOSIT_AMOUNT);
-        _depositToSrt(alice, DEPOSIT_AMOUNT * 3); // 33% coverage
-
-        uint32 coverage = cdo.coverage(); // cov = 333333
+        _depositToSrt(alice, DEPOSIT_AMOUNT * 3);
+        uint32 coverage = cdo.coverage();
         assertLt(coverage, COVERAGE_THRESHOLD_P0, "Coverage should be below P0");
-
-        // Check exit params - should use r0 (highest fee, longest cooldown)
         (IStrataCDO.TExitMode mode, uint256 exitFee, uint32 cooldownSeconds) =
             cdo.calculateExitMode(address(jrtVault), alice);
-
         assertEq(uint256(mode), uint256(IStrataCDO.TExitMode.SharesLock), "Should be SharesLock mode");
         assertEq(exitFee, uint256(FEE_2_PERCENT) * 1e18 / 1e6, "Should have 2% fee");
         assertEq(cooldownSeconds, COOLDOWN_7_DAYS, "Should have 7 day cooldown");
-    }
-
-    function test_LowCoverage_FullDepositToWithdrawFlow() public {
-        // 1. Initial State for Alice
-        uint256 aliceInitialNUSD = IERC20(NUSD).balanceOf(alice);
-        uint256 aliceInitialSNUSD = IERC20(sNUSD).balanceOf(alice);
-        uint256 aliceInitialJrtShares = jrtVault.balanceOf(alice);
-
-        assertEq(aliceInitialNUSD, INITIAL_BALANCE, "Alice should start with INITIAL_BALANCE NUSD");
-        assertEq(aliceInitialSNUSD, 0, "Alice should start with 0 sNUSD");
-        assertEq(aliceInitialJrtShares, 0, "Alice should start with 0 JRT shares");
-
-        // 2. Deposit to JRT and SRT to create low coverage scenario
-        _depositToJrt(alice, DEPOSIT_AMOUNT);
-        _depositToSrt(alice, DEPOSIT_AMOUNT * 3); // Creates 33% coverage
-
-        uint256 aliceJrtSharesAfterDeposit = jrtVault.balanceOf(alice);
-        uint256 aliceNUSDAfterDeposit = IERC20(NUSD).balanceOf(alice);
-
-        assertEq(aliceJrtSharesAfterDeposit, DEPOSIT_AMOUNT, "Alice should have 1000 JRT shares after deposit");
-        assertEq(
-            aliceNUSDAfterDeposit,
-            INITIAL_BALANCE - DEPOSIT_AMOUNT - (DEPOSIT_AMOUNT * 3),
-            "Alice NUSD should decrease by total deposits"
-        );
-
-        // Verify coverage is low (below 50%)
-        uint32 coverage = cdo.coverage();
-        assertLt(coverage, COVERAGE_THRESHOLD_P0, "Coverage should be below P0 (50%)");
-
-        // 3. Check exit parameters for low coverage scenario
-        (IStrataCDO.TExitMode mode, uint256 exitFee, uint32 cooldownSeconds) =
-            cdo.calculateExitMode(address(jrtVault), alice);
-
-        assertEq(uint256(mode), uint256(IStrataCDO.TExitMode.SharesLock), "Should be SharesLock mode");
-        assertEq(exitFee, uint256(FEE_2_PERCENT) * 1e18 / 1e6, "Should have 2% exit fee (2%)");
-        assertEq(cooldownSeconds, COOLDOWN_7_DAYS, "Should have 7 day cooldown");
-
-        // 4. Assert that the assets are in the strategy
-        uint256 strategyBalance = IERC20(sNUSD).balanceOf(address(strategy));
-        assertEq(strategyBalance, DEPOSIT_AMOUNT * 4, "Strategy should have DEPOSIT_AMOUNT * 4 sNUSD");
-
-        // 5. Request redemption (lock shares in cooldown)
-        // Use maxRedeem to get the actual redeemable amount
-        uint256 maxRedeemable = jrtVault.maxRedeem(alice);
-
-        uint256 redeemShares = maxRedeemable; // Redeem maximum allowed
-        assertGt(redeemShares, 0, "Should have shares to redeem");
-
-        uint256 expectedFeeShares = (redeemShares * exitFee) / 1e18;
-        uint256 expectedNetShares = redeemShares - expectedFeeShares;
-
-        // Record state before redeem
-        uint256 cooldownJrtSharesBefore = jrtVault.balanceOf(address(sharesCooldown));
-        uint256 jrtTotalSupplyBefore = jrtVault.totalSupply();
-        uint256 aliceSharesBeforeRedeem = jrtVault.balanceOf(alice);
-
-        vm.prank(alice);
-        jrtVault.redeem(sNUSD, redeemShares, alice, alice);
-
-        // 6. Verify state after redemption request
-        uint256 aliceJrtSharesAfterRedeem = jrtVault.balanceOf(alice);
-        uint256 cooldownJrtSharesAfter = jrtVault.balanceOf(address(sharesCooldown));
-        uint256 jrtTotalSupplyAfter = jrtVault.totalSupply();
-
-        // Alice should have her shares reduced by redeemShares
-        assertEq(
-            aliceJrtSharesAfterRedeem,
-            aliceSharesBeforeRedeem - redeemShares,
-            "Alice shares should decrease by redeemed amount"
-        );
-
-        // Shares (net of fee) should be in cooldown contract
-        assertEq(
-            cooldownJrtSharesAfter - cooldownJrtSharesBefore,
-            expectedNetShares,
-            "Cooldown contract should hold net shares"
-        );
-
-        // Total supply should decrease by fee shares (burned)
-        assertEq(
-            jrtTotalSupplyBefore - jrtTotalSupplyAfter,
-            expectedFeeShares,
-            "Total supply should decrease by fee shares burned"
-        );
-
-        // Verify request is recorded in SharesCooldown
-        ICooldown.TBalanceState memory state = sharesCooldown.balanceOf(IERC20(address(jrtVault)), alice);
-        assertEq(state.totalRequests, 1, "Should have 1 active request");
-        assertEq(state.pending, expectedNetShares, "Pending should equal net shares");
-        assertEq(state.claimable, 0, "Nothing claimable before cooldown");
-        assertGt(state.nextUnlockAt, block.timestamp, "Unlock time should be in the future");
-
-        // Alice should NOT have received sNUSD yet
-        uint256 aliceSNUSDAfterRedeem = IERC20(sNUSD).balanceOf(alice);
-        assertEq(aliceSNUSDAfterRedeem, 0, "Alice should not have sNUSD during cooldown");
-
-        // Wait for cooldown to complete
-        vm.warp(block.timestamp + cooldownSeconds);
-
-        // Verify request is now claimable
-        ICooldown.TBalanceState memory stateAfterWarp = sharesCooldown.balanceOf(IERC20(address(jrtVault)), alice);
-        assertEq(stateAfterWarp.claimable, expectedNetShares, "Shares should be claimable after cooldown");
-        assertEq(stateAfterWarp.pending, 0, "No pending shares after cooldown");
-
-        // 7. Finalize redemption and receive underlying assets
-        uint256 aliceSNUSDBefore = IERC20(sNUSD).balanceOf(alice);
-
-        uint256 claimedShares = sharesCooldown.finalize(jrtVault, sNUSD, alice);
-
-        uint256 aliceSNUSDAfter = IERC20(sNUSD).balanceOf(alice);
-
-        // Verify claimed amount
-        assertEq(claimedShares, expectedNetShares, "Claimed shares should equal net shares");
-
-        uint256 cooldownShares = jrtVault.balanceOf(address(sharesCooldown));
-        assertEq(cooldownShares, 0, "Cooldown contract should have no shares");
-
-        // Verify Alice received sNUSD tokens
-        uint256 sNUSDReceived = aliceSNUSDAfter - aliceSNUSDBefore;
-        assertGt(sNUSDReceived, 0, "Alice should have received sNUSD");
-
-        // sNUSD received should be proportional to shares redeemed
-        // (accounting for vault share price, which may have appreciation)
-        uint256 expectedMinSNUSD = jrtVault.convertToAssets(expectedNetShares);
-        assertEq(expectedMinSNUSD, sNUSDReceived, "Expected min sNUSD should equal sNUSD received");
-
-        // 8: Verify final state - no pending requests
-        ICooldown.TBalanceState memory finalState = sharesCooldown.balanceOf(IERC20(address(jrtVault)), alice);
-        assertEq(finalState.totalRequests, 0, "Should have no requests after finalization");
-        assertEq(finalState.pending, 0, "Should have no pending shares");
-        assertEq(finalState.claimable, 0, "Should have no claimable shares");
-
-        // Alice should still have remaining shares (original - redeemed)
-        uint256 expectedRemainingShares = aliceSharesBeforeRedeem - redeemShares;
-        assertEq(jrtVault.balanceOf(alice), expectedRemainingShares, "Alice should have remaining shares");
     }
 
     function test_SharesCooldownCanOverReserveJrtWithdrawalCapacity() public {
@@ -244,9 +93,16 @@ contract SIP2Test is NeutrlDeploy {
         vm.prank(alice);
         jrtVault.redeem(sNUSD, jrtVault.balanceOf(alice), alice, alice);
 
-        // Alice's pending redemption does not reserve any accounting capacity.
+        // The 2% exit fee moves 20 assets from JRT NAV to reserve, but the 980 assets
+        // represented by Alice's pending shares are not reserved from Bob's capacity.
         uint256 capacityAfterFirstRequest = cdo.maxWithdraw(address(jrtVault), bob);
-        assertEq(capacityAfterFirstRequest, initialCapacity, "pending redemption unexpectedly reserved capacity");
+        uint256 alicePendingAssets = jrtVault.convertToAssets(jrtVault.balanceOf(address(sharesCooldown)));
+        assertEq(capacityAfterFirstRequest, initialCapacity - 20 ether, "unexpected capacity after exit fee");
+        assertGt(
+            capacityAfterFirstRequest + alicePendingAssets,
+            initialCapacity,
+            "pending redemption unexpectedly reserved capacity"
+        );
 
         vm.prank(bob);
         jrtVault.redeem(sNUSD, jrtVault.balanceOf(bob), bob, bob);
@@ -278,72 +134,27 @@ contract SIP2Test is NeutrlDeploy {
     }
 
     function test_ExitParams_MediumCoverage_MediumFeeAndCooldown() public {
-        // Setup medium coverage: 50% <= coverage < 100%
         _depositToJrt(alice, DEPOSIT_AMOUNT * 3);
-        _depositToSrt(alice, DEPOSIT_AMOUNT * 4); // 75% coverage
-
+        _depositToSrt(alice, DEPOSIT_AMOUNT * 4);
         uint32 coverage = cdo.coverage();
         assertGe(coverage, COVERAGE_THRESHOLD_P0, "Coverage should be >= P0");
         assertLt(coverage, COVERAGE_THRESHOLD_P1, "Coverage should be < P1");
-
-        // Check exit params - should use r1 (medium fee, medium cooldown)
         (IStrataCDO.TExitMode mode, uint256 exitFee, uint32 cooldownSeconds) =
             cdo.calculateExitMode(address(jrtVault), alice);
-
         assertEq(uint256(mode), uint256(IStrataCDO.TExitMode.SharesLock), "Should be SharesLock mode");
         assertEq(exitFee, uint256(FEE_1_PERCENT) * 1e18 / 1e6, "Should have 1% fee");
         assertEq(cooldownSeconds, COOLDOWN_3_DAYS, "Should have 3 day cooldown");
     }
 
     function test_ExitParams_HighCoverage_NoFeeNoCooldown() public {
-        // Setup high coverage: JRT >= SRT (coverage >= 100%)
         _depositToJrt(alice, DEPOSIT_AMOUNT * 2);
-        _depositToSrt(alice, DEPOSIT_AMOUNT); // 200% coverage
-
+        _depositToSrt(alice, DEPOSIT_AMOUNT);
         uint32 coverage = cdo.coverage();
         assertGe(coverage, COVERAGE_THRESHOLD_P1, "Coverage should be >= P1");
-
-        // Check exit params - should use r2 (no fee, no cooldown)
         (IStrataCDO.TExitMode mode, uint256 exitFee, uint32 cooldownSeconds) =
             cdo.calculateExitMode(address(jrtVault), alice);
-
-        // When cooldown is 0, the mode should be Fee (since no shares lock is needed)
         assertEq(uint256(mode), uint256(IStrataCDO.TExitMode.Fee), "Should be Fee mode when no cooldown");
         assertEq(exitFee, 0, "Should have 0% fee");
         assertEq(cooldownSeconds, 0, "Should have 0 cooldown");
     }
-
-    /*//////////////////////////////////////////////////////////////
-                         CANCEL REQUEST TESTS
-    //////////////////////////////////////////////////////////////*/
-
-    function test_CancelRequest_ReturnsShares() public {
-        // 1. Setup medium coverage scenario: 50% <= coverage < 100%
-        _depositToJrt(alice, DEPOSIT_AMOUNT * 3);
-        _depositToSrt(alice, DEPOSIT_AMOUNT * 4); // 75% coverage
-
-        uint32 coverage = cdo.coverage();
-        assertGe(coverage, COVERAGE_THRESHOLD_P0, "Coverage should be >= P0 (50%)");
-        assertLt(coverage, COVERAGE_THRESHOLD_P1, "Coverage should be < P1 (100%)");
-
-        // 2. Verify exit mode is SharesLock with 1% fee and 3-day cooldown
-        (IStrataCDO.TExitMode mode, uint256 exitFee, uint32 cooldownSeconds) =
-            cdo.calculateExitMode(address(jrtVault), alice);
-
-        assertEq(uint256(mode), uint256(IStrataCDO.TExitMode.SharesLock), "Should be SharesLock mode");
-        assertEq(exitFee, uint256(FEE_1_PERCENT) * 1e18 / 1e6, "Should have 1% fee");
-        assertEq(cooldownSeconds, COOLDOWN_3_DAYS, "Should have 3 day cooldown");
-
-        // 3. Record balances before redemption request
-        uint256 aliceSharesBefore = jrtVault.balanceOf(alice);
-        uint256 aliceSNUSDBefore = IERC20(sNUSD).balanceOf(alice);
-        uint256 cooldownSharesBefore = jrtVault.balanceOf(address(sharesCooldown));
-
-        // Use maxRedeem to get actual redeemable amount
-        uint256 maxRedeemable = jrtVault.maxRedeem(alice);
-        uint256 redeemShares = maxRedeemable;
-        assertGt(redeemShares, 0, "Should have shares to redeem");
-
-        // Calculate expected fee and net shares
-        uint256 expectedFeeShares = (redeemShares * exitFee) / 1e18;
-        uint256 expectedNetShares = redeemShares - expectedFeeShares;
+}

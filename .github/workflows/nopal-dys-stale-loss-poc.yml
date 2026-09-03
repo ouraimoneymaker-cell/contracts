@@ -7,6 +7,7 @@ on:
     paths:
       - 'test/PoC/NestOpalDYSStaleLossPoC.t.sol'
       - 'test/PoC/NestOpalDYSStaleLossEconomics.t.sol'
+      - 'test/PoC/NestOpalDYSStaleLossSeniorSpill.t.sol'
       - '.github/workflows/nopal-dys-stale-loss-poc.yml'
   workflow_dispatch:
 
@@ -34,6 +35,9 @@ jobs:
 
       - name: Run current-like nOPAL economics regression
         run: forge test --match-path test/PoC/NestOpalDYSStaleLossEconomics.t.sol --match-test test_CurrentLikeCoverageTwentyBpsLossCreatesRationalImmediateExit -vvv
+
+      - name: Run current-like nOPAL Senior spill regression
+        run: forge test --match-path test/PoC/NestOpalDYSStaleLossSeniorSpill.t.sol --match-test test_CurrentLikeCoverageWhaleExitCanPushDeferredLossIntoSenior -vvv
 
       - name: Run Strata existing non-fork nOPAL regression suite
         run: forge test --match-path test/nest/NestOpalTest.t.sol -vv

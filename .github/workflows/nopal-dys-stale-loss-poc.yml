@@ -1,0 +1,29 @@
+name: nOPAL DYS Stale Loss PoC
+
+on:
+  push:
+    branches:
+      - security/nopal-dys-stale-loss-poc
+    paths:
+      - 'test/PoC/NestOpalDYSStaleLossPoC.t.sol'
+      - '.github/workflows/nopal-dys-stale-loss-poc.yml'
+  workflow_dispatch:
+
+jobs:
+  nopal-poc:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - run: npm ci
+
+      - uses: foundry-rs/foundry-toolchain@v1
+
+      - name: Run nOPAL stale-loss redemption PoC
+        run: forge test --match-path test/PoC/NestOpalDYSStaleLossPoC.t.sol -vvv

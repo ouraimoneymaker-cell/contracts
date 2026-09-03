@@ -169,18 +169,14 @@ contract AaveAprProviderForkSensitivityTest is Test {
         assertGt(maxMove, 0, "deployed provider was insensitive to unprivileged Aave supply");
     }
 
-    function _tryMeasureAaveBorrow(uint256 marketIndex, uint256 amount)
-        internal
-        returns (bool success, uint256 movedUp)
-    {
-        address token = provider.benchmarkTokens(marketIndex);
-        uint256 targetBefore = uint256(uint64(provider.getAPRtarget()));
-        uint256 collateralAmount = 100_000 ether;
-
-        deal(WETH, address(this), collateralAmount);
+    function _fundCollateral(uint256 amount) internal {
+        deal(WETH, address(this), amount);
         IERC20(WETH).approve(address(pool), type(uint256).max);
-        pool.supply(WETH, collateralAmount, address(this), 0);
+        pool.supply(WETH, amount, address(this), 0);
+    }
 
+    function _borrowRaw(uint256 marketIndex, uint256 amount) internal returns (bool success) {
+        address token = provider.benchmarkTokens(marketIndex);
         (success,) = address(pool).call(
             abi.encodeWithSelector(
                 IAavePoolActions.borrow.selector,
@@ -191,6 +187,25 @@ contract AaveAprProviderForkSensitivityTest is Test {
                 address(this)
             )
         );
+    }
+
+    function _repayAll(uint256 marketIndex) internal returns (uint256 repaid) {
+        address token = provider.benchmarkTokens(marketIndex);
+        uint256 repaymentBalance = IERC20(token).balanceOf(address(this));
+        deal(token, address(this), repaymentBalance + 1_000_000);
+        IERC20(token).approve(address(pool), type(uint256).max);
+        repaid = pool.repay(token, type(uint256).max, 2, address(this));
+    }
+
+    function _tryMeasureAaveBorrow(uint256 marketIndex, uint256 amount)
+        internal
+        returns (bool success, uint256 movedUp)
+    {
+        uint256 targetBefore = uint256(uint64(provider.getAPRtarget()));
+        uint256 collateralAmount = 100_000 ether;
+
+        _fundCollateral(collateralAmount);
+        success = _borrowRaw(marketIndex, amount);
         if (!success) {
             console2.log("borrow rejected market", marketIndex);
             console2.log("borrow amount", amount);
@@ -207,13 +222,7 @@ contract AaveAprProviderForkSensitivityTest is Test {
         console2.log("Strata target during borrow (1e12)", targetDuring);
         console2.log("upward target move (1e12)", movedUp);
 
-        // Variable debt can accrue by a few token subunits even inside one fork test.
-        // Top up a small cleanup buffer so repay(max) measures economic reversibility
-        // instead of failing on a one-unit balance shortfall.
-        uint256 repaymentBalance = IERC20(token).balanceOf(address(this));
-        deal(token, address(this), repaymentBalance + 1_000_000);
-        IERC20(token).approve(address(pool), type(uint256).max);
-        uint256 repaid = pool.repay(token, type(uint256).max, 2, address(this));
+        uint256 repaid = _repayAll(marketIndex);
         assertGt(repaid, 0, "fork cleanup repaid nothing");
         uint256 collateralOut = pool.withdraw(WETH, type(uint256).max, address(this));
         assertGt(collateralOut, 0, "fork cleanup withdrew no WETH collateral");
@@ -245,7 +254,6 @@ contract AaveAprProviderForkSensitivityTest is Test {
                 if (!ok) continue;
                 successfulMeasurements += 1;
                 uint256 targetNow = uint256(uint64(provider.getAPRtarget()));
-                // targetNow is restored after helper cleanup; reconstruct the peak from the move.
                 uint256 peak = targetNow + movedUp;
                 if (peak > maxTargetDuring) maxTargetDuring = peak;
             }
@@ -255,6 +263,99 @@ contract AaveAprProviderForkSensitivityTest is Test {
         assertGt(maxTargetDuring, uint256(uint64(provider.getAPRtarget())), "borrowing never raised Strata target");
         console2.log("max temporary Strata target observed (1e12)", maxTargetDuring);
         console2.log("temporary target crossed live Senior APR", maxTargetDuring > liveSeniorApr12);
+    }
+
+    function test_nearDrainUsdcBorrowBracketsLiveSeniorAprThreshold() public {
+        uint256[6] memory notionals = [
+            uint256(120_000_000e6),
+            uint256(130_000_000e6),
+            uint256(140_000_000e6),
+            uint256(145_000_000e6),
+            uint256(147_000_000e6),
+            uint256(148_000_000e6)
+        ];
+
+        uint256 liveSeniorApr12 = UD60x18.unwrap(Accounting(DEPLOYED_ACCOUNTING).aprSrt()) / 1e6;
+        uint256 maxPeak;
+        uint256 maxAccepted;
+
+        console2.log("near-drain live Senior APR threshold (1e12)", liveSeniorApr12);
+
+        for (uint256 i; i < notionals.length; ++i) {
+            (bool ok, uint256 movedUp) = _tryMeasureAaveBorrow(0, notionals[i]);
+            if (!ok) continue;
+            uint256 restored = uint256(uint64(provider.getAPRtarget()));
+            uint256 peak = restored + movedUp;
+            maxAccepted = notionals[i];
+            if (peak > maxPeak) maxPeak = peak;
+            console2.log("near-drain USDC accepted", notionals[i]);
+            console2.log("near-drain reconstructed peak target (1e12)", peak);
+            console2.log("near-drain crossed Senior APR", peak > liveSeniorApr12);
+        }
+
+        assertGt(maxAccepted, 0, "no near-drain USDC borrow was accepted");
+        console2.log("largest accepted near-drain USDC borrow", maxAccepted);
+        console2.log("maximum near-drain target (1e12)", maxPeak);
+        console2.log("maximum near-drain target crossed Senior APR", maxPeak > liveSeniorApr12);
+    }
+
+    function test_combinedNearDrainBenchmarkBorrowCanCrossLiveSeniorApr() public {
+        uint256 targetBefore = uint256(uint64(provider.getAPRtarget()));
+        uint256 liveSeniorApr12 = UD60x18.unwrap(Accounting(DEPLOYED_ACCOUNTING).aprSrt()) / 1e6;
+        uint256 collateralAmount = 150_000 ether;
+
+        _fundCollateral(collateralAmount);
+
+        uint256[3] memory usdcCandidates = [uint256(145_000_000e6), uint256(140_000_000e6), uint256(130_000_000e6)];
+        uint256 usdcBorrowed;
+        for (uint256 i; i < usdcCandidates.length; ++i) {
+            if (_borrowRaw(0, usdcCandidates[i])) {
+                usdcBorrowed = usdcCandidates[i];
+                break;
+            }
+        }
+        assertGt(usdcBorrowed, 0, "combined probe could not borrow USDC");
+
+        uint256 targetAfterUsdc = uint256(uint64(provider.getAPRtarget()));
+
+        uint256[4] memory usdtCandidates = [
+            uint256(40_000_000e6),
+            uint256(30_000_000e6),
+            uint256(20_000_000e6),
+            uint256(10_000_000e6)
+        ];
+        uint256 usdtBorrowed;
+        for (uint256 i; i < usdtCandidates.length; ++i) {
+            if (_borrowRaw(1, usdtCandidates[i])) {
+                usdtBorrowed = usdtCandidates[i];
+                break;
+            }
+        }
+        assertGt(usdtBorrowed, 0, "combined probe could not borrow USDT");
+
+        uint256 targetCombined = uint256(uint64(provider.getAPRtarget()));
+
+        console2.log("combined target before (1e12)", targetBefore);
+        console2.log("combined live Senior APR threshold (1e12)", liveSeniorApr12);
+        console2.log("combined USDC borrowed", usdcBorrowed);
+        console2.log("target after USDC borrow (1e12)", targetAfterUsdc);
+        console2.log("combined USDT borrowed", usdtBorrowed);
+        console2.log("combined target during both borrows (1e12)", targetCombined);
+        console2.log("combined target crossed live Senior APR", targetCombined > liveSeniorApr12);
+
+        assertGt(targetCombined, targetBefore, "combined benchmark borrowing did not raise target");
+
+        uint256 repaidUsdt = _repayAll(1);
+        uint256 repaidUsdc = _repayAll(0);
+        assertGt(repaidUsdt, 0, "combined cleanup repaid no USDT");
+        assertGt(repaidUsdc, 0, "combined cleanup repaid no USDC");
+        uint256 collateralOut = pool.withdraw(WETH, type(uint256).max, address(this));
+        assertGt(collateralOut, 0, "combined cleanup withdrew no WETH collateral");
+
+        uint256 targetAfter = uint256(uint64(provider.getAPRtarget()));
+        uint256 movedUp = targetCombined - targetBefore;
+        console2.log("combined target after cleanup (1e12)", targetAfter);
+        _assertRestoredVeryClosely(targetBefore, targetAfter, movedUp);
     }
 
     function test_liveSusdeDepositCanMoveBaseAprAndChecksUnwindability() public {

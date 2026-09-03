@@ -207,6 +207,11 @@ contract AaveAprProviderForkSensitivityTest is Test {
         console2.log("Strata target during borrow (1e12)", targetDuring);
         console2.log("upward target move (1e12)", movedUp);
 
+        // Variable debt can accrue by a few token subunits even inside one fork test.
+        // Top up a small cleanup buffer so repay(max) measures economic reversibility
+        // instead of failing on a one-unit balance shortfall.
+        uint256 repaymentBalance = IERC20(token).balanceOf(address(this));
+        deal(token, address(this), repaymentBalance + 1_000_000);
         IERC20(token).approve(address(pool), type(uint256).max);
         uint256 repaid = pool.repay(token, type(uint256).max, 2, address(this));
         assertGt(repaid, 0, "fork cleanup repaid nothing");

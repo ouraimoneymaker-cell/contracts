@@ -3,7 +3,7 @@ name: Audit Transient Coverage PoC
 on:
   push:
     branches:
-      - audit/transient-coverage-bypass-poc
+      - research/transient-coverage-validation
 
 jobs:
   poc:

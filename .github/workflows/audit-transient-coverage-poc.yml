@@ -21,15 +21,41 @@ jobs:
           registry-url: 'https://registry.npmjs.org'
           cache: npm
 
-      - run: npm ci
-      - run: npm run compile
-      - name: Run Saturn-native classification PoC
-        run: npx atma test test/tranches/PoC/TransientCoverageBypass.spec.ts
-      - name: Run mHYPER economic impact PoC
-        run: npx atma test test/tranches/PoC/TransientCoverageBypassImpact.spec.ts
-      - name: Run Saturn-native economic impact PoC
-        run: npx atma test test/tranches/PoC/TransientCoverageBypassSaturnImpact.spec.ts
-      - name: Run Saturn near-floor scaling PoC
-        run: npx atma test test/tranches/PoC/TransientCoverageBypassSaturnScale.spec.ts
-      - name: Run current-Saturn-sized economic PoC
-        run: npx atma test test/tranches/PoC/TransientCoverageBypassSaturnLiveScale.spec.ts
+      - name: Install dependencies
+        run: npm ci >/tmp/npm-ci.log 2>&1 || { cat /tmp/npm-ci.log; exit 1; }
+
+      - name: Compile
+        run: npm run compile >/tmp/compile.log 2>&1 || { cat /tmp/compile.log; exit 1; }
+
+      - name: Saturn-native classification PoC
+        shell: bash
+        run: |
+          npx atma test test/tranches/PoC/TransientCoverageBypass.spec.ts >/tmp/classification.log 2>&1 || { cat /tmp/classification.log; exit 1; }
+          echo "PASS: Saturn protected-tier classification bypass reproduced"
+
+      - name: mHYPER same-loss economic PoC
+        shell: bash
+        run: |
+          npx atma test test/tranches/PoC/TransientCoverageBypassImpact.spec.ts >/tmp/mhyper.log 2>&1 || { cat /tmp/mhyper.log; exit 1; }
+          echo "PASS: mHYPER same-underlying-loss economic differential reproduced"
+
+      - name: Saturn same-global-loss economic PoC
+        shell: bash
+        run: |
+          npx atma test test/tranches/PoC/TransientCoverageBypassSaturnImpact.spec.ts >/tmp/saturn-impact.log 2>&1 || { cat /tmp/saturn-impact.log; exit 1; }
+          grep -E 'control attacker value|attack attacker value|attacker advantage|control remaining-JRT value|attack remaining-JRT value|remaining-JRT victim loss' /tmp/saturn-impact.log || true
+          echo "PASS: Saturn same-global-loss economic differential reproduced"
+
+      - name: Saturn near-floor scaling PoC
+        shell: bash
+        run: |
+          npx atma test test/tranches/PoC/TransientCoverageBypassSaturnScale.spec.ts >/tmp/saturn-scale.log 2>&1 || { cat /tmp/saturn-scale.log; exit 1; }
+          grep -E 'scale (control|attack|attacker|remaining|final)' /tmp/saturn-scale.log || true
+          echo "PASS: Saturn near-floor scaling reproduced"
+
+      - name: Current-Saturn-sized economic PoC
+        shell: bash
+        run: |
+          npx atma test test/tranches/PoC/TransientCoverageBypassSaturnLiveScale.spec.ts >/tmp/saturn-live.log 2>&1 || { cat /tmp/saturn-live.log; exit 1; }
+          grep -E 'live-scale' /tmp/saturn-live.log || true
+          echo "PASS: current-Saturn-sized six-figure differential reproduced"

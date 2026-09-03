@@ -1,0 +1,29 @@
+name: SharesCooldown capacity over-reservation PoC
+
+on:
+  push:
+    branches:
+      - security/shares-cooldown-capacity-overreservation
+    paths:
+      - 'test/neutrl/SIP2Test.t.sol'
+      - '.github/workflows/shares-cooldown-capacity-overreservation.yml'
+  workflow_dispatch:
+
+jobs:
+  poc:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - run: npm ci
+
+      - uses: foundry-rs/foundry-toolchain@v1
+
+      - name: Run focused SharesCooldown capacity over-reservation PoC
+        run: forge test --match-contract SIP2Test --match-test test_SharesCooldownCanOverReserveJrtWithdrawalCapacity -vvvv

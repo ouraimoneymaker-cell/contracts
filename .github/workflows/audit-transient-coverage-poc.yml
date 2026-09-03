@@ -23,7 +23,9 @@ jobs:
 
       - run: npm ci
       - run: npm run compile
-      - name: Run classification PoC
+      - name: Run Saturn-native classification PoC
         run: npx atma test test/tranches/PoC/TransientCoverageBypass.spec.ts
-      - name: Run economic impact PoC
+      - name: Run mHYPER economic impact PoC
         run: npx atma test test/tranches/PoC/TransientCoverageBypassImpact.spec.ts
+      - name: Run Saturn-native economic impact PoC
+        run: npx atma test test/tranches/PoC/TransientCoverageBypassSaturnImpact.spec.ts

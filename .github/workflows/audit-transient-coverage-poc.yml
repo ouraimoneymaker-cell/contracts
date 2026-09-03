@@ -23,8 +23,21 @@ jobs:
 
       - run: npm ci
       - run: npm run compile
-      - name: Run transient coverage PoCs only
-        run: >-
-          npx atma test
-          test/tranches/PoC/TransientCoverageBypass.spec.ts
-          test/tranches/PoC/TransientCoverageBypassImpact.spec.ts
+
+      - name: Run classification PoC
+        id: classification
+        continue-on-error: true
+        run: npx atma test test/tranches/PoC/TransientCoverageBypass.spec.ts
+
+      - name: Run economic impact PoC
+        id: impact
+        continue-on-error: true
+        run: npx atma test test/tranches/PoC/TransientCoverageBypassImpact.spec.ts
+
+      - name: Require both PoCs to pass
+        if: always()
+        run: |
+          echo "classification=${{ steps.classification.outcome }}"
+          echo "impact=${{ steps.impact.outcome }}"
+          test "${{ steps.classification.outcome }}" = "success"
+          test "${{ steps.impact.outcome }}" = "success"

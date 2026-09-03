@@ -36,7 +36,7 @@ const {
     feed,
     cdo,
     strategy,
-} = await test.deploy();
+} = await test.deploy({ initialDeposit: false });
 
 const { client, deployer } = test;
 const { sharesCooldown } = await test.factory.ensureCooldowns(cdo);
@@ -63,7 +63,8 @@ await $exitMode.set(sharesCooldown, attacker, jrtVault.address, [
     { covPct: 0,  feeBps: 20, lock: 0        },
 ]);
 
-// 100 JRT / 1000 SRT = 10% coverage. Attacker owns 25% of JRT.
+// Exact starting state: 100 JRT / 1000 SRT = 10% coverage.
+// Attacker owns 25% of JRT.
 await $erc20.mint(mHYPER, deployer, liquidityProvider, 1_075);
 await $erc20.mint(mHYPER, deployer, attacker, 25);
 await $erc4626.depositMeta(jrtVault, mHYPER.address, liquidityProvider, 75);

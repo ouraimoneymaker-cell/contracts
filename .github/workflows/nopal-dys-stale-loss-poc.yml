@@ -6,6 +6,7 @@ on:
       - security/nopal-dys-stale-loss-poc
     paths:
       - 'test/PoC/NestOpalDYSStaleLossPoC.t.sol'
+      - 'test/PoC/NestOpalDYSStaleLossEconomics.t.sol'
       - '.github/workflows/nopal-dys-stale-loss-poc.yml'
   workflow_dispatch:
 
@@ -30,6 +31,9 @@ jobs:
 
       - name: Run complete nOPAL stale-loss PoC suite
         run: forge test --match-path test/PoC/NestOpalDYSStaleLossPoC.t.sol -vv
+
+      - name: Run current-like nOPAL economics regression
+        run: forge test --match-path test/PoC/NestOpalDYSStaleLossEconomics.t.sol --match-test test_CurrentLikeCoverageTwentyBpsLossCreatesRationalImmediateExit -vvv
 
       - name: Run Strata existing non-fork nOPAL regression suite
         run: forge test --match-path test/nest/NestOpalTest.t.sol -vv

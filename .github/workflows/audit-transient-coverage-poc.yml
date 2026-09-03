@@ -29,3 +29,5 @@ jobs:
         run: npx atma test test/tranches/PoC/TransientCoverageBypassImpact.spec.ts
       - name: Run Saturn-native economic impact PoC
         run: npx atma test test/tranches/PoC/TransientCoverageBypassSaturnImpact.spec.ts
+      - name: Run Saturn near-floor scaling PoC
+        run: npx atma test test/tranches/PoC/TransientCoverageBypassSaturnScale.spec.ts

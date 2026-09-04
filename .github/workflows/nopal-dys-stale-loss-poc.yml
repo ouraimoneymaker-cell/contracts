@@ -8,6 +8,7 @@ on:
       - 'test/PoC/NestOpalDYSStaleLossPoC.t.sol'
       - 'test/PoC/NestOpalDYSStaleLossEconomics.t.sol'
       - 'test/PoC/NestOpalDYSStaleLossSeniorSpill.t.sol'
+      - 'test/PoC/NestOpalDYSMainnetForkProof.t.sol'
       - '.github/workflows/nopal-dys-stale-loss-poc.yml'
   workflow_dispatch:
 
@@ -32,6 +33,11 @@ jobs:
 
       - name: Run complete nOPAL stale-loss PoC suite
         run: forge test --match-path test/PoC/NestOpalDYSStaleLossPoC.t.sol -vv
+
+      - name: Run deployed nOPAL mainnet-fork proof
+        env:
+          ETH_RPC_URL: https://ethereum-rpc.publicnode.com
+        run: forge test --match-path test/PoC/NestOpalDYSMainnetForkProof.t.sol -vvvv
 
       - name: Run current-like nOPAL Senior spill regression
         run: forge test --match-path test/PoC/NestOpalDYSStaleLossSeniorSpill.t.sol --match-test test_CurrentLikeCoverageWhaleExitCanPushDeferredLossIntoSenior -vvv

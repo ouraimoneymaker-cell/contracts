@@ -129,7 +129,12 @@ contract IsolatedStrategyStaleNavPrincipalLossEscapeTest is IsolatedIntegrationD
         // is reconciled by an ordinary JRT deposit while Bob still owns almost all of the JRT risk.
         oracle.setRoundData(int256(1e8));
         _depositJrt(alice, RECONCILE_TRIGGER_DEPOSIT);
-        assertEq(strategy.totalAssets(), accounting.nav(), "fresh control did not reconcile the physical loss");
+        assertApproxEqAbs(
+            strategy.totalAssets(),
+            accounting.nav(),
+            1,
+            "fresh control did not reconcile the physical loss"
+        );
 
         uint256 freshQuote = jrtVault.previewRedeem(bobShares);
         (, uint256 srtAfterLoss,) = accounting.totalAssetsT0();

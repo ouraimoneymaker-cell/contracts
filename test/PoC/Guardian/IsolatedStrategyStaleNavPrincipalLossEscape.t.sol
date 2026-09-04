@@ -176,7 +176,12 @@ contract IsolatedStrategyStaleNavPrincipalLossEscapeTest is IsolatedIntegrationD
 
         uint256 reconciliationAnchor = accounting.lastReconciliation();
         assertEq(reconciliationAnchor, block.timestamp, "anchor reconciliation did not advance");
-        assertEq(strategy.totalAssets(), accounting.nav(), "anchor loss was not fully reconciled");
+        assertApproxEqAbs(
+            strategy.totalAssets(),
+            accounting.nav(),
+            1,
+            "anchor loss was not fully reconciled"
+        );
 
         // Spark can carry a tiny unvested rounding gain after the anchor deposit. If the next
         // deposit occurs immediately, _drip() exits early and the intended principal loss is not

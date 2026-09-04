@@ -9,6 +9,7 @@ on:
       - 'test/PoC/NestOpalDYSStaleLossEconomics.t.sol'
       - 'test/PoC/NestOpalDYSStaleLossSeniorSpill.t.sol'
       - 'test/PoC/NestOpalDYSMainnetForkProof.t.sol'
+      - 'test/PoC/NestOpalDYSForkDiagnostics.t.sol'
       - '.github/workflows/nopal-dys-stale-loss-poc.yml'
   workflow_dispatch:
 
@@ -33,6 +34,11 @@ jobs:
 
       - name: Run complete nOPAL stale-loss PoC suite
         run: forge test --match-path test/PoC/NestOpalDYSStaleLossPoC.t.sol -vv
+
+      - name: Diagnose deployed nOPAL fork settlement state
+        env:
+          ETH_RPC_URL: https://ethereum-rpc.publicnode.com
+        run: forge test --match-path test/PoC/NestOpalDYSForkDiagnostics.t.sol -vvvv
 
       - name: Run deployed nOPAL mainnet-fork proof
         env:

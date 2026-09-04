@@ -58,8 +58,9 @@ contract NestOpalDYSMainnetForkProof is Test {
 
         assertEq(address(cdo.strategy()), STRATEGY, "deployed CDO strategy mismatch");
         assertEq(address(cdo.accounting()), ACCOUNTING, "deployed CDO accounting mismatch");
+        assertEq(address(cdo.jrtVault()), JRT, "deployed JRT mismatch");
+        assertEq(address(cdo.srtVault()), SRT, "deployed SRT mismatch");
         assertTrue(cdo.isJrt(JRT), "deployed JRT not registered");
-        assertTrue(cdo.isSrt(SRT), "deployed SRT not registered");
         assertEq(address(strategy.nOPAL()), NOPAL, "strategy nOPAL mismatch");
         assertEq(address(strategy.USDC()), USDC, "strategy USDC mismatch");
         assertEq(address(strategy.accountant()), ACCOUNTANT, "strategy accountant mismatch");
@@ -184,9 +185,6 @@ contract NestOpalDYSMainnetForkProof is Test {
         );
 
         IAprSnapshotProvider provider = strategy.aprProvider();
-        // The real deployed provider must classify the lower rate as negative. If its historical
-        // buffer makes 5 bps non-meaningful at the fork head, model only the meaningfulness gate;
-        // the accountant rate/state and all Strata accounting/redemption contracts stay deployed.
         assertTrue(provider.isNegativeChange(uint96(lossRate)), "deployed provider must see lower rate as negative");
         if (!provider.isMeaningfulUpdate(uint96(lossRate), updateTs)) {
             vm.mockCall(

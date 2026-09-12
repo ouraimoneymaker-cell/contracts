@@ -1,0 +1,44 @@
+name: nOPAL V3 Fork Validation
+
+on:
+  push:
+    branches:
+      - security/nopal-v3-validation
+    paths:
+      - 'test/PoC/NestOpalDYSMainnetForkProof_v3.t.sol'
+      - '.github/workflows/nopal-v3-validation.yml'
+  workflow_dispatch:
+
+jobs:
+  nopal-v3:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      ETH_RPC_URL: https://ethereum-rpc.publicnode.com
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - run: npm ci
+
+      - uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: stable
+
+      - name: Run deployed nOPAL v3 fork proof
+        run: |
+          set -o pipefail
+          forge test --match-path test/PoC/NestOpalDYSMainnetForkProof_v3.t.sol -vvvv 2>&1 | tee nopal-v3-forge.log
+
+      - name: Upload v3 Forge trace
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nopal-v3-forge-trace
+          path: nopal-v3-forge.log
+          if-no-files-found: ignore

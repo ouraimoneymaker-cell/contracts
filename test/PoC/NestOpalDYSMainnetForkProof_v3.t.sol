@@ -221,10 +221,11 @@ contract NestOpalDYSMainnetForkProofV3 is Test {
         assertGt(strategyShares, 0, "strategy has no nOPAL");
 
         uint256 rateForPositiveNav = Math.mulDiv(accounting.nav() + 1, ONE, strategyShares, Math.Rounding.Ceil);
-        positiveRate = Math.max(liveRate + 1, uint256(providerRate) + 1);
-        positiveRate = Math.max(positiveRate, rateForPositiveNav);
         uint256 maxAllowed = Math.mulDiv(liveRate, upperBound, DENOM);
-        assertLe(positiveRate, maxAllowed, "positive anchor exceeds live Nest bound; use synchronized fork block");
+        assertGt(maxAllowed, liveRate, "live Nest upper bound permits no positive move");
+        assertGt(maxAllowed, uint256(providerRate), "bounded positive move does not exceed provider snapshot");
+        assertGe(maxAllowed, rateForPositiveNav, "bounded positive move cannot create NAV reconciliation; use synchronized fork block");
+        positiveRate = maxAllowed;
 
         vm.warp(block.timestamp + updateStep);
         uint64 ts = uint64(block.timestamp);
